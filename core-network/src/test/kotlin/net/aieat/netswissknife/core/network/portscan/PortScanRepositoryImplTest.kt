@@ -31,6 +31,7 @@ import net.aieat.netswissknife.core.network.tls.TlsHandshakeEngine
 import net.aieat.netswissknife.core.network.tls.TlsHandshakeSnapshot
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -1273,11 +1274,11 @@ class PortScanRepositoryImplTest {
         }
 
         @Test
-        fun `unknown port has non-null service name fallback`() = runTest {
+        fun `unknown port has no invented service name`() = runTest {
             val repo = testRepository(checker = openChecker())
             val updates = repo.scan("host", listOf(12345), timeoutMs = 1000, concurrency = 10).toList()
             val result = updates.filterIsInstance<PortScanUpdate.PortResult>().first().result
-            assertNotNull(result.serviceName)
+            assertNull(result.serviceName)
         }
     }
 

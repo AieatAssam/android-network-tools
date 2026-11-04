@@ -16,6 +16,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.data.ToolSessionMemory
+import net.aieat.netswissknife.app.data.purgeInvalidHostRecents
+import net.aieat.netswissknife.app.data.validHostRecents
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
@@ -70,11 +73,25 @@ sealed class TopologyUiState {
     ) : TopologyUiState()
 }
 
+/** The last visit's seed and terminal state, kept in [ToolSessionMemory] while the activity lives. */
+internal data class TopologySessionSnapshot(
+    val seed: String?,
+    val state: TopologyUiState,
+)
+
+internal const val TOPOLOGY_SESSION_KEY = "topologyDiscoverySession"
+
+private fun TopologyUiState.Discovering.asCanceled() = TopologyUiState.Canceled(nodes, links, nodesDone, selectedNodeIp)
+
+private fun TopologyUiState.Canceling.asCanceled() = TopologyUiState.Canceled(nodes, links, nodesDone, selectedNodeIp)
+
 @HiltViewModel
 class TopologyDiscoveryViewModel @Inject constructor(
     private val useCase: TopologyDiscoveryUseCase,
     private val recentHostsRepository: RecentHostsRepository,
     networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+    // Hilt supplies the activity-retained holder; the default keeps direct unit tests simple.
+    private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
 ) : ViewModel() {
 
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
@@ -84,16 +101,46 @@ class TopologyDiscoveryViewModel @Inject constructor(
 
     val recentSeeds: StateFlow<List<String>> = recentHostsRepository
         .getRecents(AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS)
+        .validHostRecents()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    init {
+        viewModelScope.launch {
+            recentHostsRepository.purgeInvalidHostRecents(AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS)
+        }
+    }
 
     private var discoveryJob: Job? = null
     private var operationSession: OperationSession? = null
     private var operationId = 0L
 
+    /** The seed of the last discovery, so the form is refilled when the tool is shown again. */
+    private var lastSeed: String? = null
+
+    /** The seed kept from the last visit, for the screen's initial host field value. */
+    val restoredSeed: String? = sessionMemory.get<TopologySessionSnapshot>(TOPOLOGY_SESSION_KEY)?.seed
+
     init {
+        sessionMemory.get<TopologySessionSnapshot>(TOPOLOGY_SESSION_KEY)?.let { _uiState.value = it.state }
         addCloseable(LIFECYCLE_CLOSEABLE_KEY, AutoCloseable {
             cancelDiscovery(CancellationReason.LIFECYCLE_PAUSE)
         })
+    }
+
+    /**
+     * Keeps the last terminal result when the tool is left. A discovery still running is kept as
+     * the canceled partial result it becomes once its closeable stops it. The SNMP community and the
+     * v3 passwords are never kept: they live in the screen, not in this state.
+     */
+    override fun onCleared() {
+        val kept =
+            when (val state = _uiState.value) {
+                is TopologyUiState.Discovering -> state.asCanceled()
+                is TopologyUiState.Canceling -> state.asCanceled()
+                else -> state
+            }
+        sessionMemory.put(TOPOLOGY_SESSION_KEY, TopologySessionSnapshot(seed = lastSeed, state = kept))
+        super.onCleared()
     }
 
     fun startDiscovery(params: TopologyParams) {
@@ -102,6 +149,7 @@ class TopologyDiscoveryViewModel @Inject constructor(
         if (operationSession != null || _uiState.value is TopologyUiState.Discovering ||
             _uiState.value is TopologyUiState.Canceling
         ) return
+        lastSeed = params.targetIp
         val operationTimeoutMillis = TopologyOperationBudget.timeoutMillisOrNull(params)
         if (operationTimeoutMillis == null) {
             _uiState.value = TopologyUiState.Failure(

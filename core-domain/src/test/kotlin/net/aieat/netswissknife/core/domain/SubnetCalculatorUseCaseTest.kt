@@ -2,9 +2,12 @@ package net.aieat.netswissknife.core.domain
 
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.subnet.Ipv4Scope
 import net.aieat.netswissknife.core.network.subnet.SubnetCalculatorRepository
 import net.aieat.netswissknife.core.network.subnet.SubnetInfo
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -14,6 +17,13 @@ class SubnetCalculatorUseCaseTest {
 
     private val repository = mockk<SubnetCalculatorRepository>()
     private val useCase = SubnetCalculatorUseCase(repository)
+
+    @Test
+    fun `cidrInputError reports a bad prefix synchronously without a suspend call`() {
+        every { repository.calculate("10.0.0.0/33") } returns NetworkResult.error(ErrorCode.SUBNET_PREFIX_INVALID)
+
+        assertEquals(ErrorCode.SUBNET_PREFIX_INVALID, useCase.cidrInputError("10.0.0.0/33")?.info?.code)
+    }
 
     @Test
     fun `invoke delegates to repository and returns result`() = runTest {
@@ -35,6 +45,7 @@ class SubnetCalculatorUseCaseTest {
             hostBits = 8,
             ipClass = "C",
             isPrivate = true,
+            scope = Ipv4Scope.PRIVATE,
             cidrNotation = "192.168.1.0/24",
             inputIsAligned = false,
         )

@@ -414,9 +414,8 @@ class TlsInspectorScreenTest {
 
         listOf(
             context.getString(R.string.tls_connect_time),
-            context.getString(R.string.tls_hostname_match),
             context.getString(R.string.tls_alpn),
-            context.getString(R.string.tls_pin_match),
+            context.getString(R.string.tls_verdict_untrusted_findings),
             context.getString(R.string.tls_findings),
             "EXPIRED",
             context.getString(R.string.tls_issue_expired),
@@ -457,9 +456,8 @@ class TlsInspectorScreenTest {
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
         every { viewModel.sourceContextState } returns sourceContextFlow
-        every { viewModel.networkStatus } returns MutableStateFlow(
-            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
-        )
+        val networkStatusFlow = MutableStateFlow(NetworkStatus(hasInternet = true, hasLocalNetwork = true))
+        every { viewModel.networkStatus } returns networkStatusFlow
         every { viewModel.clearPrefill() } answers { sourceContextFlow.value = null }
         // onHostChange is otherwise a no-op on a relaxed mock, so typing into the host
         // field would never be reflected back through uiState.host — feed it back into

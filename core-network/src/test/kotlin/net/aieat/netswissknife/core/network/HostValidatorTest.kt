@@ -23,6 +23,12 @@ class HostValidatorTest {
     @DisplayName("normalize")
     inner class Normalize {
         @Test
+        fun `trims surrounding whitespace before normalizing a hostname`() {
+            assertEquals("example.com", HostValidator.normalize("example.com "))
+            assertEquals("192.0.2.1", HostValidator.normalize(" 192.0.2.1\t"))
+        }
+
+        @Test
         fun `converts unicode hostname to IDN ascii`() {
             assertEquals("xn--bcher-kva.de", HostValidator.normalize("bücher.de"))
             assertTrue(HostValidator.isValidHostname("bücher.de"))

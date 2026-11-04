@@ -11,9 +11,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,15 +26,12 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.ChipColors
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
@@ -60,12 +57,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.style.TextAlign
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
+import net.aieat.netswissknife.app.ui.theme.StatusGood
+import net.aieat.netswissknife.app.ui.theme.StatusWarn
+import net.aieat.netswissknife.app.ui.theme.StatusWarnDeep
+import net.aieat.netswissknife.app.ui.components.messageRes
+import net.aieat.netswissknife.app.ui.components.scrollIntoViewOnFocus
+import net.aieat.netswissknife.app.ui.format.withSeparatorBreaks
+import net.aieat.netswissknife.app.ui.theme.StatusGoodDeep
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.foundation.background
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -83,15 +90,16 @@ import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
+import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.theme.StatusBlue
 import net.aieat.netswissknife.app.util.shareText
-import net.aieat.netswissknife.app.ui.theme.StatusGood
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.TlsInspectorErrorKeys
 import net.aieat.netswissknife.core.network.HostValidator
@@ -110,6 +118,8 @@ object TlsInspectorScreenTestTags {
     const val CLEAR_PREFILL_ACTION = "tls_clear_prefill_action"
     const val PROTOCOL_PROBE_TOGGLE = "tls_protocol_probe_toggle"
     const val EXPECTED_PIN_FIELD = "tls_expected_pin_field"
+    const val VERDICT_DETAIL = "tls_verdict_detail"
+    const val EXPIRY_BADGE = "tls_expiry_badge"
 }
 
 @Composable
@@ -233,7 +243,7 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
                     when (state) {
                         is DisplayState.Idle    -> TlsIdlePlaceholder()
                         is DisplayState.Loading -> TlsLoadingContent()
-                        is DisplayState.Canceled -> TlsCanceledContent()
+                        is DisplayState.Canceled -> TlsCanceledContent(onRetry = { viewModel.inspect() })
                         is DisplayState.Error   -> TlsErrorContent(state.message, state.descriptionKey) { viewModel.inspect() }
                         is DisplayState.Success -> TlsSuccessContent(state.result)
                     }
@@ -307,7 +317,7 @@ private fun TlsInputSection(
     onRemoveRecentHost: (String) -> Unit,
     onClearRecentHosts: () -> Unit
 ) {
-    val focusManager = LocalFocusManager.current
+    val dismissKeyboard = rememberDismissKeyboard()
     val protocolToggleLabel = stringResource(R.string.tls_probe_protocols_label)
     val normalizedHost = HostValidator.normalize(host)
     val isHostInvalid = host.isNotBlank() && normalizedHost == null
@@ -318,7 +328,7 @@ private fun TlsInputSection(
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
             // Host field
-            OutlinedTextField(
+            ToolTextField(
                 value         = host,
                 onValueChange = onHostChange,
                 label         = { Text(stringResource(R.string.tls_host_label)) },
@@ -326,19 +336,9 @@ private fun TlsInputSection(
                 leadingIcon   = {
                     Icon(Icons.Default.Lock, contentDescription = null)
                 },
-                trailingIcon  = {
-                    if (host.isNotEmpty()) {
-                        IconButton(onClick = { onHostChange("") }) {
-                            Icon(
-                                Icons.Default.Clear,
-                                contentDescription = stringResource(R.string.clear)
-                            )
-                        }
-                    }
-                },
                 isError       = isHostInvalid,
                 supportingText = if (isHostInvalid) {
-                    { Text(stringResource(R.string.error_invalid_host)) }
+                    { Text(stringResource(HostValidator.problemOf(host)?.messageRes() ?: R.string.error_host_invalid)) }
                 } else null,
                 enabled       = !isLoading,
                 singleLine    = true,
@@ -368,14 +368,14 @@ private fun TlsInputSection(
                 } else null,
                 enabled       = !isLoading,
                 singleLine    = true,
-                modifier      = Modifier.fillMaxWidth(),
+                modifier      = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Number,
                     imeAction    = ImeAction.Done
                 ),
                 keyboardActions = KeyboardActions(
                     onDone = {
-                        focusManager.clearFocus()
+                        dismissKeyboard()
                         if (!isLoading && normalizedHost != null && isPortValid) onInspect()
                     }
                 )
@@ -412,7 +412,10 @@ private fun TlsInputSection(
                 supportingText = { Text(stringResource(R.string.tls_expected_pin_help)) },
                 enabled = !isLoading,
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth().testTag(TlsInspectorScreenTestTags.EXPECTED_PIN_FIELD),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(TlsInspectorScreenTestTags.EXPECTED_PIN_FIELD)
+                    .scrollIntoViewOnFocus(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Done),
             )
 
@@ -423,7 +426,7 @@ private fun TlsInputSection(
             ) {
                 Button(
                     onClick   = hapticAction {
-                        focusManager.clearFocus()
+                        dismissKeyboard()
                         onInspect()
                     },
                     enabled   = normalizedHost != null && isPortValid && !isLoading,
@@ -494,16 +497,31 @@ private fun TlsIdlePlaceholder() {
 }
 
 @Composable
-private fun TlsCanceledContent() {
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun TlsCanceledContent(onRetry: () -> Unit) {
+    // A stopped inspection is not an error, but the card still says what happened and offers the next step (PHB-18).
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.tls_inspection_canceled),
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(20.dp),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.tls_inspection_canceled),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = stringResource(R.string.tls_inspection_canceled_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            ToolRetryButton(text = stringResource(R.string.tls_retry), onClick = onRetry)
+        }
     }
 }
 
@@ -539,17 +557,14 @@ private fun TlsLoadingContent() {
 private fun TlsErrorContent(message: String, descriptionKey: String?, onRetry: () -> Unit) {
     val visibleMessage = when (descriptionKey) {
         TlsInspectorErrorKeys.PIN_INVALID_DESCRIPTION -> stringResource(R.string.tls_pin_invalid)
+        TlsInspectorErrorKeys.NOT_TLS_PORT_DESCRIPTION -> stringResource(R.string.tls_not_tls_port)
         else -> message
     }
     ToolErrorCard(
         title = stringResource(R.string.tls_error_title),
         message = visibleMessage,
     ) {
-        TextButton(onClick = onRetry) {
-            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(stringResource(R.string.tls_retry))
-        }
+        ToolRetryButton(text = stringResource(R.string.tls_retry), onClick = onRetry)
     }
 }
 
@@ -560,24 +575,10 @@ private fun TlsSuccessContent(result: TlsInspectorResult) {
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_tls, result.host, result.port)
     val pemShareSubject = stringResource(R.string.tls_share_pem_subject, result.host, result.port)
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = {
-                context.shareText(
-                    text = buildTlsShareText(result),
-                    subject = shareSubject
-                )
-            }) {
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = stringResource(R.string.action_share)
-                )
-            }
-            if (result.chain.any { it.pemEncoded.isNotBlank() }) {
+    val hasPem = result.chain.any { it.pemEncoded.isNotBlank() }
+    val pemAction: (@Composable RowScope.() -> Unit)? =
+        if (hasPem) {
+            {
                 TextButton(onClick = {
                     context.shareText(
                         text = buildTlsPemShareText(result),
@@ -587,7 +588,10 @@ private fun TlsSuccessContent(result: TlsInspectorResult) {
                     Text(stringResource(R.string.tls_share_pem))
                 }
             }
+        } else {
+            null
         }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ConnectionCard(result)
         result.chain.forEachIndexed { index, cert ->
             val certLabel = when {
@@ -603,6 +607,16 @@ private fun TlsSuccessContent(result: TlsInspectorResult) {
                 expandedByDefault = index == 0
             )
         }
+        ResultActionsRow(
+            copyText = buildTlsShareText(result),
+            onShare = {
+                context.shareText(
+                    text = buildTlsShareText(result),
+                    subject = shareSubject
+                )
+            },
+            extraActions = pemAction,
+        )
     }
 }
 
@@ -639,36 +653,36 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
+                    // Verdict, not the bare chain result: hostname, expiry and pin failures
+                    // make the connection untrusted even when the chain verifies.
+                    val trusted = result.isConnectionTrusted
                     SuggestionChip(
                         onClick = {},
                         label   = {
                             Text(
-                                if (result.isChainTrusted) stringResource(R.string.tls_trusted)
+                                if (trusted) stringResource(R.string.tls_trusted)
                                 else stringResource(R.string.tls_untrusted)
                             )
                         },
-                        colors  = SuggestionChipDefaults.suggestionChipColors(
-                            containerColor = if (result.isChainTrusted)
-                                MaterialTheme.colorScheme.tertiaryContainer
-                            else
-                                MaterialTheme.colorScheme.secondaryContainer
-                        )
+                        colors  = verdictChipColors(trusted),
                     )
                 }
 
+                Text(
+                    text = verdictDetail(result),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag(TlsInspectorScreenTestTags.VERDICT_DETAIL),
+                )
                 HorizontalDivider()
 
-                LabeledValue(
-                    label = stringResource(R.string.tls_host_port),
-                    value = "${result.host}:${result.port}"
-                )
                 LabeledValue(
                     label = stringResource(R.string.tls_version),
                     value = result.tlsVersion
                 )
                 LabeledValue(
                     label = stringResource(R.string.tls_cipher_suite),
-                    value = result.cipherSuite
+                    value = withSeparatorBreaks(result.cipherSuite)
                 )
                 LabeledValue(
                     label = stringResource(R.string.tls_handshake_time),
@@ -678,20 +692,8 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                     label = stringResource(R.string.tls_connect_time),
                     value = stringResource(R.string.tls_ms_format, result.connectTimeMs)
                 )
-                result.hostnameMatches?.let { matches ->
-                    LabeledValue(
-                        label = stringResource(R.string.tls_hostname_match),
-                        value = stringResource(if (matches) R.string.tls_match else R.string.tls_no_match),
-                    )
-                }
                 result.alpn?.takeIf { it.isNotBlank() }?.let { alpn ->
                     LabeledValue(stringResource(R.string.tls_alpn), alpn)
-                }
-                result.pinMatch?.let { matches ->
-                    LabeledValue(
-                        label = stringResource(R.string.tls_pin_match),
-                        value = stringResource(if (matches) R.string.tls_match else R.string.tls_no_match),
-                    )
                 }
                 result.protocolSupport?.toSortedMap()?.forEach { (protocol, supported) ->
                     LabeledValue(
@@ -728,7 +730,7 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                                     )
                                 }
                                 Text(
-                                    stringResource(issue.stringRes()),
+                                    issueText(issue, result.untrustedRootName),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.error,
                                 )
@@ -739,6 +741,36 @@ private fun ConnectionCard(result: TlsInspectorResult) {
             }
         }
     }
+}
+
+/** One line that says what the verdict rests on, so the Trusted or Untrusted chip is not a bare claim. */
+@Composable
+private fun verdictDetail(result: TlsInspectorResult): String {
+    val trusted = result.isConnectionTrusted
+    return if (trusted && result.pinMatch == true) {
+        stringResource(R.string.tls_verdict_trusted_pinned)
+    } else if (trusted) {
+        stringResource(R.string.tls_verdict_trusted)
+    } else if (result.chainIssues.isNotEmpty()) {
+        stringResource(R.string.tls_verdict_untrusted_findings)
+    } else {
+        stringResource(R.string.tls_verdict_untrusted_generic)
+    }
+}
+
+/**
+ * Verdict chip colours. Trusted uses the success token rather than the error role; untrusted uses
+ * the error role. The verdict already folds in hostname, expiry and pin failures.
+ */
+@Composable
+private fun verdictChipColors(trusted: Boolean): ChipColors {
+    // Brighter green on dark surfaces keeps label contrast; the deeper one suits light surfaces.
+    val onDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val successText = if (onDark) StatusGood else StatusGoodDeep
+    return SuggestionChipDefaults.suggestionChipColors(
+        containerColor = if (trusted) StatusGoodDeep.copy(alpha = 0.12f) else MaterialTheme.colorScheme.errorContainer,
+        labelColor = if (trusted) successText else MaterialTheme.colorScheme.onErrorContainer,
+    )
 }
 
 // ── Certificate card ──────────────────────────────────────────────────────────
@@ -782,20 +814,18 @@ private fun CertificateCard(
                     )
                 }
 
-                // Subject CN
-                Text(
-                    text     = cert.subjectCN.ifBlank { stringResource(R.string.tls_unknown_cn) },
-                    style    = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(Modifier.width(8.dp))
-
-                // Expiry badge
-                ExpiryBadge(cert)
+                // Subject CN and expiry share one weighted column: the name keeps the row width
+                // (two lines before the ellipsis) instead of being squeezed beside the chip at 360 dp.
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = cert.subjectCN.ifBlank { stringResource(R.string.tls_unknown_cn) },
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    ExpiryBadge(cert)
+                }
 
                 // Expand/collapse toggle
                 IconButton(onClick = { expanded = !expanded }) {
@@ -826,71 +856,54 @@ private fun CertificateCard(
 
 @Composable
 private fun ExpiryBadge(cert: TlsCertificate) {
-    val now = System.currentTimeMillis()
-    val daysLeft = TimeUnit.MILLISECONDS.toDays(cert.notAfter - now)
-    val expiryDate = formatDate(cert.notAfter)
-
-    when {
-        cert.notYetValid -> {
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.errorContainer
-            ) {
-                Text(
-                    text = stringResource(R.string.tls_not_yet_valid),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                )
-            }
+    val daysLeft = TimeUnit.MILLISECONDS.toDays(cert.notAfter - System.currentTimeMillis())
+    val tone = expiryTone(daysLeft = daysLeft, expired = cert.isExpired, notYetValid = cert.notYetValid)
+    val label =
+        when {
+            cert.notYetValid -> stringResource(R.string.tls_not_yet_valid)
+            cert.isExpired -> stringResource(R.string.tls_expired)
+            else -> pluralStringResource(R.plurals.tls_days_left, daysLeft.toInt(), daysLeft)
         }
-        cert.isExpired -> {
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.errorContainer
-            ) {
-                Text(
-                    text  = stringResource(R.string.tls_expired),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                )
-            }
-        }
-        daysLeft <= 30 -> {
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.secondaryContainer
-            ) {
-                Text(
-                    text  = pluralStringResource(R.plurals.tls_days_left, daysLeft.toInt(), daysLeft),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                )
-            }
-        }
-        else -> {
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.tertiaryContainer
-            ) {
-                Text(
-                    text  = expiryDate,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                )
-            }
-        }
+    // Colour carries the state; the text carries the number. Surfaces stay readable on light and dark.
+    val onDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val container = expiryContainerColor(tone)
+    val content = expiryContentColor(tone, onDark)
+    Surface(shape = MaterialTheme.shapes.small, color = container) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = content,
+            modifier =
+                Modifier
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                    .testTag(TlsInspectorScreenTestTags.EXPIRY_BADGE),
+        )
     }
 }
+
+@Composable
+private fun expiryContainerColor(tone: ExpiryTone): Color =
+    when (tone) {
+        ExpiryTone.ERROR -> MaterialTheme.colorScheme.errorContainer
+        ExpiryTone.WARNING -> StatusWarn.copy(alpha = 0.22f)
+        ExpiryTone.OK -> StatusGoodDeep.copy(alpha = 0.12f)
+    }
+
+@Composable
+private fun expiryContentColor(
+    tone: ExpiryTone,
+    onDark: Boolean,
+): Color =
+    when (tone) {
+        ExpiryTone.ERROR -> MaterialTheme.colorScheme.onErrorContainer
+        ExpiryTone.WARNING -> if (onDark) StatusWarn else StatusWarnDeep
+        ExpiryTone.OK -> if (onDark) StatusGood else StatusGoodDeep
+    }
 
 @Composable
 private fun CertificateDetails(cert: TlsCertificate) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // Subject
-        LabeledValue(stringResource(R.string.tls_subject_cn),  cert.subjectCN.ifBlank { "N/A" })
         cert.subjectOrg?.let { LabeledValue(stringResource(R.string.tls_subject_org), it) }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -1015,7 +1028,8 @@ internal fun buildTlsShareText(result: TlsInspectorResult): String = buildString
     appendLine("TLS – ${result.host}:${result.port}")
     appendLine("Protocol: ${result.tlsVersion}")
     appendLine("Cipher: ${result.cipherSuite}")
-    appendLine("Trusted: ${result.isChainTrusted}")
+    appendLine("Trusted: ${result.isConnectionTrusted}")
+    appendLine("Chain trusted: ${result.isChainTrusted}")
     appendLine("Connect: ${result.connectTimeMs} ms; handshake: ${result.handshakeTimeMs} ms")
     result.alpn?.let { appendLine("ALPN: $it") }
     result.hostnameMatches?.let { appendLine("Hostname match: $it") }
@@ -1048,6 +1062,18 @@ internal fun buildTlsPemShareText(result: TlsInspectorResult): String = result.c
     .mapNotNull { it.pemEncoded.takeIf(String::isNotBlank)?.trim() }
     .joinToString(separator = "\n", postfix = "\n")
 
+/** Names the missing issuing root when it is the only finding; otherwise the generic issue text. */
+@Composable
+private fun issueText(
+    issue: net.aieat.netswissknife.core.network.tls.ChainIssue,
+    untrustedRootName: String?,
+): String =
+    if (issue == net.aieat.netswissknife.core.network.tls.ChainIssue.UNTRUSTED && untrustedRootName != null) {
+        stringResource(R.string.tls_issue_untrusted_root, untrustedRootName)
+    } else {
+        stringResource(issue.stringRes())
+    }
+
 private fun net.aieat.netswissknife.core.network.tls.ChainIssue.stringRes(): Int = when (this) {
     net.aieat.netswissknife.core.network.tls.ChainIssue.EXPIRED -> R.string.tls_issue_expired
     net.aieat.netswissknife.core.network.tls.ChainIssue.NOT_YET_VALID -> R.string.tls_issue_not_yet_valid
@@ -1058,4 +1084,5 @@ private fun net.aieat.netswissknife.core.network.tls.ChainIssue.stringRes(): Int
     net.aieat.netswissknife.core.network.tls.ChainIssue.WEAK_SIGNATURE -> R.string.tls_issue_weak_signature
     net.aieat.netswissknife.core.network.tls.ChainIssue.WEAK_KEY -> R.string.tls_issue_weak_key
     net.aieat.netswissknife.core.network.tls.ChainIssue.INCOMPLETE_CHAIN -> R.string.tls_issue_incomplete_chain
+    net.aieat.netswissknife.core.network.tls.ChainIssue.PIN_MISMATCH -> R.string.tls_issue_pin_mismatch
 }

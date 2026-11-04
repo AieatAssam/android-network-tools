@@ -19,6 +19,7 @@ import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.speedtest.LatencySample
 import net.aieat.netswissknife.core.network.speedtest.LatencyStats
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestEvent
@@ -33,9 +34,25 @@ import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestOperation
 import javax.inject.Inject
 
+/**
+ * Latency and download results from a run that did not finish. Kept on failure and cancel so the
+ * user does not lose measurements that already completed.
+ */
+data class PartialSpeedTest(
+    val latency: LatencyStats = LatencyStats.EMPTY,
+    val download: ThroughputResult? = null,
+    val serverInfo: ServerInfo? = null,
+) {
+    val isEmpty: Boolean get() = latency == LatencyStats.EMPTY && download == null
+}
+
 /** All possible states for the Speed Test UI. */
 sealed interface SpeedTestUiState {
-    object Idle : SpeedTestUiState
+    /** [canceled] shows a "Test canceled" notice after a user cancel; [partial] keeps finished results. */
+    data class Idle(
+        val canceled: Boolean = false,
+        val partial: PartialSpeedTest = PartialSpeedTest(),
+    ) : SpeedTestUiState
     data class Running(
         val phase: SpeedTestPhase,
         val latencyStats: LatencyStats = LatencyStats.EMPTY,
@@ -47,8 +64,20 @@ sealed interface SpeedTestUiState {
         val loadedLatencyUp: LatencyStats = LatencyStats.EMPTY
     ) : SpeedTestUiState
     data class Finished(val result: SpeedTestResult) : SpeedTestUiState
-    data class Error(val phase: SpeedTestPhase, val message: String) : SpeedTestUiState
+
+    /**
+     * [message] is developer detail only and is never shown. [reason] selects the friendly text;
+     * [partial] keeps the results completed before the failing phase.
+     */
+    data class Error(
+        val phase: SpeedTestPhase,
+        val message: String,
+        val reason: ErrorCode = ErrorCode.NETWORK_REQUEST_FAILED,
+        val partial: PartialSpeedTest = PartialSpeedTest(),
+    ) : SpeedTestUiState
 }
+
+private fun SpeedTestUiState.Running.toPartial() = PartialSpeedTest(latencyStats, downloadResult, serverInfo)
 
 @HiltViewModel
 class SpeedTestViewModel @Inject constructor(
@@ -57,7 +86,7 @@ class SpeedTestViewModel @Inject constructor(
     private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<SpeedTestUiState>(SpeedTestUiState.Idle)
+    private val _uiState = MutableStateFlow<SpeedTestUiState>(SpeedTestUiState.Idle())
     val uiState: StateFlow<SpeedTestUiState> = _uiState.asStateFlow()
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
@@ -180,14 +209,25 @@ class SpeedTestViewModel @Inject constructor(
                             )
                         }
                         is SpeedTestEvent.Failed -> {
-                            _uiState.value = SpeedTestUiState.Error(event.phase, event.message)
+                            _uiState.value =
+                                SpeedTestUiState.Error(
+                                    phase = event.phase,
+                                    message = event.message,
+                                    reason = event.info.code,
+                                    partial = current.toPartial(),
+                                )
                         }
                     }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.value = SpeedTestUiState.Error(current.phase, e.message ?: "Unknown error")
+                _uiState.value =
+                    SpeedTestUiState.Error(
+                        phase = current.phase,
+                        message = e.message ?: "Unknown error",
+                        partial = current.toPartial(),
+                    )
             } finally {
                 if (session != null && operationSession === session) operationSession = null
             }
@@ -195,11 +235,12 @@ class SpeedTestViewModel @Inject constructor(
     }
 
     fun onCancel() {
+        val partial = (_uiState.value as? SpeedTestUiState.Running)?.toPartial()
         operationSession?.cancel(CancellationReason.USER_STOP)
         operationSession = null
         testJob?.cancel()
         testJob = null
-        _uiState.value = SpeedTestUiState.Idle
+        _uiState.value = SpeedTestUiState.Idle(canceled = partial != null, partial = partial ?: PartialSpeedTest())
     }
 
     fun onRetry() = startTest()

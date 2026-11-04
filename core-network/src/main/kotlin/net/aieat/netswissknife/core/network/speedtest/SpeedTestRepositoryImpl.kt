@@ -28,6 +28,7 @@ import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActi
 import java.io.Closeable
 import java.io.IOException
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URI
 import java.security.SecureRandom
 import java.util.concurrent.atomic.AtomicBoolean
@@ -435,6 +436,8 @@ class SpeedTestRepositoryImpl(
                             report = { send(SpeedTestEvent.UploadProgress(it)) },
                             loadedReport = { send(SpeedTestEvent.LoadedLatencySample(currentPhase, it)) },
                         )
+                    // Nothing reached the server inside the window: report a stall, not a result of 0 Mbps.
+                    if (upload.bytesTransferred == 0L) throw SocketTimeoutException("Upload stalled")
                     send(SpeedTestEvent.LoadedLatencyFinished(currentPhase, loadedUp))
                     send(SpeedTestEvent.UploadFinished(upload))
                 }
@@ -449,7 +452,7 @@ class SpeedTestRepositoryImpl(
                     send(SpeedTestEvent.Failed(currentPhase, ErrorInfo(ErrorCode.NETWORK_TIMEOUT, developerMessage = "Speed test timed out")))
                 } else {
                     ensureCurrentOperationActive()
-                    send(SpeedTestEvent.Failed(currentPhase, ErrorInfo(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = failure.message ?: "Speed test failed")))
+                    send(SpeedTestEvent.Failed(currentPhase, transferFailure(currentPhase, failure)))
                 }
             }
         }
@@ -498,7 +501,8 @@ class SpeedTestRepositoryImpl(
         while (true) {
             delay(config.loadedLatencyIntervalMs)
             ensureCurrentOperationActive()
-            val sample = measureLoadedRtt(engine, operationSession, baseUrl)
+            // A probe that stalls under load is a missing sample, not a failed transfer phase.
+            val sample = measureLoadedRtt(engine, operationSession, baseUrl) ?: continue
             ensureCurrentOperationActive()
             sequence++
             report(sample)
@@ -510,16 +514,17 @@ class SpeedTestRepositoryImpl(
         engine: TransferEngine,
         operationSession: OperationSession,
         baseUrl: String,
-    ): Long =
+    ): Long? =
         try {
             operationSession.concurrencyLimiter.withPermit {
                 engine.httpRtt("$baseUrl/__down?bytes=0").correctedMs
             }
-        } catch (failure: IOException) {
+        } catch (ignoredFailure: IOException) {
             // OkHttp reports Call.cancel() from coroutine cancellation as IOException("Canceled").
-            // Re-check context so phase-end cancellation is benign while active network errors surface.
+            // Re-check context so phase-end cancellation stays silent. Any other I/O failure (including
+            // a read stall under load) only drops this sample; the transfer itself decides the phase result.
             currentCoroutineContext().ensureActive()
-            throw failure
+            null
         }
 
     private suspend fun collectEngineTransfer(
@@ -806,4 +811,16 @@ class SpeedTestRepositoryImpl(
 
         return ThroughputResult.from(totalBytes, actualDurationMs, samples)
     }
+}
+
+/** Maps a transfer failure to a user-facing code. A socket stall is a timeout; the detail names the phase. */
+private fun transferFailure(
+    phase: SpeedTestPhase,
+    failure: Exception,
+): ErrorInfo {
+    if (failure !is SocketTimeoutException) {
+        return ErrorInfo(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = failure.message ?: "Speed test failed")
+    }
+    val phaseName = phase.name.lowercase().replaceFirstChar { it.uppercase() }
+    return ErrorInfo(ErrorCode.NETWORK_TIMEOUT, developerMessage = "$phaseName stalled")
 }

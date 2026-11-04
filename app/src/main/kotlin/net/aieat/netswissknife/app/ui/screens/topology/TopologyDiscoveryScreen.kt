@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -35,6 +36,7 @@ import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -45,13 +47,20 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.app.ui.components.AppModalBottomSheet
+import net.aieat.netswissknife.app.ui.components.DisabledActionHint
 import net.aieat.netswissknife.app.ui.components.HeroTitleText
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import net.aieat.netswissknife.app.ui.components.ToolTextField
+import net.aieat.netswissknife.app.ui.components.messageRes
+import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
+import net.aieat.netswissknife.app.ui.components.scrollIntoViewOnFocus
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.util.shareText
@@ -80,6 +89,7 @@ fun TopologyDiscoveryScreen(viewModel: TopologyDiscoveryViewModel = hiltViewMode
             networkStatus = networkStatus,
             onGrantPermission = requestLocalNetworkPermission,
             recentSeeds = recentSeeds,
+            initialSeed = viewModel.restoredSeed.orEmpty(),
             onStartDiscovery = { params -> viewModel.startDiscovery(params) },
             onRemoveRecentSeed = { seed -> viewModel.removeRecentSeed(seed) },
             onClearRecentSeeds = { viewModel.clearRecentSeeds() },
@@ -126,6 +136,7 @@ private fun TopologyScreenContent(
     networkStatus: net.aieat.netswissknife.app.platform.NetworkStatus,
     onGrantPermission: () -> Unit,
     recentSeeds: List<String>,
+    initialSeed: String,
     onStartDiscovery: (TopologyParams) -> Unit,
     onRemoveRecentSeed: (String) -> Unit,
     onClearRecentSeeds: () -> Unit,
@@ -135,17 +146,19 @@ private fun TopologyScreenContent(
     onRetryDiscovery: (TopologyParams) -> Unit,
     onHelpClick: () -> Unit = {},
 ) {
-    var targetIp by remember { mutableStateOf("") }
-    var snmpVersion by remember { mutableStateOf(SnmpVersion.V2C) }
+    // Non-secret form inputs survive rotation (rememberSaveable). Community string and v3
+    // passwords stay in plain remember so credentials never reach the saved-state Bundle.
+    var targetIp by rememberSaveable { mutableStateOf(initialSeed) }
+    var snmpVersion by rememberSaveable { mutableStateOf(SnmpVersion.V2C) }
     var community by remember { mutableStateOf("public") }
-    var v3Username by remember { mutableStateOf("") }
-    var v3AuthProto by remember { mutableStateOf(V3AuthProtocol.NONE) }
+    var v3Username by rememberSaveable { mutableStateOf("") }
+    var v3AuthProto by rememberSaveable { mutableStateOf(V3AuthProtocol.NONE) }
     var v3AuthPassword by remember { mutableStateOf("") }
-    var v3PrivProto by remember { mutableStateOf(V3PrivProtocol.NONE) }
+    var v3PrivProto by rememberSaveable { mutableStateOf(V3PrivProtocol.NONE) }
     var v3PrivPassword by remember { mutableStateOf("") }
-    var maxHops by remember { mutableFloatStateOf(3f) }
-    var queryDiscoveredNeighbors by remember { mutableStateOf(false) }
-    var configExpanded by remember { mutableStateOf(true) }
+    var maxHops by rememberSaveable { mutableStateOf(3f) }
+    var queryDiscoveredNeighbors by rememberSaveable { mutableStateOf(false) }
+    var configExpanded by rememberSaveable { mutableStateOf(true) }
     var showCommunityPassword by remember { mutableStateOf(false) }
     var showAuthPassword by remember { mutableStateOf(false) }
     var showPrivPassword by remember { mutableStateOf(false) }
@@ -158,6 +171,14 @@ private fun TopologyScreenContent(
     val isInProgress = isDiscovering || isCanceling
     val normalizedTargetIp = HostValidator.normalize(targetIp)
     val isTargetIpInvalid = targetIp.isNotBlank() && normalizedTargetIp == null
+    // Name the specific reason (spaces, bad characters, bad label...) rather than one generic message.
+    val targetIpErrorRes: Int? =
+        if (isTargetIpInvalid) {
+            HostValidator.problemOf(targetIp)?.messageRes() ?: R.string.error_host_invalid
+        } else {
+            null
+        }
+    val dismissKeyboard = rememberDismissKeyboard()
     val canStartDiscovery =
         !isInProgress && normalizedTargetIp != null &&
             !(v3PrivProto != V3PrivProtocol.NONE && v3AuthProto == V3AuthProtocol.NONE)
@@ -178,6 +199,13 @@ private fun TopologyScreenContent(
             timeoutMs = 3000,
             retries = 1,
         )
+
+    // Shared by the Discover button and the keyboard Done action, so both start the same scan.
+    fun startDiscoveryIfReady() {
+        if (!canStartDiscovery) return
+        onStartDiscovery(currentTopologyParams())
+        configExpanded = false
+    }
 
     val selectedNode =
         when (uiState) {
@@ -315,11 +343,23 @@ private fun TopologyScreenContent(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = "SNMP Configuration",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "SNMP Configuration",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        val subtitle = topologyConfigSubtitle(targetIp, snmpVersion.name.lowercase())
+                        if (!configExpanded && subtitle != null) {
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                     Icon(
                         imageVector = if (configExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = null,
@@ -329,27 +369,32 @@ private fun TopologyScreenContent(
 
                 AnimatedVisibility(visible = configExpanded) {
                     Column(modifier = Modifier.padding(top = 12.dp)) {
-                        OutlinedTextField(
+                        ToolTextField(
                             value = targetIp,
                             onValueChange = { targetIp = it },
                             label = { Text(stringResource(R.string.topology_target_ip_label)) },
+                            leadingIcon = { Icon(Icons.Default.Router, contentDescription = null) },
                             isError = isTargetIpInvalid,
                             supportingText =
-                                if (isTargetIpInvalid) {
-                                    { Text(stringResource(R.string.error_invalid_host)) }
+                                if (targetIpErrorRes != null) {
+                                    { Text(stringResource(targetIpErrorRes)) }
                                 } else {
                                     null
                                 },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                            trailingIcon = {
-                                if (targetIp.isNotEmpty()) {
-                                    IconButton(onClick = { targetIp = "" }) {
-                                        Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
-                                    }
-                                }
-                            },
+                            keyboardOptions =
+                                KeyboardOptions(
+                                    keyboardType = KeyboardType.Uri,
+                                    imeAction = ImeAction.Done,
+                                ),
+                            keyboardActions =
+                                KeyboardActions(
+                                    onDone = {
+                                        dismissKeyboard()
+                                        startDiscoveryIfReady()
+                                    },
+                                ),
                         )
 
                         RecentHostsRow(
@@ -394,7 +439,7 @@ private fun TopologyScreenContent(
                                 value = community,
                                 onValueChange = { community = it },
                                 label = { Text(stringResource(R.string.topology_community_label)) },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
                                 singleLine = true,
                                 visualTransformation =
                                     if (showCommunityPassword) {
@@ -419,7 +464,7 @@ private fun TopologyScreenContent(
                                     value = v3Username,
                                     onValueChange = { v3Username = it },
                                     label = { Text(stringResource(R.string.topology_v3_username_label)) },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
                                     singleLine = true,
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
@@ -438,7 +483,7 @@ private fun TopologyScreenContent(
                                         value = v3AuthPassword,
                                         onValueChange = { v3AuthPassword = it },
                                         label = { Text(stringResource(R.string.topology_v3_auth_password_label)) },
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
                                         singleLine = true,
                                         visualTransformation =
                                             if (showAuthPassword) {
@@ -483,7 +528,7 @@ private fun TopologyScreenContent(
                                         value = v3PrivPassword,
                                         onValueChange = { v3PrivPassword = it },
                                         label = { Text(stringResource(R.string.topology_v3_priv_password_label)) },
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
                                         singleLine = true,
                                         visualTransformation =
                                             if (showPrivPassword) {
@@ -528,58 +573,69 @@ private fun TopologyScreenContent(
                             checked = queryDiscoveredNeighbors,
                             onCheckedChange = { queryDiscoveredNeighbors = it },
                         )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Button(
-                            onClick = {
-                                onStartDiscovery(currentTopologyParams())
-                                configExpanded = false
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = canStartDiscovery,
-                        ) {
-                            if (isInProgress) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-                            Text(stringResource(R.string.topology_discover_button))
-                        }
                     }
                 }
+            }
+        }
 
-                // Keep cancellation available after Discover collapses the
-                // configuration fields for the active scan.
-                AnimatedVisibility(visible = isInProgress) {
-                    OutlinedButton(
-                        onClick = onReset,
-                        enabled = isDiscovering,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp),
-                    ) {
-                        if (isCanceling) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                            )
-                            Spacer(Modifier.width(8.dp))
-                        }
-                        Text(
-                            stringResource(
-                                if (isCanceling) {
-                                    R.string.topology_canceling_button
-                                } else {
-                                    R.string.topology_cancel_button
-                                },
-                            ),
+        // Primary actions live outside the scrolling configuration card so Discover (and
+        // Cancel while a scan runs) stay visible whatever the card's scroll position is.
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        ) {
+            Button(
+                onClick = { startDiscoveryIfReady() },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = canStartDiscovery,
+            ) {
+                if (isInProgress) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text(stringResource(R.string.topology_discover_button))
+            }
+
+            if (!canStartDiscovery && !isInProgress) {
+                DisabledActionHint(
+                    stringResource(
+                        if (normalizedTargetIp == null) {
+                            R.string.topology_discover_disabled_target
+                        } else {
+                            R.string.topology_discover_disabled_v3
+                        },
+                    ),
+                )
+            }
+
+            AnimatedVisibility(visible = isInProgress) {
+                OutlinedButton(
+                    onClick = onReset,
+                    enabled = isDiscovering,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                ) {
+                    if (isCanceling) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
                         )
+                        Spacer(Modifier.width(8.dp))
                     }
+                    Text(
+                        stringResource(
+                            if (isCanceling) {
+                                R.string.topology_canceling_button
+                            } else {
+                                R.string.topology_cancel_button
+                            },
+                        ),
+                    )
                 }
             }
         }
@@ -826,7 +882,7 @@ private fun TopologyResultUtilities(
                 onValueChange = onNodeSearchChange,
                 label = { Text(stringResource(R.string.topology_search_nodes)) },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
             )
             val matches =
                 graph.nodes.filter { node ->
@@ -1127,12 +1183,15 @@ private fun ErrorContent(
     retryEnabled: Boolean,
     onRetry: () -> Unit,
 ) {
+    // Top-aligned: the failure card sits directly under Discover instead of floating mid-slot.
+    // Scrolls when the slot is short, so a long message is never cut off (V6A-05).
     Box(
         modifier =
             Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.TopCenter,
     ) {
         ElevatedCard(
             modifier =
@@ -1157,7 +1216,7 @@ private fun ErrorContent(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Discovery Failed",
+                    text = stringResource(R.string.topology_error_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onErrorContainer,
@@ -1170,17 +1229,12 @@ private fun ErrorContent(
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Button(
+                ToolRetryButton(
+                    text = stringResource(R.string.topology_error_retry),
                     onClick = onRetry,
                     enabled = retryEnabled,
                     modifier = Modifier.testTag("topology_error_retry"),
-                    colors =
-                        ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                        ),
-                ) {
-                    Text(stringResource(R.string.topology_error_retry))
-                }
+                )
             }
         }
     }
@@ -1507,7 +1561,7 @@ private fun NodeDetailSheet(
     // scroll can't reveal them because the lazy list never laid them out to begin
     // with. Same fix as ToolHelpSheet.kt.
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    AppModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         LazyColumn(
             modifier =
                 Modifier

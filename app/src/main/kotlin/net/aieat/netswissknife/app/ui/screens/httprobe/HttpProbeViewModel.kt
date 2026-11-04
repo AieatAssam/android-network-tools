@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.data.ToolSessionMemory
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
@@ -32,6 +33,7 @@ import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.HttpProbeParams
 import net.aieat.netswissknife.core.domain.HttpProbeUseCase
 import net.aieat.netswissknife.core.domain.validateHttpProbeUrl
+import net.aieat.netswissknife.core.network.ErrorInfo
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeOperation
@@ -54,6 +56,12 @@ data class PendingEntityReplayApproval(
     val statusCode: Int
 )
 
+/** A mDNS or LAN handoff to a plain-HTTP port, which HTTP Probe cannot send. No URL is filled in. */
+data class PlainHttpHandoff(
+    val host: String,
+    val port: Int,
+)
+
 data class BlockedHttpRedirectWarning(
     val sourceUrl: String,
     val destinationUrl: String,
@@ -72,12 +80,40 @@ data class HttpProbeUiState(
     val isCanceled: Boolean = false,
     val result: HttpProbeResult? = null,
     val error: String? = null,
+    /** Typed cause of [error], so the screen can show localized copy. */
+    val errorInfo: ErrorInfo? = null,
     val blockedRedirectWarning: BlockedHttpRedirectWarning? = null,
     val pendingEntityReplayApproval: PendingEntityReplayApproval? = null,
     val selectedTab: Int = 0,
     val headersExpanded: Boolean = false,
     val prettyJson: Boolean = false,
 )
+
+/** [ToolSessionMemory] slot for the HTTP Probe URL, method, redirect flag and last finished result. */
+private const val HTTP_SESSION_KEY = "httpProbeSession"
+
+/**
+ * What HTTP Probe keeps when the tool is left: the URL, method, redirect flag and the last finished
+ * result. Request headers and the request body are never kept (they can hold tokens), so the result is
+ * stored without them; see [forSessionMemory].
+ */
+internal data class HttpProbeSessionSnapshot(
+    val url: String,
+    val method: HttpMethod,
+    val followRedirects: Boolean,
+    val result: HttpProbeResult?,
+)
+
+/** Drops the request headers, body and replay callback before a result is kept in memory. */
+internal fun HttpProbeResult.forSessionMemory(): HttpProbeResult =
+    copy(
+        request =
+            request.copy(
+                headers = emptyList(),
+                body = null,
+                approveCrossOriginEntityReplay = null,
+            ),
+    )
 
 @HiltViewModel
 class HttpProbeViewModel @Inject constructor(
@@ -87,7 +123,11 @@ class HttpProbeViewModel @Inject constructor(
     // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
     @param:SuppressLint("VisibleForTests")
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+    private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
 ) : ViewModel() {
+
+    private val restoredSession: HttpProbeSessionSnapshot? =
+        sessionMemory.get<HttpProbeSessionSnapshot>(HTTP_SESSION_KEY)
 
     private val routeHost = savedStateHandle.get<String>("host")
     private val rawIntentArgument = savedStateHandle.get<String>("intent")
@@ -113,17 +153,38 @@ class HttpProbeViewModel @Inject constructor(
     )
     val sourceContext: ToolSource? get() = _sourceContext.value
     val sourceContextState: StateFlow<ToolSource?> = _sourceContext.asStateFlow()
+    private val _plainHttpHandoff =
+        MutableStateFlow(
+            handoffTarget
+                ?.takeIf { httpUrlForTarget(it) == null && _sourceContext.value != null }
+                ?.let { PlainHttpHandoff(host = it.host.canonical, port = requireNotNull(it.port).value) },
+        )
+    val plainHttpHandoff: StateFlow<PlainHttpHandoff?> = _plainHttpHandoff.asStateFlow()
 
-    private val _uiState = MutableStateFlow(
-        HttpProbeUiState(
-            url = if (savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true) {
-                savedStateHandle.get<String>(EDITED_URL_KEY).orEmpty()
-            } else {
-                savedStateHandle.get<String>(EDITED_URL_KEY)
-                    ?: if (_hasInvalidHandoff.value) "" else handoffTarget?.let(::httpUrlForTarget).orEmpty()
-            },
-        ),
-    )
+    // A handoff (route or intent) wins over the URL kept when the tool was left; a kept result is shown
+    // only for the URL it was produced from.
+    private val initialUrl: String =
+        if (savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true) {
+            savedStateHandle.get<String>(EDITED_URL_KEY).orEmpty()
+        } else {
+            savedStateHandle.get<String>(EDITED_URL_KEY)
+                ?: if (_hasInvalidHandoff.value) {
+                    ""
+                } else {
+                    handoffTarget?.let(::httpUrlForTarget)
+                        ?: restoredSession?.takeIf { handoffTarget == null }?.url.orEmpty()
+                }
+        }
+
+    private val _uiState =
+        MutableStateFlow(
+            HttpProbeUiState(
+                url = initialUrl,
+                method = restoredSession?.method ?: HttpMethod.GET,
+                followRedirects = restoredSession?.followRedirects ?: true,
+                result = restoredSession?.takeIf { it.url == initialUrl }?.result,
+            ),
+        )
     val uiState: StateFlow<HttpProbeUiState> = _uiState.asStateFlow()
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
     private data class ActiveReplayDecision(
@@ -134,6 +195,12 @@ class HttpProbeViewModel @Inject constructor(
 
     private var activeReplayDecision: ActiveReplayDecision? = null
     private var operationSession: OperationSession? = null
+
+    /**
+     * Set by Cancel for the current request. Once it is set, whatever the call returns (a result,
+     * an error such as a timeout, or a cancellation) the request ends as canceled, not as that outcome.
+     */
+    private var userStopRequested = false
 
     init {
         if (savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) != true) {
@@ -168,6 +235,11 @@ class HttpProbeViewModel @Inject constructor(
     fun onUrlChange(url: String) {
         if (!updateRequestInput { it.copy(url = url) }) return
         savedStateHandle[EDITED_URL_KEY] = url
+        // Once the user edits the URL it is no longer the handed-off destination, so the provenance
+        // label and the plain-HTTP explanation would be stale.
+        _sourceContext.value = null
+        savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
+        _plainHttpHandoff.value = null
         if (_hasInvalidHandoff.value && validateHttpProbeUrl(url) == null) {
             savedStateHandle[HANDOFF_RECOVERED_KEY] = true
             _hasInvalidHandoff.value = false
@@ -178,6 +250,7 @@ class HttpProbeViewModel @Inject constructor(
     fun clearPrefill() {
         if (_uiState.value.isLoading) return
         _sourceContext.value = null
+        _plainHttpHandoff.value = null
         savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
         savedStateHandle[HANDOFF_CONSUMED_KEY] = true
         onUrlChange("")
@@ -270,6 +343,7 @@ class HttpProbeViewModel @Inject constructor(
                 isCanceled = false,
                 result = null,
                 error = null,
+                errorInfo = null,
                 blockedRedirectWarning = null,
                 selectedTab = 0,
             )
@@ -277,6 +351,7 @@ class HttpProbeViewModel @Inject constructor(
         val runId = UUID.randomUUID().toString()
         val session = HttpProbeOperation.newInteractiveSession()
         operationSession = session
+        userStopRequested = false
 
         viewModelScope.launch {
             val headers = state.customHeaders
@@ -324,6 +399,7 @@ class HttpProbeViewModel @Inject constructor(
                 )
 
                 _uiState.update { current ->
+                    if (userStopRequested) return@update current.canceled()
                     when (result) {
                         is NetworkResult.Success -> current.copy(
                             isLoading = false,
@@ -342,6 +418,7 @@ class HttpProbeViewModel @Inject constructor(
                                 isCanceled = false,
                                 pendingEntityReplayApproval = null,
                                 error = result.message.takeUnless { blocked != null },
+                                errorInfo = result.info.takeUnless { blocked != null },
                                 blockedRedirectWarning = blocked?.let {
                                     BlockedHttpRedirectWarning(
                                         sourceUrl = it.sourceUrl,
@@ -355,15 +432,8 @@ class HttpProbeViewModel @Inject constructor(
                     }
                 }
             } catch (e: CancellationException) {
-                if (session.cancellationReason == CancellationReason.USER_STOP) {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            isCanceling = false,
-                            isCanceled = true,
-                            pendingEntityReplayApproval = null,
-                        )
-                    }
+                if (userStopRequested || session.cancellationReason == CancellationReason.USER_STOP) {
+                    _uiState.update { it.canceled() }
                 }
                 throw e
             } catch (e: Exception) {
@@ -371,12 +441,16 @@ class HttpProbeViewModel @Inject constructor(
                     ?: e::class.simpleName
                     ?: "Unknown request error"
                 _uiState.update {
+                    // A transport error reported after Cancel (for example an IOException from a
+                    // cancelled call) is still the user's cancel, not a failure.
+                    if (userStopRequested) return@update it.canceled()
                     it.copy(
                         isLoading = false,
                         isCanceling = false,
                         isCanceled = false,
                         pendingEntityReplayApproval = null,
                         error = "Request failed: $detail",
+                        errorInfo = null,
                     )
                 }
             } finally {
@@ -386,10 +460,24 @@ class HttpProbeViewModel @Inject constructor(
     }
 
     fun cancel() {
-        if (!_uiState.value.isLoading || _uiState.value.isCanceling || operationSession == null) return
+        val state = _uiState.value
+        if (!state.isLoading || state.isCanceling) return
+        userStopRequested = true
         _uiState.update { it.copy(isCanceling = true) }
         cancelRequest(CancellationReason.USER_STOP)
     }
+
+    private fun HttpProbeUiState.canceled(): HttpProbeUiState =
+        copy(
+            isLoading = false,
+            isCanceling = false,
+            isCanceled = true,
+            result = null,
+            error = null,
+            errorInfo = null,
+            blockedRedirectWarning = null,
+            pendingEntityReplayApproval = null,
+        )
 
     private fun cancelRequest(reason: CancellationReason) {
         operationSession?.let { session ->
@@ -410,6 +498,7 @@ class HttpProbeViewModel @Inject constructor(
                 isCanceled = false,
                 result = null,
                 error = null,
+                errorInfo = null,
                 blockedRedirectWarning = null,
                 pendingEntityReplayApproval = null,
                 selectedTab = 0,
@@ -420,6 +509,18 @@ class HttpProbeViewModel @Inject constructor(
 
     override fun onCleared() {
         cancelRequest(CancellationReason.LIFECYCLE_PAUSE)
+        // A request still running is cancelled and not kept as running; headers and body are never kept.
+        val state = _uiState.value
+        val kept = state.result?.takeIf { !state.isLoading && !state.isCanceling }
+        sessionMemory.put(
+            HTTP_SESSION_KEY,
+            HttpProbeSessionSnapshot(
+                url = state.url,
+                method = state.method,
+                followRedirects = state.followRedirects,
+                result = kept?.forSessionMemory(),
+            ),
+        )
     }
 
     private companion object {
@@ -431,10 +532,22 @@ class HttpProbeViewModel @Inject constructor(
     }
 }
 
-internal fun httpUrlForTarget(target: ToolDestination.HostTarget): String {
+/**
+ * The URL prefilled from a mDNS or LAN handoff. HTTP Probe only sends HTTPS, so a service on a
+ * plain-HTTP port gets no URL (null) and the screen explains why. 443 and 8443 are the
+ * conventional TLS ports, and 443 uses the default port in the URL.
+ */
+private const val HTTPS_DEFAULT_PORT = 443
+private const val HTTPS_ALTERNATE_PORT = 8443
+
+internal fun httpUrlForTarget(target: ToolDestination.HostTarget): String? {
     val host = target.host.canonical.let { canonical ->
         val address = canonical.removeSurrounding("[", "]")
         if (':' in address) "[${address.replace("%", "%25")}]" else address
     }
-    return "http://$host:${requireNotNull(target.port).value}/"
+    return when (requireNotNull(target.port).value) {
+        HTTPS_DEFAULT_PORT -> "https://$host/"
+        HTTPS_ALTERNATE_PORT -> "https://$host:$HTTPS_ALTERNATE_PORT/"
+        else -> null
+    }
 }

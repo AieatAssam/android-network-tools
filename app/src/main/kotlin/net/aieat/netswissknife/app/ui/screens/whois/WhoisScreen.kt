@@ -1,10 +1,14 @@
 package net.aieat.netswissknife.app.ui.screens.whois
 
+import android.app.Activity
 import android.content.Intent
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.core.net.toUri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.InfiniteTransition
 import androidx.compose.animation.core.RepeatMode
@@ -15,22 +19,20 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -42,14 +44,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.EventBusy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.automirrored.filled.ManageSearch
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -60,12 +60,9 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -87,10 +84,10 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -98,7 +95,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.R
@@ -111,7 +111,6 @@ import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.whois.WhoisProtocol
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
 import net.aieat.netswissknife.core.network.whois.WhoisResult
-import net.aieat.netswissknife.core.network.whois.WhoisServerRole
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -142,14 +141,19 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    // Rotation also reaches ON_STOP and disposes this screen. The Activity reports it through
+    // isChangingConfigurations, and the lookup must keep running across that recreation.
+    val activity = context as? Activity
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) viewModel.onLifecyclePause()
+            if (event == Lifecycle.Event.ON_STOP) {
+                viewModel.onLifecyclePause(configurationChange = activity?.isChangingConfigurations == true)
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            viewModel.onLifecyclePause()
+            viewModel.onLifecyclePause(configurationChange = activity?.isChangingConfigurations == true)
         }
     }
 
@@ -183,25 +187,32 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
             // ── Input card ─────────────────────────────────────────────────────
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
+                        val queryInvalidText = stringResource(R.string.whois_query_invalid)
+                        val queryInvalidSupport: @Composable () -> Unit = { Text(queryInvalidText) }
+                        val queryKeyboard =
+                            KeyboardOptions(
+                                capitalization = KeyboardCapitalization.None,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Go,
+                            )
+                        val queryActions =
+                            KeyboardActions(
+                                onGo = { if (!uiState.isLoading && !uiState.queryInvalid) viewModel.lookup() },
+                            )
+                    ToolTextField(
                         value = uiState.query,
                         onValueChange = viewModel::onQueryChange,
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text(stringResource(R.string.whois_query_label)) },
                         placeholder = { Text(stringResource(R.string.whois_query_placeholder)) },
                         leadingIcon = { Icon(Icons.AutoMirrored.Filled.ManageSearch, contentDescription = null) },
-                        trailingIcon = {
-                            if (uiState.query.isNotEmpty()) {
-                                IconButton(
-                                    onClick = { viewModel.onQueryChange("") },
-                                    enabled = !uiState.isLoading,
-                                ) {
-                                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear))
-                                }
-                            }
-                        },
                         singleLine = true,
-                        enabled = !uiState.isLoading
+                            enabled = !uiState.isLoading,
+                            isError = uiState.queryInvalid,
+                            supportingText = if (uiState.queryInvalid) queryInvalidSupport else null,
+                            // Domain names are not sentences: no capital letters or autocorrected spaces (PHB-10).
+                            keyboardOptions = queryKeyboard,
+                            keyboardActions = queryActions,
                     )
                     RecentHostsRow(
                         recentHosts = recentHosts,
@@ -236,7 +247,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                     Button(
                         onClick = hapticAction(viewModel::lookup),
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !uiState.isLoading && uiState.query.isNotBlank()
+                            enabled = !uiState.isLoading && uiState.query.isNotBlank() && !uiState.queryInvalid,
                     ) {
                         Text(stringResource(R.string.whois_lookup_button))
                     }
@@ -337,7 +348,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                     }
                     error != null -> {
                         ErrorCard(
-                            message = error,
+                                message = error,
                             onRetry = viewModel::lookup,
                             hopStates = uiState.hopStates
                         )
@@ -398,9 +409,7 @@ private fun CanceledLookupCard(isLifecyclePaused: Boolean, onRetry: () -> Unit) 
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
-            Button(onClick = hapticAction(onRetry)) {
-                Text(stringResource(R.string.whois_retry))
-            }
+            ToolRetryButton(text = stringResource(R.string.whois_retry), onClick = onRetry)
         }
     }
 }
@@ -496,8 +505,9 @@ private fun HopNodeCircle(
     infiniteTransition: InfiniteTransition,
     modifier: Modifier = Modifier
 ) {
-    val roleColor = hopRoleContainerColor(hop.server.role)
-    val roleOnColor = hopRoleOnContainerColor(hop.server.role)
+    // Every completed hop uses the same success colour; the role is shown in the label below.
+    val doneColor = MaterialTheme.colorScheme.primaryContainer
+    val doneOnColor = MaterialTheme.colorScheme.onPrimaryContainer
 
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 0.9f,
@@ -510,7 +520,7 @@ private fun HopNodeCircle(
         targetValue = when (hop.status) {
             HopStatus.PENDING -> MaterialTheme.colorScheme.surface
             HopStatus.QUERYING -> MaterialTheme.colorScheme.primaryContainer
-            HopStatus.DONE -> roleColor
+            HopStatus.DONE -> doneColor
             HopStatus.FAILED -> MaterialTheme.colorScheme.errorContainer
             HopStatus.SKIPPED -> MaterialTheme.colorScheme.surface
         },
@@ -530,7 +540,7 @@ private fun HopNodeCircle(
                 HopStatus.DONE ->
                     Icon(
                         Icons.Default.Check, contentDescription = null,
-                        modifier = Modifier.size(20.dp), tint = roleOnColor
+                        modifier = Modifier.size(20.dp), tint = doneOnColor
                     )
                 HopStatus.FAILED ->
                     Icon(
@@ -582,25 +592,6 @@ private fun HopNodeLabels(hop: HopUiState, modifier: Modifier = Modifier) {
         }
     }
 }
-
-@Composable
-private fun hopRoleContainerColor(role: WhoisServerRole): Color = when (role) {
-    WhoisServerRole.IANA -> MaterialTheme.colorScheme.tertiaryContainer
-    WhoisServerRole.REGISTRY -> MaterialTheme.colorScheme.primaryContainer
-    WhoisServerRole.REGISTRAR -> MaterialTheme.colorScheme.secondaryContainer
-    WhoisServerRole.RIR -> MaterialTheme.colorScheme.secondaryContainer
-    WhoisServerRole.RDAP -> MaterialTheme.colorScheme.primaryContainer
-}
-
-@Composable
-private fun hopRoleOnContainerColor(role: WhoisServerRole): Color = when (role) {
-    WhoisServerRole.IANA -> MaterialTheme.colorScheme.onTertiaryContainer
-    WhoisServerRole.REGISTRY -> MaterialTheme.colorScheme.onPrimaryContainer
-    WhoisServerRole.REGISTRAR -> MaterialTheme.colorScheme.onSecondaryContainer
-    WhoisServerRole.RIR -> MaterialTheme.colorScheme.onSecondaryContainer
-    WhoisServerRole.RDAP -> MaterialTheme.colorScheme.onPrimaryContainer
-}
-
 
 // ── Idle Card ─────────────────────────────────────────────────────────────────
 
@@ -684,9 +675,7 @@ fun ErrorCard(message: String, onRetry: () -> Unit, hopStates: List<HopUiState>)
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     textAlign = TextAlign.Center
                 )
-                Button(onClick = onRetry) {
-                    Text(stringResource(R.string.whois_retry))
-                }
+                ToolRetryButton(text = stringResource(R.string.whois_retry), onClick = onRetry)
             }
         }
     }
@@ -703,16 +692,13 @@ fun WhoisResultsSection(
     onOpenUrl: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            IconButton(onClick = onShare) {
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = stringResource(R.string.action_share)
-                )
-            }
+        // The query chain already names the answering protocol and server, so no separate "Answered by" line.
+        result.rdapFallbackReason?.let { reason ->
+            Text(
+                text = stringResource(R.string.whois_rdap_fallback_note, reason),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         when (result.queryType) {
             WhoisQueryType.DOMAIN -> DomainResultCard(result, onOpenUrl)
@@ -721,6 +707,10 @@ fun WhoisResultsSection(
 
         // Raw response accordion
         RawResponseAccordion(result = result, showRaw = showRaw, onToggle = onToggleRaw)
+        ResultActionsRow(
+            copyText = buildWhoisShareText(result),
+            onShare = onShare,
+        )
     }
 }
 
@@ -821,7 +811,7 @@ fun DomainResultCard(result: WhoisResult, onOpenUrl: (String) -> Unit) {
                         result.statusCodes.forEach { status ->
                             SuggestionChip(
                                 onClick = {},
-                                label = { Text(humanReadableStatus(status), style = MaterialTheme.typography.labelSmall) }
+                                label = { Text(whoisStatusLabel(status), style = MaterialTheme.typography.labelSmall) }
                             )
                         }
                     }
@@ -857,7 +847,7 @@ fun DomainResultCard(result: WhoisResult, onOpenUrl: (String) -> Unit) {
             // DNSSEC
             val dnssec = result.dnssec
             if (dnssec != null) {
-                LabeledRow(label = stringResource(R.string.whois_dnssec), value = dnssec)
+                LabeledRow(label = stringResource(R.string.whois_dnssec), value = dnssecText(dnssec))
                 HorizontalDivider()
             }
 
@@ -880,20 +870,6 @@ fun DomainResultCard(result: WhoisResult, onOpenUrl: (String) -> Unit) {
                         )
                     }
                 }
-            }
-
-            // Raw toggle
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.whois_show_raw),
-                    style = MaterialTheme.typography.bodyMedium
-                )
             }
         }
     }
@@ -929,7 +905,7 @@ fun IpAsnResultCard(result: WhoisResult) {
             val orgName = result.orgName
             val country = result.country
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (netRange != null) LabeledRow(stringResource(R.string.whois_net_range), netRange)
+                if (netRange != null) LabeledRow(stringResource(R.string.whois_net_range), netRangeDisplay(netRange))
                 if (orgName != null) LabeledRow(stringResource(R.string.whois_org), orgName)
                 if (country != null) {
                     LabeledRow(
@@ -952,6 +928,7 @@ fun RawResponseAccordion(result: WhoisResult, showRaw: Boolean, onToggle: () -> 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clickable(role = Role.Button, onClick = onToggle)
                     .padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -960,14 +937,11 @@ fun RawResponseAccordion(result: WhoisResult, showRaw: Boolean, onToggle: () -> 
                     text = stringResource(R.string.whois_raw_responses),
                     style = MaterialTheme.typography.titleMedium
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Switch(checked = showRaw, onCheckedChange = { onToggle() })
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        imageVector = if (showRaw) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = null
-                    )
-                }
+                // One affordance for one action: the whole row toggles, the chevron shows the state.
+                Icon(
+                    imageVector = if (showRaw) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null
+                )
             }
             AnimatedVisibility(visible = showRaw) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1083,25 +1057,6 @@ private fun expiryColor(epochMs: Long?): Color? {
     }
 }
 
-private fun humanReadableStatus(raw: String): String {
-    val stripped = raw.substringBefore(" ").trim()
-    return when (stripped) {
-        "clientTransferProhibited" -> "Transfer Locked"
-        "clientDeleteProhibited" -> "Delete Locked"
-        "clientUpdateProhibited" -> "Update Locked"
-        "serverTransferProhibited" -> "Server Transfer Locked"
-        "clientHold" -> "Client Hold"
-        "pendingDelete" -> "Pending Delete"
-        else -> {
-            stripped
-                .removePrefix("client")
-                .removePrefix("server")
-                .replace(Regex("(?<=[a-z])(?=[A-Z])"), " ")
-                .replaceFirstChar { it.uppercase() }
-        }
-    }
-}
-
 private fun flagEmoji(countryCode: String): String {
     if (countryCode.length != 2) return ""
     val base = 0x1F1E6 - 'A'.code
@@ -1110,13 +1065,13 @@ private fun flagEmoji(countryCode: String): String {
         .joinToString("")
 }
 
-private fun buildWhoisShareText(result: net.aieat.netswissknife.core.network.whois.WhoisResult): String = buildString {
+internal fun buildWhoisShareText(result: net.aieat.netswissknife.core.network.whois.WhoisResult): String = buildString {
     appendLine("WHOIS – ${result.query}")
     appendLine()
     result.registrar?.let { appendLine("Registrar: $it") }
-    result.registeredOn?.let { appendLine("Created: $it") }
-    result.updatedOn?.let { appendLine("Updated: $it") }
-    result.expiresOn?.let { appendLine("Expires: $it") }
+    result.registeredOn?.let { appendLine("Created: ${formatDate(it)}") }
+    result.updatedOn?.let { appendLine("Updated: ${formatDate(it)}") }
+    result.expiresOn?.let { appendLine("Expires: ${formatDate(it)}") }
     if (result.nameServers.isNotEmpty()) {
         appendLine("Name Servers: ${result.nameServers.joinToString(", ")}")
     }
@@ -1128,5 +1083,17 @@ private fun buildWhoisShareText(result: net.aieat.netswissknife.core.network.who
         appendLine()
         appendLine("--- Raw WHOIS ---")
         append(rawWhois)
+    }
+}
+
+/** The DNSSEC row text: one localised label for each known state, humanized text otherwise. */
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun dnssecText(raw: String): String {
+    val signed = stringResource(R.string.whois_dnssec_signed)
+    val unsigned = stringResource(R.string.whois_dnssec_unsigned)
+    return when (val label = whoisDnssecLabel(raw)) {
+        is WhoisDnssecLabel.Text -> label.text
+        is WhoisDnssecLabel.Known -> if (label.state == WhoisDnssecState.SIGNED) signed else unsigned
     }
 }

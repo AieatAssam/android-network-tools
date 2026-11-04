@@ -1,13 +1,8 @@
 package net.aieat.netswissknife.app.ui.screens.mdns
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -35,23 +30,21 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Http
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.NetworkPing
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Router
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
@@ -62,15 +55,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -81,7 +72,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
@@ -102,9 +92,11 @@ import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.HeroTitleText
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
+import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.navigation.HostTool
@@ -120,6 +112,8 @@ import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
+import net.aieat.netswissknife.core.network.mdns.MdnsDiscoveryLimits
+import net.aieat.netswissknife.core.network.mdns.MdnsTruncationReason
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -139,8 +133,9 @@ fun MdnsDiscoveryScreen(
     LaunchedEffect(Unit) { visible = true }
     var showHelp by remember { mutableStateOf(false) }
 
+    // The scan has its own status in the hero and list; the pull indicator here would sit over the title (PHB-13).
     PullToRefreshBox(
-        isRefreshing = uiState.isScanning,
+        isRefreshing = false,
         onRefresh = { viewModel.startScan() },
         modifier = Modifier.fillMaxSize(),
     ) {
@@ -152,6 +147,7 @@ fun MdnsDiscoveryScreen(
                 modifier =
                     Modifier
                         .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
                         .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -165,12 +161,7 @@ fun MdnsDiscoveryScreen(
                 )
 
                 if (uiState.truncationReasons.isNotEmpty()) {
-                    Text(
-                        text = stringResource(R.string.mdns_partial_results_status),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    TruncationBanner(uiState.truncationReasons, scanComplete = uiState.scanComplete)
                 }
 
                 ControlRow(
@@ -197,7 +188,7 @@ fun MdnsDiscoveryScreen(
                         fadeIn(AppMotion.enter(300)) togetherWith fadeOut(AppMotion.exit(200))
                     },
                     label = "mdns-state",
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                 ) { state ->
                     when (state) {
                         "idle" -> {
@@ -300,6 +291,8 @@ private fun HeroCard(
                 ),
         )
 
+    // Once results exist the hero folds to its title and counts, so the service list starts above the fold (V6B-07).
+    val compact = state.services.isNotEmpty()
     ElevatedCard(
         shape = AppShapes.large,
         modifier = Modifier.fillMaxWidth(),
@@ -309,14 +302,14 @@ private fun HeroCard(
                 Modifier
                     .fillMaxWidth()
                     .background(gradient)
-                    .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(if (compact) 12.dp else 20.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier =
                         Modifier
-                            .size(52.dp)
+                            .size(if (compact) 40.dp else 52.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center,
@@ -325,21 +318,21 @@ private fun HeroCard(
                         imageVector = Icons.Default.Devices,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp),
+                        modifier = Modifier.size(if (compact) 22.dp else 28.dp),
                     )
                 }
-                Spacer(Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    HeroTitleText(
-                        text = stringResource(R.string.mdns_screen_title),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                    Text(
-                        text = stringResource(R.string.mdns_screen_subtitle),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-                    )
-                }
+                Spacer(Modifier.width(12.dp))
+                HeroTitleText(
+                    text = stringResource(R.string.mdns_screen_title),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.weight(1f),
+                    style =
+                        if (compact) {
+                            MaterialTheme.typography.headlineSmall
+                        } else {
+                            MaterialTheme.typography.displaySmall
+                        },
+                )
                 IconButton(onClick = onHelpClick) {
                     Icon(
                         imageVector = Icons.Default.Info,
@@ -347,6 +340,13 @@ private fun HeroCard(
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
+            }
+            if (!compact) {
+                Text(
+                    text = stringResource(R.string.mdns_screen_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                )
             }
 
             // Stats badges
@@ -397,6 +397,77 @@ private fun StatBadge(
         )
     }
 }
+
+/**
+ * Informational note shown only when a configured limit was actually reached during the scan.
+ * It is neutral (not error-styled) and names each limit, so a complete scan never looks like a failure.
+ */
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun TruncationBanner(
+    reasons: Set<MdnsTruncationReason>,
+    scanComplete: Boolean,
+) {
+    val partial = stringResource(R.string.mdns_partial_results_status, limitsText(reasons))
+    val showing =
+        stringResource(
+            if (scanComplete) R.string.mdns_showing_all else R.string.mdns_showing_so_far,
+        )
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Icon(
+            imageVector = Icons.Default.Info,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = stringResource(R.string.mdns_partial_results_notice, partial, showing),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun limitsText(reasons: Set<MdnsTruncationReason>): String {
+    val labels = reasons.sortedBy { it.ordinal }.map { limitLabel(it) }
+    return labels.joinToString(", ")
+}
+
+@Composable
+private fun limitLabel(reason: MdnsTruncationReason): String =
+    when (reason) {
+        MdnsTruncationReason.SERVICE_TYPE_LIMIT -> {
+            stringResource(R.string.mdns_limit_service_types, MdnsDiscoveryLimits.DEFAULT_MAX_SERVICE_TYPES)
+        }
+
+        MdnsTruncationReason.INSTANCE_LIMIT -> {
+            stringResource(R.string.mdns_limit_services, MdnsDiscoveryLimits.DEFAULT_MAX_INSTANCES)
+        }
+
+        MdnsTruncationReason.ADDRESS_LIMIT -> {
+            stringResource(
+                R.string.mdns_limit_addresses,
+                MdnsDiscoveryLimits.DEFAULT_MAX_ADDRESSES_PER_SERVICE,
+            )
+        }
+
+        MdnsTruncationReason.TXT_BYTES_LIMIT -> {
+            stringResource(R.string.mdns_limit_txt, MdnsDiscoveryLimits.DEFAULT_MAX_TXT_BYTES_PER_SERVICE)
+        }
+
+        MdnsTruncationReason.QUERY_LIMIT -> {
+            stringResource(R.string.mdns_limit_queries, MdnsDiscoveryLimits.DEFAULT_MAX_QUERIES)
+        }
+
+        MdnsTruncationReason.PACKET_RECORD_LIMIT -> {
+            stringResource(R.string.mdns_limit_records, MdnsDiscoveryLimits.DEFAULT_MAX_RECORDS_PER_PACKET)
+        }
+    }
 
 // ── Control row ───────────────────────────────────────────────────────────────
 
@@ -590,17 +661,19 @@ internal fun buildMdnsShareText(
     isScanning: Boolean,
     isCanceling: Boolean,
     scanCanceled: Boolean,
-    truncationReasons: Set<net.aieat.netswissknife.core.network.mdns.MdnsTruncationReason>,
+    truncationNote: String?,
+    filterQuery: String = "",
 ): String =
     buildString {
         appendLine("mDNS services: ${services.size}")
+        if (filterQuery.isNotBlank()) appendLine("Filter: ${filterQuery.trim()}")
         when {
             isCanceling -> appendLine("Discovery stopping; partial results.")
             isScanning -> appendLine("Discovery in progress; partial results.")
             scanCanceled -> appendLine("Discovery canceled; partial results.")
             else -> appendLine("Discovery window complete.")
         }
-        if (truncationReasons.isNotEmpty()) appendLine("Truncated: ${truncationReasons.joinToString()}")
+        truncationNote?.let { appendLine(it) }
         services.sortedWith(compareBy({ it.serviceType }, { it.instanceName })).forEach { service ->
             appendLine("${service.displayName} (${service.serviceType}) · ${service.hostname}:${service.port}")
             if (service.ipAddresses.isNotEmpty()) appendLine("Addresses: ${service.ipAddresses.joinToString()}")
@@ -614,45 +687,62 @@ private fun ServiceList(
     isScanning: Boolean,
     isCanceling: Boolean,
     scanCanceled: Boolean,
-    truncationReasons: Set<net.aieat.netswissknife.core.network.mdns.MdnsTruncationReason>,
+    truncationReasons: Set<MdnsTruncationReason>,
     onPingHost: (String) -> Unit,
     onHttpProbe: (DiscoveredService) -> Unit,
 ) {
     val expandedTypes = remember { mutableStateMapOf<String, Boolean>() }
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    val allServices = servicesByType.values.flatten()
     val filteredByType = filterMdnsServices(servicesByType, searchQuery)
-    val report = buildMdnsShareText(allServices, isScanning, isCanceling, scanCanceled, truncationReasons)
+    // Copy and Share export exactly what the list shows, so the filter is part of the report.
+    val truncationNote =
+        truncationReasons.takeIf { it.isNotEmpty() }?.let {
+            stringResource(R.string.mdns_partial_results_status, limitsText(it))
+        }
+    val report =
+        buildMdnsShareText(
+            services = filteredByType.values.flatten(),
+            isScanning = isScanning,
+            isCanceling = isCanceling,
+            scanCanceled = scanCanceled,
+            truncationNote = truncationNote,
+            filterQuery = searchQuery,
+        )
+    val context = LocalContext.current
     val shareSubject = stringResource(R.string.mdns_screen_title)
+    val noMatch = searchQuery.isNotBlank() && filteredByType.isEmpty() && servicesByType.isNotEmpty()
 
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item {
-            ServiceSearchToolbar(
-                searchQuery = searchQuery,
-                onSearchChange = { searchQuery = it },
-                report = report,
-                shareSubject = shareSubject,
-            )
+    // Plain Column, not a LazyColumn: the whole screen scrolls and the result count is bounded
+    // (each service keeps at most 16 addresses), so nested scrolling is not needed.
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ServiceSearchToolbar(
+            searchQuery = searchQuery,
+            onSearchChange = { searchQuery = it },
+        )
+        if (noMatch) {
+            NoMatchHint(query = searchQuery, onClear = { searchQuery = "" })
         }
         if (scanCanceled) {
-            item {
-                Text(
-                    text = stringResource(R.string.mdns_canceled_partial),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(vertical = 4.dp),
-                )
-            }
+            Text(
+                text = stringResource(R.string.mdns_canceled_partial),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
         }
         if (isScanning) {
-            item { ServiceScanningStatus(isCanceling) }
+            ServiceScanningStatus(isCanceling)
         }
-        serviceGroups(filteredByType, expandedTypes, onPingHost, onHttpProbe)
-        item { Spacer(Modifier.height(16.dp)) }
+        ServiceGroups(filteredByType, expandedTypes, onPingHost, onHttpProbe)
+        ResultActionsRow(
+            copyText = report,
+            onShare = { context.shareText(report, shareSubject) },
+        )
+        Spacer(Modifier.height(16.dp))
     }
 }
 
-private fun filterMdnsServices(
+internal fun filterMdnsServices(
     servicesByType: Map<String, List<DiscoveredService>>,
     searchQuery: String,
 ): Map<String, List<DiscoveredService>> =
@@ -674,32 +764,15 @@ private fun filterMdnsServices(
 private fun ServiceSearchToolbar(
     searchQuery: String,
     onSearchChange: (String) -> Unit,
-    report: String,
-    shareSubject: String,
 ) {
-    val context = LocalContext.current
-    val copiedMessage = stringResource(R.string.lan_copied)
-    OutlinedTextField(
+    ToolTextField(
         value = searchQuery,
         onValueChange = onSearchChange,
         label = { Text(stringResource(R.string.mdns_search_label)) },
+        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
     )
-    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-        TextButton(
-            enabled = report.isNotBlank(),
-            onClick = {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("mDNS services", report))
-                Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
-            },
-        ) { Text(stringResource(R.string.action_copy)) }
-        TextButton(
-            enabled = report.isNotBlank(),
-            onClick = { context.shareText(report, shareSubject) },
-        ) { Text(stringResource(R.string.action_share)) }
-    }
 }
 
 @Composable
@@ -715,15 +788,21 @@ private fun ServiceScanningStatus(isCanceling: Boolean) {
             modifier = Modifier.size(14.dp).semantics { contentDescription = scanningCd },
             strokeWidth = 2.dp,
         )
-        Text(
-            stringResource(if (isCanceling) R.string.mdns_canceling_hint else R.string.mdns_scanning_inline_label),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-        )
+        // While scanning, the hero already shows the count and elapsed time and the Stop button
+        // says the scan is running, so the status line only names a cancel in progress (PHB-14).
+        if (isCanceling) {
+            Text(
+                stringResource(R.string.mdns_canceling_hint),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+        }
     }
 }
 
-private fun LazyListScope.serviceGroups(
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun ServiceGroups(
     servicesByType: Map<String, List<DiscoveredService>>,
     expandedTypes: MutableMap<String, Boolean>,
     onPingHost: (String) -> Unit,
@@ -731,22 +810,22 @@ private fun LazyListScope.serviceGroups(
 ) {
     servicesByType.forEach { (serviceType, services) ->
         val isExpanded = expandedTypes[serviceType] != false
-        item(key = serviceType) {
-            ServiceTypeHeader(
-                serviceType = serviceType,
-                count = services.size,
-                isExpanded = isExpanded,
-                onClick = { expandedTypes[serviceType] = !isExpanded },
-            )
-        }
+        ServiceTypeHeader(
+            serviceType = serviceType,
+            count = services.size,
+            isExpanded = isExpanded,
+            onClick = { expandedTypes[serviceType] = !isExpanded },
+        )
         if (isExpanded) {
-            items(services, key = { it.instanceName }) { service ->
-                AnimatedVisibility(
-                    visible = true,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically(),
-                ) {
-                    ServiceItem(service, onPingHost, onHttpProbe)
+            services.forEach { service ->
+                key(service.instanceName) {
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        ServiceItem(service, onPingHost, onHttpProbe)
+                    }
                 }
             }
         }
@@ -953,6 +1032,46 @@ private fun ServiceItem(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun NoMatchHint(
+    query: String,
+    onClear: () -> Unit,
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn() + expandVertically(),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+            )
+            Text(
+                text = stringResource(R.string.mdns_no_match_title, query.trim()),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 24.dp),
+            )
+            FilledTonalButton(onClick = onClear) {
+                Text(stringResource(R.string.mdns_no_match_clear))
             }
         }
     }

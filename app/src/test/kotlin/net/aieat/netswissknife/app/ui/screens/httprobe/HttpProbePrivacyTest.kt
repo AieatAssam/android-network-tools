@@ -2,7 +2,9 @@ package net.aieat.netswissknife.app.ui.screens.httprobe
 
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRequest
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -55,5 +57,29 @@ class HttpProbePrivacyTest {
         assertFalse(visible.keys.any { it.equals("Set-Cookie", true) || it.equals("Authorization", true) })
         assertTrue(visible["Location"]!!.single().contains("https://next.example/[path omitted]"))
         assertTrue(visible["Content-Type"]!!.single() == "text/plain")
+    }
+
+    @Test
+    fun `root URL shows the slash instead of a path placeholder`() {
+        assertEquals("https://example.com/", safeRedirectDisplayValue("https://example.com"))
+        assertEquals("https://example.com/", safeRedirectDisplayValue("https://example.com/"))
+    }
+
+    @Test
+    fun `existing path is still marked omitted and a root query is marked omitted`() {
+        assertEquals("https://example.com/[path omitted]", safeRedirectDisplayValue("https://example.com/a/b"))
+        assertEquals(
+            "https://example.com/[query omitted]",
+            safeRedirectDisplayValue("https://example.com/?token=secret"),
+        )
+    }
+
+    @Test
+    fun `response header lookup ignores name case`() {
+        val headers = mapOf("content-type" to listOf("text/html; charset=utf-8"))
+        assertEquals("text/html; charset=utf-8", httpHeaderValue(headers, "Content-Type"))
+        val upper = mapOf("CONTENT-TYPE" to listOf("text/html; charset=utf-8"))
+        assertEquals("text/html; charset=utf-8", httpHeaderValue(upper, "Content-Type"))
+        assertNull(httpHeaderValue(emptyMap(), "Content-Type"))
     }
 }

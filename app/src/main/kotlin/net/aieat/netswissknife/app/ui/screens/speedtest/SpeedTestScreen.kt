@@ -10,8 +10,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
@@ -35,11 +33,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
@@ -54,6 +52,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -73,7 +72,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
@@ -88,6 +86,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
@@ -99,14 +99,13 @@ import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.util.formatBytes
 import net.aieat.netswissknife.app.util.shareText
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.speedtest.LatencyStats
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestPhase
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestResult
 import net.aieat.netswissknife.core.network.speedtest.ThroughputResult
 import net.aieat.netswissknife.core.network.speedtest.ThroughputSample
 import net.aieat.netswissknife.core.network.speedtest.ServerInfo
-import kotlin.math.cos
-import kotlin.math.sin
 
 private const val CLOUDFLARE_SPEED_URL = "https://speed.cloudflare.com"
 private const val GAUGE_MAX_MBPS = 1_000.0
@@ -154,6 +153,29 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
                 }
             }
 
+            if ((uiState as? SpeedTestUiState.Idle)?.canceled == true) {
+                item {
+                    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                text = stringResource(R.string.speedtest_canceled),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                }
+            }
+
             item {
                 val shareSubject = stringResource(R.string.share_subject_speedtest, "results")
                 AnimatedContent(
@@ -194,6 +216,38 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
                 }
             }
 
+            val partial =
+                when (val state = uiState) {
+                    is SpeedTestUiState.Idle -> state.partial
+                    is SpeedTestUiState.Error -> state.partial
+                    else -> PartialSpeedTest()
+                }
+            if (!partial.isEmpty) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = stringResource(R.string.speedtest_partial_heading),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        if (partial.latency != LatencyStats.EMPTY) {
+                            LatencyResultCard(
+                                title = stringResource(R.string.speedtest_idle_latency_header),
+                                stats = partial.latency,
+                            )
+                        }
+                        partial.download?.let { download ->
+                            ThroughputResultCard(
+                                title = stringResource(R.string.speedtest_download_header),
+                                icon = Icons.Default.ArrowDownward,
+                                accentColor = MaterialTheme.colorScheme.primary,
+                                result = download,
+                            )
+                        }
+                    }
+                }
+            }
+
             item { CloudflareAttributionCard() }
         }
     }
@@ -227,8 +281,6 @@ private enum class DisplayPhase { IDLE, RUNNING, FINISHED, ERROR }
 
 @Composable
 private fun SpeedTestHeaderCard(onHelpClick: () -> Unit) {
-    val uriHandler = LocalUriHandler.current
-
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -245,21 +297,6 @@ private fun SpeedTestHeaderCard(onHelpClick: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Speed,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-                Spacer(Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = stringResource(R.string.speedtest_screen_title),
@@ -279,29 +316,6 @@ private fun SpeedTestHeaderCard(onHelpClick: () -> Unit) {
                         imageVector = Icons.Default.Info,
                         contentDescription = stringResource(R.string.action_help),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-            Surface(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(50),
-                modifier = Modifier.clickable { uriHandler.openUri(CLOUDFLARE_SPEED_URL) }
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.speedtest_attribution),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(14.dp)
                     )
                 }
             }
@@ -344,8 +358,7 @@ private fun SpeedTestIdleContent(
                             )
                         ),
                         shape = CircleShape
-                    )
-                    .clickable(onClick = hapticAction(onStart)),
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Surface(
@@ -354,9 +367,10 @@ private fun SpeedTestIdleContent(
                     modifier = Modifier.size(96.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
+                        // Decorative only: the Start button below is the single primary action.
                         Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = stringResource(R.string.speedtest_start_button),
+                            imageVector = Icons.Default.Speed,
+                            contentDescription = null,
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(44.dp)
                         )
@@ -369,24 +383,26 @@ private fun SpeedTestIdleContent(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold
             )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.speedtest_idle_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 StreamSetting(
-                    text = stringResource(R.string.speedtest_download_streams, config.downloadStreams),
+                    label = stringResource(R.string.speedtest_download_streams_label),
+                    value = config.downloadStreams,
+                    modifier = Modifier.weight(1f),
                     choices = 1..8,
                     selected = config.downloadStreams,
-                    onSelect = onDownloadStreamsChange
+                    onSelect = onDownloadStreamsChange,
                 )
                 StreamSetting(
-                    text = stringResource(R.string.speedtest_upload_streams, config.uploadStreams),
+                    label = stringResource(R.string.speedtest_upload_streams_label),
+                    value = config.uploadStreams,
+                    modifier = Modifier.weight(1f),
                     choices = 1..4,
                     selected = config.uploadStreams,
-                    onSelect = onUploadStreamsChange
+                    onSelect = onUploadStreamsChange,
                 )
             }
             Spacer(Modifier.height(20.dp))
@@ -400,10 +416,23 @@ private fun SpeedTestIdleContent(
 }
 
 @Composable
-private fun StreamSetting(text: String, choices: IntRange, selected: Int, onSelect: (Int) -> Unit) {
+private fun StreamSetting(
+    label: String,
+    value: Int,
+    choices: IntRange,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     var expanded by remember { mutableStateOf(false) }
-    Box {
-        FilledTonalButton(onClick = { expanded = true }) { Text(text) }
+    Box(modifier = modifier) {
+        FilledTonalButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
+                Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                Text(value.toString(), style = MaterialTheme.typography.titleSmall, maxLines = 1)
+            }
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+        }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             choices.forEach { value ->
                 DropdownMenuItem(
@@ -665,9 +694,9 @@ private fun ThroughputChart(samples: List<ThroughputSample>, accentColor: Color)
     ) {
         val chartWidth = size.width
         val chartHeight = size.height
-        val maxMbps = (samples.maxOfOrNull { it.instantMbps } ?: 1.0).coerceAtLeast(1.0)
-
         val gridLines = 4
+        val step = niceAxisStep((samples.maxOfOrNull { it.instantMbps } ?: 1.0).coerceAtLeast(1.0), gridLines - 1)
+        val maxMbps = step * (gridLines - 1)
         repeat(gridLines) { i ->
             val y = edgePad + (chartHeight - 2 * edgePad) * i / (gridLines - 1)
             drawLine(
@@ -676,8 +705,9 @@ private fun ThroughputChart(samples: List<ThroughputSample>, accentColor: Color)
                 end = Offset(chartWidth - edgePad, y),
                 strokeWidth = 1f
             )
-            val valueAtLine = maxMbps * (gridLines - 1 - i) / (gridLines - 1)
-            val measured = textMeasurer.measure("%.0f".format(valueAtLine), style = labelStyle)
+            val valueAtLine = step * (gridLines - 1 - i)
+            val label = if (step < 1.0) "%.1f".format(valueAtLine) else "%.0f".format(valueAtLine)
+            val measured = textMeasurer.measure(label, style = labelStyle)
             drawText(textLayoutResult = measured, topLeft = Offset(0f, y - measured.size.height / 2f))
         }
 
@@ -757,6 +787,17 @@ private fun MiniResultCard(
 
 // ── Finished state ────────────────────────────────────────────────────────────
 
+/** Results title. Copy and Share sit together at the foot of the results. */
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun SpeedTestResultHeader() {
+    Text(
+        text = stringResource(R.string.speedtest_results_header),
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+    )
+}
+
 @Composable
 private fun SpeedTestResultContent(
     result: SpeedTestResult,
@@ -767,13 +808,8 @@ private fun SpeedTestResultContent(
     LaunchedEffect(Unit) {
         listOf(80L, 120L, 120L).forEach { d -> delay(d); visibleCards++ }
     }
-
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(
-            text = stringResource(R.string.speedtest_results_header),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
-        )
+        SpeedTestResultHeader()
 
         result.serverInfo?.let { ServerInfoChip(it) }
 
@@ -812,18 +848,15 @@ private fun SpeedTestResultContent(
             )
         }
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onShare, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Default.Share, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.speedtest_share))
-            }
-            Button(onClick = onRetry, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Default.Refresh, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.speedtest_retry))
-            }
-        }
+        ResultActionsRow(
+            copyText = buildSpeedTestShareText(result),
+            onShare = onShare,
+        )
+        ToolRetryButton(
+            text = stringResource(R.string.speedtest_retry),
+            onClick = onRetry,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -915,6 +948,13 @@ private fun SpeedTestErrorContent(state: SpeedTestUiState.Error, onRetry: () -> 
         SpeedTestPhase.DOWNLOAD -> R.string.speedtest_phase_download
         SpeedTestPhase.UPLOAD -> R.string.speedtest_phase_upload
     }
+    // Friendly, localized reason only: the raw exception text in state.message is never shown.
+    val reasonLabel =
+        if (state.reason == ErrorCode.NETWORK_TIMEOUT) {
+            R.string.speedtest_error_reason_timeout
+        } else {
+            R.string.speedtest_error_reason_generic
+        }
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -943,17 +983,13 @@ private fun SpeedTestErrorContent(state: SpeedTestUiState.Error, onRetry: () -> 
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = state.message,
+                text = stringResource(reasonLabel),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
             Spacer(Modifier.height(20.dp))
-            FilledTonalButton(onClick = onRetry) {
-                Icon(Icons.Default.Refresh, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.speedtest_retry))
-            }
+            ToolRetryButton(text = stringResource(R.string.speedtest_retry), onClick = onRetry)
         }
     }
 }

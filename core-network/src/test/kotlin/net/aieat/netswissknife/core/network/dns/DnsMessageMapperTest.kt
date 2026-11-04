@@ -7,6 +7,7 @@ import org.xbill.DNS.DClass
 import org.xbill.DNS.Flags
 import org.xbill.DNS.Message
 import org.xbill.DNS.Name
+import org.xbill.DNS.OPTRecord
 import org.xbill.DNS.Rcode
 import org.xbill.DNS.Record
 import org.xbill.DNS.Section
@@ -149,6 +150,17 @@ class DnsMessageMapperTest {
         val result = map(Message(wire), DnsRecordType.TXT)
 
         assertEquals("é", result.records.single().value)
+    }
+
+    @Test
+    fun `EDNS OPT pseudo-record is labelled OPT rather than TXT`() {
+        val response = Message.newQuery(query("example.com.", Type.A))
+        response.addRecord(OPTRecord(1232, 0, 0, 0), Section.ADDITIONAL)
+
+        val opt = map(response, DnsRecordType.A).additional.single()
+
+        assertEquals("OPT", opt.rrTypeName)
+        assertEquals(null, opt.type)
     }
 
     private fun query(name: String, type: Int): Record =

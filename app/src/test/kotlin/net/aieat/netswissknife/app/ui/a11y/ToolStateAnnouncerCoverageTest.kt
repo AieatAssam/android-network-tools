@@ -24,6 +24,8 @@ class ToolStateAnnouncerCoverageTest {
             "wol/WakeOnLanScreen.kt",
             "mdns/MdnsDiscoveryScreen.kt",
             "topology/TopologyDiscoveryScreen.kt",
+            "netinfo/NetInfoScreen.kt",
+            "oui/OuiLookupScreen.kt",
         )
         val nonToolScreens = setOf(
             "HomeScreen.kt",
@@ -37,7 +39,7 @@ class ToolStateAnnouncerCoverageTest {
             .toSet()
 
         assertEquals(expectedScreens + nonToolScreens, discoveredScreens)
-        assertEquals(14, expectedScreens.size)
+        assertEquals(16, expectedScreens.size)
         expectedScreens.forEach { relativePath ->
             val file = root.resolve(relativePath)
             assertTrue(file.isFile, "Expected shipped tool screen: $relativePath")

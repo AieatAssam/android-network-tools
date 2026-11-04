@@ -569,6 +569,98 @@ class PingViewModelTest {
             }
 
         @Test
+        fun `configuration change keeps a normal ping running to completion`() =
+            runTest {
+                val sessionSlot = slot<OperationSession>()
+                coEvery { pingUseCase(any(), capture(sessionSlot)) } returns
+                    flow {
+                        emit(PingFlowResult.Packet(successPacket))
+                        emit(PingFlowResult.Packet(successPacket.copy(sequence = 2)))
+                        awaitCancellation()
+                    }
+                viewModel.onHostChange("example.com")
+                viewModel.startPing()
+
+                viewModel.onLifecycleStop(configurationChange = true)
+
+                assertNull(sessionSlot.captured.cancellationReason)
+                val running = viewModel.uiState.value as PingUiState.Running
+                assertEquals(2, running.packets.size)
+                viewModel.onStop()
+            }
+
+        @Test
+        fun `configuration change keeps a continuous ping running`() =
+            runTest {
+                val sessionSlot = slot<OperationSession>()
+                coEvery { continuousPingUseCase(any(), capture(sessionSlot)) } returns neverEndingFlow()
+                viewModel.onHostChange("example.com")
+                viewModel.onToggleContinuous(true)
+                viewModel.startPing()
+
+                viewModel.onLifecycleStop(configurationChange = true)
+
+                assertNull(sessionSlot.captured.cancellationReason)
+                assertTrue(viewModel.uiState.value is PingUiState.Running)
+                viewModel.onStop()
+            }
+
+        @Test
+        fun `backgrounding a normal ping marks the partial result as interrupted`() =
+            runTest {
+                coEvery { pingUseCase(any(), any()) } returns
+                    flow {
+                        emit(PingFlowResult.Packet(successPacket))
+                        awaitCancellation()
+                    }
+                viewModel.onHostChange("example.com")
+                viewModel.startPing()
+
+                viewModel.onLifecycleStop()
+
+                assertTrue(awaitFinished().interrupted)
+            }
+
+        @Test
+        fun `user stop of a normal ping marks the partial result as interrupted`() =
+            runTest {
+                coEvery { pingUseCase(any(), any()) } returns
+                    flow {
+                        emit(PingFlowResult.Packet(successPacket))
+                        awaitCancellation()
+                    }
+                viewModel.onHostChange("example.com")
+                viewModel.startPing()
+
+                viewModel.onStop()
+
+                assertTrue(awaitFinished().interrupted)
+            }
+
+        @Test
+        fun `a completed normal ping is not marked interrupted`() =
+            runTest {
+                coEvery { pingUseCase(any(), any()) } returns flowOf(PingFlowResult.Packet(successPacket))
+                viewModel.onHostChange("example.com")
+                viewModel.startPing()
+
+                assertFalse(awaitFinished().interrupted)
+            }
+
+        @Test
+        fun `resetAdvancedOptions restores payload, TTL and interval defaults`() {
+            viewModel.onPayloadSizeChange(736)
+            viewModel.onTtlChange(128)
+            viewModel.onIntervalChange(5_000)
+
+            viewModel.onResetAdvancedOptions()
+
+            assertEquals(56, viewModel.payloadBytes.value)
+            assertEquals(64, viewModel.ttl.value)
+            assertEquals(1_000, viewModel.intervalMs.value)
+        }
+
+        @Test
         fun `onLifecycleStop cancels the caller-owned continuous session`() =
             runTest {
                 val sessionSlot = slot<OperationSession>()

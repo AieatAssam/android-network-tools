@@ -18,6 +18,7 @@ import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.core.domain.WhoisLookupUseCase
 import net.aieat.netswissknife.core.domain.WhoisParams
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.whois.WhoisHop
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
@@ -329,6 +330,50 @@ class WhoisViewModelTest {
         progress.tryEmit(stubHop.copy(operationId = session.budget.operationId))
         runCurrent()
         assertTrue(viewModel.uiState.value.hopStates.isEmpty(), "stopped lookup must ignore late progress")
+    }
+
+    @Test
+    fun `configuration change keeps the lookup running`() {
+        runTest {
+            var receivedSession: OperationSession? = null
+            coEvery { whoisLookupUseCase(any(), any()) } coAnswers {
+                receivedSession = secondArg()
+                kotlinx.coroutines.awaitCancellation()
+            }
+            viewModel.onQueryChange("example.com")
+            viewModel.lookup()
+            runCurrent()
+            val session = checkNotNull(receivedSession)
+
+            viewModel.onLifecyclePause(configurationChange = true)
+            runCurrent()
+
+            assertTrue(viewModel.uiState.value.isLoading)
+            assertFalse(viewModel.uiState.value.isCanceled)
+            assertFalse(session.cancellationReason == CancellationReason.LIFECYCLE_PAUSE)
+        }
+    }
+
+    @Test
+    fun `an invalid query is flagged as the user types and never reaches the lookup`() {
+        runTest {
+            viewModel.onQueryChange("bad domain!!")
+
+            assertTrue(viewModel.uiState.value.queryInvalid)
+            viewModel.lookup()
+            coVerify(exactly = 0) { whoisLookupUseCase(any(), any()) }
+            assertNull(viewModel.uiState.value.error)
+        }
+    }
+
+    @Test
+    fun `correcting the query clears the invalid flag`() {
+        runTest {
+            viewModel.onQueryChange("bad domain!!")
+            viewModel.onQueryChange("example.com")
+
+            assertFalse(viewModel.uiState.value.queryInvalid)
+        }
     }
 
     @Test

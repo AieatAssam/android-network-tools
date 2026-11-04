@@ -30,6 +30,8 @@ import net.aieat.netswissknife.app.ui.screens.httprobe.HttpProbeScreen
 import net.aieat.netswissknife.app.ui.screens.subnet.SubnetCalculatorScreen
 import net.aieat.netswissknife.app.ui.screens.settings.SettingsScreen
 import net.aieat.netswissknife.app.ui.screens.mdns.MdnsDiscoveryScreen
+import net.aieat.netswissknife.app.ui.screens.netinfo.NetInfoScreen
+import net.aieat.netswissknife.app.ui.screens.oui.OuiLookupScreen
 import net.aieat.netswissknife.app.ui.screens.speedtest.SpeedTestScreen
 import net.aieat.netswissknife.app.ui.screens.whois.WhoisScreen
 import net.aieat.netswissknife.app.ui.screens.wol.WakeOnLanScreen
@@ -252,6 +254,8 @@ private fun AppNavHostGraph(
                 },
             ),
         ) { WakeOnLanScreen() }
+        composable(NavRoutes.NetworkInfo.route) { NetInfoScreen() }
+        composable(NavRoutes.MacLookup.route) { OuiLookupScreen() }
         composable(
             route            = NavRoutes.Settings.route,
             enterTransition  = { fadeIn(AppMotion.enter()) },

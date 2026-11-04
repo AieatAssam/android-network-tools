@@ -127,9 +127,48 @@ object HostValidator {
             IDN
                 .toASCII(host, IDN.ALLOW_UNASSIGNED)
                 .lowercase(Locale.ROOT)
-                .takeIf { it.length <= MAX_HOSTNAME_LENGTH && hostnameRegex.matches(it) }
+                .takeIf { it.length <= MAX_HOSTNAME_LENGTH && hostnameRegex.matches(it) && !endsInNumericLabel(it) }
         } catch (_: IllegalArgumentException) {
             null
+        }
+    }
+
+    /**
+     * A name whose last label is all digits is never a hostname (RFC 3696 section 2): it is either
+     * a malformed IPv4 literal, such as two addresses typed together, or a typo. Dotted numeric
+     * input that is not a valid IPv4 address is rejected here.
+     */
+    private fun endsInNumericLabel(host: String): Boolean = host.substringAfterLast('.').all { it in '0'..'9' }
+
+    private val ipv4ShapedRegex = Regex("""^\d+(\.\d+)*$""")
+
+    /**
+     * Names the first reason [input] is not an accepted host or IP literal, or null when
+     * [normalize] accepts it. Callers use this for specific inline messages; the check is
+     * a pure string parse like the rest of this object.
+     */
+    fun problemOf(input: String): HostProblem? {
+        val text = input.trim()
+        if (normalize(text) != null) return null
+        return when {
+            text.isEmpty() -> HostProblem.BLANK
+            text.any { it.isWhitespace() } -> HostProblem.CONTAINS_WHITESPACE
+            text.contains(':') -> HostProblem.IPV6_INVALID
+            ipv4ShapedRegex.matches(text.removeSuffix(".")) -> HostProblem.IPV4_INVALID
+            text.length > MAX_HOSTNAME_LENGTH -> HostProblem.TOO_LONG
+            else -> hostnameProblem(text.removeSuffix("."))
+        }
+    }
+
+    private fun hostnameProblem(host: String): HostProblem {
+        val labels = host.split('.')
+        val badLabel = labels.any { it.length > MAX_LABEL_LENGTH || it.startsWith('-') || it.endsWith('-') }
+        val badCharacter = labels.any { label -> label.any { !it.isLetterOrDigit() && it != '-' && it.code < 128 } }
+        return when {
+            labels.any { it.isEmpty() } -> HostProblem.EMPTY_LABEL
+            badLabel -> HostProblem.INVALID_LABEL
+            badCharacter -> HostProblem.INVALID_CHARACTERS
+            else -> HostProblem.INVALID
         }
     }
 
@@ -143,6 +182,7 @@ object HostValidator {
     }
 
     private const val MAX_HOSTNAME_LENGTH = 253
+    private const val MAX_LABEL_LENGTH = 63
 
     fun isValidHostname(host: String): Boolean {
         val normalized = normalize(host) ?: return false

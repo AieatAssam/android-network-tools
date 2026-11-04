@@ -36,7 +36,6 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -64,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.AppModalBottomSheet
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 
 private const val PAGE_COUNT = 4
@@ -83,7 +83,7 @@ fun OnboardingSheet(onDismiss: () -> Unit) {
     var contentVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { contentVisible = true }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    AppModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         AnimatedVisibility(
             visible = contentVisible,
             enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 },

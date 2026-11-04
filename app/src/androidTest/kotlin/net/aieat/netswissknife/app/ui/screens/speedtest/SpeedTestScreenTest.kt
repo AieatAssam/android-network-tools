@@ -1,7 +1,9 @@
 package net.aieat.netswissknife.app.ui.screens.speedtest
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -46,7 +48,7 @@ class SpeedTestScreenTest {
     fun helpSheet_showsConceptHeading() {
         composeRule.setContent {
             NetSwissKnifeTheme {
-                SpeedTestScreen(viewModel = fakeViewModel(SpeedTestUiState.Idle))
+                SpeedTestScreen(viewModel = fakeViewModel(SpeedTestUiState.Idle()))
             }
         }
 
@@ -103,7 +105,7 @@ class SpeedTestScreenTest {
 
     @Test
     fun startButton_fromIdle_callsStartTest() {
-        val viewModel = fakeViewModel(SpeedTestUiState.Idle)
+        val viewModel = fakeViewModel(SpeedTestUiState.Idle())
         composeRule.setContent {
             NetSwissKnifeTheme {
                 SpeedTestScreen(viewModel = viewModel)
@@ -116,6 +118,20 @@ class SpeedTestScreenTest {
             .performClick()
 
         verify(exactly = 1) { viewModel.startTest() }
+    }
+
+    @Test
+    fun canceledIdle_showsCanceledNoticeAndSingleStartButton() {
+        val viewModel = fakeViewModel(SpeedTestUiState.Idle(canceled = true))
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                SpeedTestScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        composeRule.onNodeWithText(context.getString(R.string.speedtest_canceled)).assertIsDisplayed()
+        composeRule.onAllNodesWithText(context.getString(R.string.speedtest_start_button)).assertCountEquals(1)
     }
 
     @Test
@@ -162,7 +178,7 @@ class SpeedTestScreenTest {
     }
 
     @Test
-    fun errorState_showsMessageAndRetryCallsOnRetry() {
+    fun errorState_showsFriendlyReasonAndRetryCallsOnRetry() {
         val viewModel = fakeViewModel(SpeedTestUiState.Error(SpeedTestPhase.DOWNLOAD, "Connection lost"))
         composeRule.setContent {
             NetSwissKnifeTheme {
@@ -171,7 +187,10 @@ class SpeedTestScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(500L)
 
-        composeRule.onNodeWithText("Connection lost").assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.speedtest_error_reason_generic))
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Connection lost").assertDoesNotExist()
         composeRule
             .onNodeWithText(
                 context.getString(
@@ -194,7 +213,7 @@ class SpeedTestScreenTest {
         flow: MutableStateFlow<SpeedTestUiState>? = null
     ): SpeedTestViewModel {
         val viewModel = mockk<SpeedTestViewModel>(relaxed = true)
-        every { viewModel.uiState } returns (flow ?: MutableStateFlow(state ?: SpeedTestUiState.Idle))
+        every { viewModel.uiState } returns (flow ?: MutableStateFlow(state ?: SpeedTestUiState.Idle()))
         every { viewModel.config } returns MutableStateFlow(SpeedTestConfig())
         every { viewModel.networkStatus } returns MutableStateFlow(
             NetworkStatus(hasInternet = true, hasLocalNetwork = true)

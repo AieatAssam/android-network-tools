@@ -385,7 +385,9 @@ class TracerouteScreenTest {
                     lon = -77.0,
                 ),
             ),
+            // ~5,900 km from Ashburn: the RTT must allow for light in fibre, or the route is hidden.
             fakeHop(2, "192.0.2.2").copy(
+                rtTimeMs = 90L,
                 geoLocation = HopGeoLocation(
                     ip = "192.0.2.2",
                     country = "GB",

@@ -46,6 +46,7 @@ import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededE
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -665,6 +666,47 @@ class LanScanViewModelTest {
                 val partial = viewModel.uiState.value as LanScanUiState.Finished
                 assertTrue(partial.partial)
                 assertEquals(listOf(stubHost), partial.summary.hosts)
+            }
+
+        @Test
+        fun `configuration change keeps a running scan alive`() =
+            runTest {
+                val sessionSlot = slot<OperationSession>()
+                every { lanScanUseCase(any(), capture(sessionSlot)) } returns
+                    flow {
+                        emit(LanScanFlowResult.HostFound(stubHost, scannedCount = 1, totalCount = 8))
+                        awaitCancellation()
+                    }
+                viewModel.startScan()
+                withContext(Dispatchers.Default) {
+                    withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Scanning && it.hosts.isNotEmpty() } }
+                }
+
+                viewModel.onLifecyclePause(configurationChange = true)
+
+                assertEquals(null, sessionSlot.captured.cancellationReason)
+                assertTrue(viewModel.uiState.value is LanScanUiState.Scanning)
+                viewModel.onStopScan()
+            }
+
+        @Test
+        fun `back collapses the expanded host and keeps the scan results`() =
+            runTest {
+                every { lanScanUseCase(any(), any()) } returns
+                    flowOf(LanScanFlowResult.ScanComplete(stubSummary.copy(hosts = listOf(stubHost), aliveHosts = 1)))
+                viewModel.onSubnetChange("192.168.1.0/24")
+                viewModel.startScan()
+                withContext(Dispatchers.Default) {
+                    withTimeout(2_000) { viewModel.uiState.first { it is LanScanUiState.Finished } }
+                }
+                viewModel.onToggleHostExpanded(stubHost.ip)
+
+                assertTrue(viewModel.collapseExpandedHost())
+
+                val finished = viewModel.uiState.value as LanScanUiState.Finished
+                assertEquals(null, finished.expandedHostIp)
+                assertEquals(listOf(stubHost), finished.summary.hosts)
+                assertFalse(viewModel.collapseExpandedHost())
             }
     }
 

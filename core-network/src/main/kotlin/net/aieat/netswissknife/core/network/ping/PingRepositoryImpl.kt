@@ -119,8 +119,9 @@ class PingRepositoryImpl(
                     host = request.host,
                     rtTimeMs = null,
                     status = PingStatus.ERROR,
-                    errorMessage = e.message ?: "Unknown host: ${request.host}"
-                )
+                    errorMessage = e.message ?: "Unknown host: ${request.host}",
+                    unresolvedHost = true,
+                ),
             )
             return@flow
         } catch (e: Exception) {
@@ -130,8 +131,9 @@ class PingRepositoryImpl(
                     host = request.host,
                     rtTimeMs = null,
                     status = PingStatus.ERROR,
-                    errorMessage = e.message ?: e.javaClass.simpleName
-                )
+                    errorMessage = e.message ?: e.javaClass.simpleName,
+                    unresolvedHost = true,
+                ),
             )
             return@flow
         }
@@ -197,7 +199,14 @@ class PingRepositoryImpl(
                 } catch (e: OperationDeadlineExceededException) {
                     throw e
                 } catch (e: UnknownHostException) {
-                    emit(errorPacket(request, e.message ?: "Unknown host: ${request.host}", sequence))
+                    emit(
+                        errorPacket(
+                            request,
+                            e.message ?: "Unknown host: ${request.host}",
+                            sequence,
+                            unresolvedHost = true,
+                        ),
+                    )
                     sequence++
                     delay(request.intervalMs.toLong().coerceAtLeast(0L))
                     continue
@@ -267,13 +276,19 @@ class PingRepositoryImpl(
         }
     }
 
-    private fun errorPacket(request: PingRequest, message: String, sequence: Int = 1) = PingPacketResult(
+    private fun errorPacket(
+        request: PingRequest,
+        message: String,
+        sequence: Int = 1,
+        unresolvedHost: Boolean = false,
+    ) = PingPacketResult(
         sequence = sequence,
         host = request.host,
         rtTimeMs = null,
         status = PingStatus.ERROR,
         errorMessage = message,
-        fromIp = request.resolvedIp
+        fromIp = request.resolvedIp,
+        unresolvedHost = unresolvedHost,
     )
 
     private fun allEnginesFailedMessage(failureMessages: List<String>): String =

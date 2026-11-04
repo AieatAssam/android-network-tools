@@ -8,7 +8,8 @@ package net.aieat.netswissknife.core.network.lan
  * @param macAddress  MAC address from the ARP table (uppercase colon-separated), or null.
  * @param vendor      OUI vendor name derived from [macAddress], or null.
  * @param openPorts   List of TCP ports that responded during quick scan.
- * @param pingTimeMs  Round-trip time in milliseconds for the reachability probe.
+ * @param pingTimeMs  Round-trip time in milliseconds of an ICMP reply, or null when no ICMP reply was measured
+ *                    (TCP, mDNS or NetBIOS confirmation alone does not measure latency).
  * @param isGateway   True if this host is the active network's default gateway.
  */
 data class LanHost(
@@ -17,7 +18,7 @@ data class LanHost(
     val macAddress: String?,
     val vendor: String?,
     val openPorts: List<Int>,
-    val pingTimeMs: Long,
+    val pingTimeMs: Long?,
     val isGateway: Boolean = false,
     val discoveredVia: Set<DiscoveryMethod> = emptySet(),
     val macSource: MacSource = if (macAddress == null) MacSource.NONE else MacSource.ARP,

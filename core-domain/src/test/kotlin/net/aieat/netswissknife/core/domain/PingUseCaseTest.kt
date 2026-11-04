@@ -65,6 +65,13 @@ class PingUseCaseTest {
         }
 
         @Test
+        fun `concatenated dotted address emits error`() =
+            runTest {
+                val results = useCase(PingParams(host = "10.109.208.25010.109.208.200")).toList()
+                assertTrue(results.first().isError)
+            }
+
+        @Test
         fun `count zero emits error`() = runTest {
             val results = useCase(PingParams(host = "8.8.8.8", count = 0)).toList()
             assertTrue(results.first().isError)

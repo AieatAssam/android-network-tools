@@ -29,14 +29,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.ui.theme.AppSpacing
+
+private val CompactHeroPadding: Dp = 12.dp
 
 /**
  * Standard hero header for all tool screens.
@@ -54,6 +59,10 @@ fun ToolHeroHeader(
     onHelpClick: (() -> Unit)? = null,
     iconContent: @Composable (() -> Unit)? = null,
 ) {
+    // On short windows (phone landscape) the hero shrinks so the tool's first input and results sit
+    // above the fold (PHA-23). The subtitle moves behind the help button in that mode.
+    val config = LocalConfiguration.current
+    val compact = isCompactHero(config.screenHeightDp, config.screenWidthDp)
     ElevatedCard(
         modifier = modifier.fillMaxWidth(),
         shape = AppShapes.large,
@@ -69,7 +78,7 @@ fun ToolHeroHeader(
                         )
                     )
                 )
-                .padding(AppSpacing.l),
+                .padding(if (compact) CompactHeroPadding else AppSpacing.l),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (iconContent != null) {
@@ -77,7 +86,7 @@ fun ToolHeroHeader(
                 } else {
                     Box(
                         modifier = Modifier
-                            .size(52.dp)
+                            .size(if (compact) 36.dp else 52.dp)
                             .clip(CircleShape)
                             .background(
                                 Brush.radialGradient(
@@ -93,7 +102,7 @@ fun ToolHeroHeader(
                             imageVector = icon,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(28.dp),
+                            modifier = Modifier.size(if (compact) 20.dp else 28.dp),
                         )
                     }
                 }
@@ -104,18 +113,27 @@ fun ToolHeroHeader(
                     HeroTitleText(
                         text = title,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        style =
+                            if (compact) {
+                                MaterialTheme.typography.headlineSmall
+                            } else {
+                                MaterialTheme.typography.displaySmall
+                            },
                     )
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    if (!compact) {
+                        // Three lines, not two: a two-line cut removed words that changed the meaning (PHB-21).
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
 
                 if (onHelpClick != null) {
-                    IconButton(onClick = onHelpClick) {
+                    IconButton(onClick = onHelpClick, modifier = Modifier.size(ToolTouchTargetSize)) {
                         Icon(
                             imageVector = Icons.Default.Info,
                             contentDescription = stringResource(R.string.action_help),
@@ -138,10 +156,11 @@ fun HeroTitleText(
     text: String,
     color: Color,
     modifier: Modifier = Modifier,
+    style: TextStyle = MaterialTheme.typography.displaySmall,
 ) {
-    val baseStyle = MaterialTheme.typography.displaySmall
-    var textStyle by remember(text) { mutableStateOf(baseStyle) }
-    var ready by remember(text) { mutableStateOf(false) }
+    val baseStyle = style
+    var textStyle by remember(text, baseStyle) { mutableStateOf(baseStyle) }
+    var ready by remember(text, baseStyle) { mutableStateOf(false) }
 
     Text(
         text = text,

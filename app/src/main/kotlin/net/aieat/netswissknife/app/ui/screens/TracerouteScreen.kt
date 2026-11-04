@@ -1,15 +1,14 @@
 package net.aieat.netswissknife.app.ui.screens
 
+import android.app.Activity
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -40,42 +39,35 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FmdGood
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Router
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.automirrored.filled.TextSnippet
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -90,18 +82,25 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
+import net.aieat.netswissknife.app.ui.components.DisabledActionHint
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
+import net.aieat.netswissknife.app.ui.format.humanDurationText
+import net.aieat.netswissknife.app.ui.format.resolvedIpToShow
+import androidx.compose.foundation.layout.RowScope
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
+import net.aieat.netswissknife.app.ui.components.ToolTextField
+import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
 import net.aieat.netswissknife.app.ui.components.hapticAction
@@ -112,7 +111,6 @@ import net.aieat.netswissknife.app.ui.theme.StatusGood
 import net.aieat.netswissknife.app.ui.theme.StatusLime
 import net.aieat.netswissknife.app.ui.theme.StatusUnknown
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -138,22 +136,21 @@ import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewModel
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewMode
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.traceroute.CountryFlags
+import net.aieat.netswissknife.app.ui.components.messageRes
+import net.aieat.netswissknife.core.network.traceroute.GeoPlausibility
 import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
 import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
 import net.aieat.netswissknife.core.network.traceroute.TracerouteResult
-import kotlin.math.atan2
-import kotlin.math.cos
 import kotlin.math.roundToInt
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 // ── Screen entry point ────────────────────────────────────────────────────────
 
 @Composable
 fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
     val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
     val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester(viewModel::startTrace)
 
     val uiState      by viewModel.uiState.collectAsStateWithLifecycle()
@@ -184,7 +181,11 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) viewModel.onLifecycleStop()
+            if (event == Lifecycle.Event.ON_STOP) {
+                // Rotation also reaches ON_STOP; the trace must survive a configuration change.
+                val changingConfigurations = (context as? Activity)?.isChangingConfigurations == true
+                viewModel.onLifecycleStop(configurationChange = changingConfigurations)
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -202,6 +203,11 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
         label         = "screen-alpha"
     )
     var showHelp by remember { mutableStateOf(false) }
+    // Once a result is shown the configuration folds to a one-line summary so the hops are near the top (PHA-16).
+    var settingsExpanded by rememberSaveable { mutableStateOf(true) }
+    val resultShown = uiState.isResultState()
+    LaunchedEffect(resultShown) { if (resultShown) settingsExpanded = false }
+    val settingsCollapsed = !settingsExpanded && uiState !is TracerouteUiState.Idle
 
     LazyColumn(
         modifier          = Modifier.fillMaxSize().alpha(screenAlpha).testTag("traceroute_content_list"),
@@ -239,7 +245,9 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                     onStart             = { requestLocalNetworkPermission(host) },
                     onStop              = viewModel::onStop,
                     onRemoveRecentHost  = viewModel::removeRecentHost,
-                    onClearRecentHosts  = viewModel::clearRecentHosts
+                onClearRecentHosts  = viewModel::clearRecentHosts,
+                settingsCollapsed = settingsCollapsed,
+                onExpandSettings = { settingsExpanded = true },
                 )
             }
 
@@ -265,6 +273,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                             result = state.result,
                             viewMode = state.viewMode,
                             canceled = true,
+                        stoppedWhenLeft = state.stoppedWhenLeft,
                             onToggleMode = viewModel::onToggleViewMode,
                             onClear = viewModel::onClear,
                         )
@@ -354,6 +363,59 @@ private fun TracerouteHeroHeader(onHelpClick: () -> Unit) {
     )
 }
 
+/** Total time as a duration of work, or N/A when no time was measured. */
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun totalTimeText(totalTimeMs: Long): String =
+    if (totalTimeMs > 0) {
+        humanDurationText(totalTimeMs)
+    } else {
+        "N/A"
+    }
+
+/** A finished, cancelled or failed trace: the point at which the settings fold to a summary. */
+private fun TracerouteUiState.isResultState(): Boolean =
+    this is TracerouteUiState.Finished ||
+        this is TracerouteUiState.Canceled ||
+        this is TracerouteUiState.Error
+
+// ── Collapsed settings ────────────────────────────────────────────────────────
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun TracerouteSettingsSummary(
+    host: String,
+    maxHops: Int,
+    probesPerHop: Int,
+    timeoutMs: Int,
+    onExpand: () -> Unit,
+) {
+    val probesText = pluralStringResource(R.plurals.traceroute_probes_per_hop, probesPerHop, probesPerHop)
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = host,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = stringResource(R.string.traceroute_settings_summary, maxHops, probesText, timeoutMs),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(onClick = onExpand) {
+                Text(stringResource(R.string.traceroute_settings_show))
+            }
+        }
+    }
+}
+
 // ── Input card ────────────────────────────────────────────────────────────────
 
 @Composable
@@ -377,12 +439,26 @@ private fun TracerouteInputCard(
     onStart: () -> Unit,
     onStop: () -> Unit,
     onRemoveRecentHost: (String) -> Unit,
-    onClearRecentHosts: () -> Unit
+    onClearRecentHosts: () -> Unit,
+    settingsCollapsed: Boolean = false,
+    onExpandSettings: () -> Unit = {},
 ) {
-    val keyboard = LocalSoftwareKeyboardController.current
+    if (settingsCollapsed) {
+        TracerouteSettingsSummary(
+            host = host,
+            maxHops = maxHops,
+            probesPerHop = probesPerHop,
+            timeoutMs = timeoutMs,
+            onExpand = onExpandSettings,
+        )
+        return
+    }
+    val dismissKeyboard = rememberDismissKeyboard()
     val mtuDiscovery = packetSize == 0
     val normalizedHost = HostValidator.normalize(host)
-    val isHostInvalid = host.isNotBlank() && normalizedHost == null
+    // Blank input is not an error yet; a non-blank host gets a specific reason when it is invalid.
+    val hostProblem = if (host.isNotBlank()) HostValidator.problemOf(host) else null
+    val isHostInvalid = hostProblem != null
     val isBusy = isRunning || isCanceling
     val canStart = normalizedHost != null
 
@@ -397,32 +473,22 @@ private fun TracerouteInputCard(
             )
 
             // Host field
-            OutlinedTextField(
+            ToolTextField(
                 value         = host,
                 onValueChange = onHostChange,
                 label         = { Text(stringResource(R.string.traceroute_host_label)) },
                 placeholder   = { Text(stringResource(R.string.traceroute_host_placeholder)) },
                 leadingIcon   = { Icon(Icons.Default.Router, null) },
-                trailingIcon  = {
-                    if (host.isNotEmpty()) {
-                        IconButton(
-                            onClick = { onHostChange("") },
-                            enabled = !isBusy,
-                        ) {
-                            Icon(Icons.Default.Clear, stringResource(R.string.clear))
-                        }
-                    }
-                },
                 isError = isHostInvalid,
-                supportingText = if (isHostInvalid) {
-                    { Text(stringResource(R.string.error_invalid_host)) }
+                supportingText = if (hostProblem != null) {
+                    { Text(stringResource(hostProblem.messageRes())) }
                 } else null,
                 singleLine    = true,
                 enabled       = !isBusy,
                 modifier      = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = {
-                    keyboard?.hide()
+                    dismissKeyboard()
                     if (!isBusy && canStart) onStart()
                 })
             )
@@ -543,17 +609,35 @@ private fun TracerouteInputCard(
                     )
                 }
             } else {
-                Button(
-                    onClick  = hapticAction { keyboard?.hide(); onStart() },
-                    enabled  = canStart && !isBusy,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Public, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.traceroute_start_button))
-                }
+                TracerouteStartAction(
+                    canStart = canStart,
+                    isBusy = isBusy,
+                    onStart = { dismissKeyboard(); onStart() },
+                )
             }
         }
+    }
+}
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun TracerouteStartAction(
+    canStart: Boolean,
+    isBusy: Boolean,
+    onStart: () -> Unit,
+) {
+    Button(
+        onClick = hapticAction(onStart),
+        enabled = canStart && !isBusy,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Icon(Icons.Default.Public, null)
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.traceroute_start_button))
+    }
+    // A disabled button needs its reason next to it (V6A-12).
+    if (!canStart && !isBusy) {
+        DisabledActionHint(stringResource(R.string.traceroute_start_disabled_hint))
     }
 }
 
@@ -696,16 +780,30 @@ private fun TracerouteFinishedPanel(
     result: TracerouteResult,
     viewMode: TracerouteViewMode,
     canceled: Boolean = false,
+    stoppedWhenLeft: Boolean = false,
     timeLimitReached: Boolean = false,
     onToggleMode: () -> Unit,
     onClear: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
 
+        if (result.unreachableFromThisDevice) {
+            Text(
+                text = stringResource(R.string.traceroute_unreachable_from_device),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.testTag("traceroute_unreachable_from_device"),
+            )
+        }
+
         if (canceled) {
             Text(
                 text = pluralStringResource(
-                    R.plurals.traceroute_canceled_partial_status,
+                    if (stoppedWhenLeft) {
+                        R.plurals.traceroute_stopped_when_left_status
+                    } else {
+                        R.plurals.traceroute_canceled_partial_status
+                    },
                     result.hops.size,
                     result.hops.size,
                 ),
@@ -726,9 +824,6 @@ private fun TracerouteFinishedPanel(
 
         // Summary stats card
         TraceStatsSummary(result = result, onClear = onClear)
-
-        // Journey intelligence statistics card
-        TraceJourneyStats(result = result)
 
         // Tab row: Hop Details / Raw Output
         // TabRow uses SubcomposeLayout internally, which causes IllegalStateException when
@@ -788,6 +883,9 @@ private fun TracerouteFinishedPanel(
             TracerouteViewMode.Visual -> HopDetailList(result.hops)
             TracerouteViewMode.Raw    -> RawOutputCard(result.rawOutput)
         }
+
+        // Journey intelligence comes after the hops, which are the answer (PHA-16).
+        TraceJourneyStats(result = result)
     }
 }
 
@@ -808,19 +906,6 @@ private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
                     stringResource(R.string.traceroute_result_header),
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
                 )
-                Row {
-                    IconButton(onClick = {
-                        context.shareText(
-                            text = result.rawOutput,
-                            subject = shareSubject
-                        )
-                    }) {
-                        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
-                    }
-                    TextButton(onClick = onClear) {
-                        Text(stringResource(R.string.traceroute_clear_button))
-                    }
-                }
             }
             Spacer(Modifier.height(8.dp))
             Row(
@@ -833,7 +918,7 @@ private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
                 )
                 StatChip(
                     label = stringResource(R.string.traceroute_stat_time),
-                    value = if (result.totalTimeMs > 0) "${result.totalTimeMs}ms" else "N/A"
+                    value = totalTimeText(result.totalTimeMs),
                 )
                 StatChip(
                     label = stringResource(R.string.traceroute_stat_reached),
@@ -843,14 +928,24 @@ private fun TraceStatsSummary(result: TracerouteResult, onClear: () -> Unit) {
                         stringResource(R.string.traceroute_stat_no)
                 )
             }
-            if (result.resolvedIp != null) {
+            // An IP target resolves to itself; showing it again repeats the target.
+            resolvedIpToShow(result.host, result.resolvedIp)?.let { ip ->
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    stringResource(R.string.traceroute_resolved_ip, result.resolvedIp!!),
+                    stringResource(R.string.traceroute_resolved_ip, ip),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            ResultActionsRow(
+                copyText = result.rawOutput,
+                onShare = { context.shareText(text = result.rawOutput, subject = shareSubject) },
+                extraActions = {
+                    TextButton(onClick = onClear) {
+                        Text(stringResource(R.string.traceroute_clear_button))
+                    }
+                },
+            )
         }
     }
 }
@@ -880,13 +975,12 @@ private fun TraceJourneyStats(result: TracerouteResult) {
     val rtts = successHops.mapNotNull { it.rtTimeMs }
 
     // ── Geo stats ────────────────────────────────────────────────────────────
-    val totalDistanceKm: Double = remember(geoHops) {
-        if (geoHops.size < 2) 0.0
+    // GeoIP positions contradicted by the measured RTTs make distance, route and speed meaningless.
+    val geoConflict = remember(result.hops) { GeoPlausibility.implausibleHops(result.hops).isNotEmpty() }
+    val totalDistanceKm: Double = remember(geoHops, geoConflict) {
+        if (geoConflict || geoHops.size < 2) 0.0
         else geoHops.zipWithNext().sumOf { (a, b) ->
-            haversineKm(
-                a.geoLocation!!.lat, a.geoLocation!!.lon,
-                b.geoLocation!!.lat, b.geoLocation!!.lon
-            )
+            GeoPlausibility.distanceKm(a.geoLocation!!, b.geoLocation!!)
         }
     }
     val countries = remember(geoHops) {
@@ -1002,11 +1096,23 @@ private fun TraceJourneyStats(result: TracerouteResult) {
                     }
                 }
 
-                if (countries.size > 1) {
+                if (countries.size > 1 && !geoConflict) {
                     Text(
                         stringResource(R.string.traceroute_stats_country_path, countries.joinToString(" → ")),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Text(
+                    stringResource(R.string.traceroute_stats_geo_approximate),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (geoConflict) {
+                    Text(
+                        stringResource(R.string.traceroute_stats_geo_conflict),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
             } else {
@@ -1140,19 +1246,6 @@ private fun JourneyStatBox(
             )
         }
     }
-}
-
-/** Haversine great-circle distance between two (lat, lon) pairs, in kilometres. */
-private fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-    val R    = 6371.0
-    val phi1 = Math.toRadians(lat1)
-    val phi2 = Math.toRadians(lat2)
-    val dPhi = Math.toRadians(lat2 - lat1)
-    val dLam = Math.toRadians(lon2 - lon1)
-    val sinDPhi = sin(dPhi / 2)
-    val sinDLam = sin(dLam / 2)
-    val a = sinDPhi * sinDPhi + cos(phi1) * cos(phi2) * sinDLam * sinDLam
-    return R * 2.0 * atan2(sqrt(a), sqrt(1.0 - a))
 }
 
 private fun formatDistance(km: Double): String = when {
@@ -1530,10 +1623,10 @@ private fun TracerouteErrorPanel(
         FilledTonalButton(onClick = onClear, modifier = Modifier.testTag("traceroute_error_clear")) {
             Text(stringResource(R.string.traceroute_clear_button))
         }
-        Button(onClick = onRetry, modifier = Modifier.testTag("traceroute_error_retry")) {
-            Icon(Icons.Default.Refresh, null)
-            Spacer(Modifier.width(4.dp))
-            Text(stringResource(R.string.traceroute_retry_button))
-        }
+        ToolRetryButton(
+            text = stringResource(R.string.traceroute_retry_button),
+            onClick = onRetry,
+            modifier = Modifier.testTag("traceroute_error_retry"),
+        )
     }
 }

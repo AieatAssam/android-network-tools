@@ -35,7 +35,11 @@ import net.aieat.netswissknife.core.network.speedtest.SpeedTestPhase
 import net.aieat.netswissknife.core.network.speedtest.ThroughputResult
 import net.aieat.netswissknife.core.network.speedtest.ThroughputSample
 import net.aieat.netswissknife.core.network.speedtest.ServerInfo
+import net.aieat.netswissknife.core.network.ErrorCode
+import net.aieat.netswissknife.core.network.ErrorInfo
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.awaitCancellation
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -321,5 +325,82 @@ class SpeedTestViewModelTest {
         assertTrue(share.contains("Latency under download load: 28.0 ms avg / 1 samples"))
         assertTrue(share.contains("Latency under upload load: 31.0 ms avg / 1 samples"))
         assertFalse(share.contains("null"))
+    }
+
+    @Nested
+    @DisplayName("partial results and cancel")
+    inner class PartialResultsAndCancel {
+        @Test
+        fun `a failure after the download keeps latency and download results`() {
+            runTest {
+                val events =
+                    flowOf(
+                        SpeedTestEvent.LatencyFinished(latencyStats),
+                        SpeedTestEvent.DownloadFinished(downloadResult),
+                        SpeedTestEvent.Failed(
+                            SpeedTestPhase.UPLOAD,
+                            ErrorInfo(ErrorCode.NETWORK_TIMEOUT, developerMessage = "Upload stalled"),
+                        ),
+                    )
+                every { useCase(any(), any()) } returns events
+
+                viewModel.startTest()
+
+                val state = viewModel.uiState.value as SpeedTestUiState.Error
+                assertEquals(SpeedTestPhase.UPLOAD, state.phase)
+                assertEquals(ErrorCode.NETWORK_TIMEOUT, state.reason)
+                assertEquals(latencyStats, state.partial.latency)
+                assertEquals(downloadResult, state.partial.download)
+            }
+        }
+
+        @Test
+        fun `cancel returns to idle with a canceled notice and keeps partial results`() {
+            runTest {
+                val events =
+                    flow {
+                        emit(SpeedTestEvent.LatencyFinished(latencyStats))
+                        emit(SpeedTestEvent.DownloadFinished(downloadResult))
+                        awaitCancellation()
+                    }
+                every { useCase(any(), any()) } returns events
+                viewModel.startTest()
+
+                viewModel.onCancel()
+
+                val state = viewModel.uiState.value as SpeedTestUiState.Idle
+                assertTrue(state.canceled)
+                assertEquals(latencyStats, state.partial.latency)
+                assertEquals(downloadResult, state.partial.download)
+            }
+        }
+
+        @Test
+        fun `cancel before any result is idle with a canceled notice and no partial`() {
+            runTest {
+                every { useCase(any(), any()) } returns flow { awaitCancellation() }
+                viewModel.startTest()
+
+                viewModel.onCancel()
+
+                val state = viewModel.uiState.value as SpeedTestUiState.Idle
+                assertTrue(state.canceled)
+                assertTrue(state.partial.isEmpty)
+            }
+        }
+
+        @Test
+        fun `starting a new run clears the canceled notice`() {
+            runTest {
+                every { useCase(any(), any()) } returns flow { awaitCancellation() }
+                viewModel.startTest()
+                viewModel.onCancel()
+                every { useCase(any(), any()) } returns flowOf(SpeedTestEvent.LatencyFinished(latencyStats))
+
+                viewModel.startTest()
+
+                assertTrue(viewModel.uiState.value !is SpeedTestUiState.Idle)
+            }
+        }
     }
 }

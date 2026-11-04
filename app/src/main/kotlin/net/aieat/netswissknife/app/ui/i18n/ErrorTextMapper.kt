@@ -69,6 +69,7 @@ object ErrorTextMapper {
         ErrorCode.DNS_NO_RESULT -> R.string.err_dns_no_result
         ErrorCode.NETWORK_TIMEOUT -> R.string.err_network_timeout
         ErrorCode.NETWORK_REQUEST_FAILED -> R.string.err_network_request_failed
+        ErrorCode.NETWORK_CONNECTION_REFUSED -> R.string.err_network_connection_refused
         ErrorCode.WHOIS_INVALID_QUERY -> R.string.err_whois_invalid_query
         ErrorCode.WHOIS_IANA_FAILED -> R.string.err_whois_iana_failed
         ErrorCode.WHOIS_RESPONSE_TOO_LARGE -> R.string.err_whois_response_too_large
@@ -90,11 +91,21 @@ object ErrorTextMapper {
         ErrorCode.TLS_HANDSHAKE_FAILED -> R.string.err_tls_handshake_failed
         ErrorCode.TLS_PIN_INVALID -> R.string.err_tls_pin_invalid
         ErrorCode.MAC_INVALID -> R.string.err_mac_invalid
+        ErrorCode.BROADCAST_INVALID -> R.string.err_broadcast_invalid
+        ErrorCode.WOL_NO_NETWORK -> R.string.err_wol_no_network
         ErrorCode.LOCAL_NETWORK_PERMISSION_DENIED -> R.string.err_local_network_permission_denied
         ErrorCode.WOL_SEND_FAILED -> R.string.err_wol_send_failed
         ErrorCode.SUBNET_BLANK -> R.string.err_subnet_blank
         ErrorCode.SUBNET_INVALID -> R.string.err_subnet_invalid
         ErrorCode.SUBNET_RANGE_INVALID -> R.string.err_subnet_range_invalid
+        ErrorCode.SUBNET_ADDRESS_INVALID -> R.string.err_subnet_address_invalid
+        ErrorCode.SUBNET_PREFIX_MISSING -> R.string.err_subnet_prefix_missing
+        ErrorCode.SUBNET_PREFIX_INVALID -> R.string.err_subnet_prefix_invalid
+        ErrorCode.SUBNET_LEADING_ZERO -> R.string.err_subnet_leading_zero
+        ErrorCode.SUBNET_MASK_NON_CONTIGUOUS -> R.string.err_subnet_mask_non_contiguous
+        ErrorCode.SUBNET_IPV6_UNSUPPORTED -> R.string.err_subnet_ipv6_unsupported
+        ErrorCode.SUBNET_SPLIT_PREFIX_INVALID -> R.string.err_subnet_split_prefix_invalid
+        ErrorCode.SUBNET_SPLIT_COUNT_INVALID -> R.string.err_subnet_split_count_invalid
         ErrorCode.NO_RESPONSE -> R.string.err_no_response
         ErrorCode.NETWORK_IO -> R.string.err_network_io
     }
@@ -117,9 +128,18 @@ internal enum class FormatArgumentType {
     INTEGER,
 }
 
+/** Subnet errors whose message names one text argument (an address, prefix, octet or count). */
+private val STRING_SUBNET_CODES =
+    setOf(
+        ErrorCode.SUBNET_ADDRESS_INVALID,
+        ErrorCode.SUBNET_PREFIX_INVALID,
+        ErrorCode.SUBNET_LEADING_ZERO,
+        ErrorCode.SUBNET_SPLIT_COUNT_INVALID,
+    )
+
 /** Resource format argument contract audited against user-facing core ErrorInfo construction. */
 internal fun formatArgumentTypes(code: ErrorCode): List<FormatArgumentType> = when (code) {
-    ErrorCode.HOST_INVALID -> listOf(FormatArgumentType.STRING)
+    ErrorCode.HOST_INVALID, in STRING_SUBNET_CODES -> listOf(FormatArgumentType.STRING)
     ErrorCode.DOMAIN_TOO_LONG -> listOf(FormatArgumentType.INTEGER)
 
     ErrorCode.COUNT_OUT_OF_RANGE,

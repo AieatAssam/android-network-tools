@@ -3,35 +3,11 @@ package net.aieat.netswissknife.app.ui.screens.portscan
 import android.annotation.SuppressLint
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.SavedStateHandle
-import net.aieat.netswissknife.app.data.AppPreferenceKeys
-import net.aieat.netswissknife.app.data.RecentHostsRepository
-import net.aieat.netswissknife.app.platform.LinkInfoProvider
-import net.aieat.netswissknife.app.platform.LiteralDestinationClassifier
-import net.aieat.netswissknife.app.platform.OperationAvailability
-import net.aieat.netswissknife.app.ui.navigation.HostTool
-import net.aieat.netswissknife.app.ui.navigation.ToolDestination
-import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
-import net.aieat.netswissknife.app.ui.navigation.ToolSource
-import net.aieat.netswissknife.app.ui.navigation.ToolHost
-import net.aieat.netswissknife.core.domain.PortScanFlowResult
-import net.aieat.netswissknife.core.domain.PortScanDeadlineBudget
-import net.aieat.netswissknife.core.domain.PortScanParams
-import net.aieat.netswissknife.core.domain.PortScanPreset
-import net.aieat.netswissknife.core.domain.PortScanUseCase
-import net.aieat.netswissknife.core.network.HostValidator
-import net.aieat.netswissknife.core.network.MonotonicClock
-import net.aieat.netswissknife.core.network.SystemMonotonicClock
-import net.aieat.netswissknife.core.network.elapsedMillisSince
-import net.aieat.netswissknife.core.network.portscan.PortScanResult
-import net.aieat.netswissknife.core.network.portscan.PortScanSummary
-import net.aieat.netswissknife.core.network.operation.CancellationReason
-import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
-import net.aieat.netswissknife.core.network.operation.OperationRequirement
-import net.aieat.netswissknife.core.network.operation.OperationSession
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,7 +17,36 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
+import net.aieat.netswissknife.app.data.AppPreferenceKeys
+import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.data.ToolSessionMemory
+import net.aieat.netswissknife.app.data.purgeInvalidHostRecents
+import net.aieat.netswissknife.app.data.validHostRecents
+import net.aieat.netswissknife.app.platform.LinkInfoProvider
+import net.aieat.netswissknife.app.platform.LiteralDestinationClassifier
+import net.aieat.netswissknife.app.platform.OperationAvailability
+import net.aieat.netswissknife.app.ui.navigation.HostTool
+import net.aieat.netswissknife.app.ui.navigation.ToolDestination
+import net.aieat.netswissknife.app.ui.navigation.ToolHost
+import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
+import net.aieat.netswissknife.app.util.enumFromSavedName
+import net.aieat.netswissknife.core.domain.PortScanDeadlineBudget
+import net.aieat.netswissknife.core.domain.PortScanFlowResult
+import net.aieat.netswissknife.core.domain.PortScanParams
+import net.aieat.netswissknife.core.domain.PortScanPreset
+import net.aieat.netswissknife.core.domain.PortScanRange
+import net.aieat.netswissknife.core.domain.PortScanUseCase
+import net.aieat.netswissknife.core.network.HostValidator
+import net.aieat.netswissknife.core.network.MonotonicClock
+import net.aieat.netswissknife.core.network.SystemMonotonicClock
+import net.aieat.netswissknife.core.network.elapsedMillisSince
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
+import net.aieat.netswissknife.core.network.operation.OperationRequirement
+import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.portscan.PortScanResult
+import net.aieat.netswissknife.core.network.portscan.PortScanSummary
 
 object PortScanDefaults {
     const val CONCURRENCY = 50
@@ -60,11 +65,39 @@ sealed interface PortScanUiState {
     data class Finished(
         val summary: PortScanSummary,
         val completion: Completion = Completion.COMPLETE,
+        /** Ports the stopped scan was asked to probe; null when the scan was not stopped early. */
+        val requestedPorts: Int? = null,
     ) : PortScanUiState
     data class Error(val message: String, val isBudgetLimit: Boolean = false) : PortScanUiState
 
     enum class Completion { COMPLETE, USER_STOPPED, DEADLINE }
 }
+
+/** SavedStateHandle keys for the port scan form inputs; they survive process death and rotation. */
+private const val PORT_PRESET_KEY = "portPreset"
+private const val PORT_START_KEY = "portStartPort"
+private const val PORT_END_KEY = "portEndPort"
+private const val PORT_TIMEOUT_KEY = "portTimeoutMs"
+private const val PORT_CONCURRENCY_KEY = "portConcurrency"
+private const val PORT_AGGRESSIVE_KEY = "portAggressiveProbes"
+
+/** [ToolSessionMemory] slot holding the last port scan form and its finished result. */
+private const val PORT_SESSION_KEY = "portScanSession"
+
+/**
+ * The port scan form and its last finished result, kept in [ToolSessionMemory] when the tool is
+ * left. A result is restored only while the restored host still matches the one it scanned.
+ */
+internal data class PortScanSessionSnapshot(
+    val host: String,
+    val preset: PortScanPreset,
+    val startPort: String,
+    val endPort: String,
+    val timeoutMs: Int,
+    val concurrency: Int,
+    val aggressiveProbes: Boolean,
+    val finished: PortScanUiState.Finished?,
+)
 
 @HiltViewModel
 class PortScanViewModel @Inject constructor(
@@ -76,6 +109,7 @@ class PortScanViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
     private val monotonicClock: MonotonicClock = SystemMonotonicClock,
     private val linkInfoProvider: LinkInfoProvider = LinkInfoProvider({ true }, { true }),
+    private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
 ) : ViewModel() {
 
     companion object {
@@ -116,6 +150,15 @@ class PortScanViewModel @Inject constructor(
     val sourceContext: ToolSource? get() = _sourceContext.value
     val sourceContextState: StateFlow<ToolSource?> = _sourceContext.asStateFlow()
 
+    // Restore inputs before the defaults: a SavedStateHandle value (process death) wins over the
+    // snapshot kept when the tool was left, and both win over the DataStore defaults in init.
+    private val restoredSession: PortScanSessionSnapshot? =
+        sessionMemory.get<PortScanSessionSnapshot>(PORT_SESSION_KEY)
+    private val restoredTimeoutMs: Int? =
+        savedStateHandle.get<Int>(PORT_TIMEOUT_KEY) ?: restoredSession?.timeoutMs
+    private val restoredConcurrency: Int? =
+        savedStateHandle.get<Int>(PORT_CONCURRENCY_KEY) ?: restoredSession?.concurrency
+
     private val _uiState = MutableStateFlow<PortScanUiState>(PortScanUiState.Idle)
     val uiState: StateFlow<PortScanUiState> = _uiState.asStateFlow()
 
@@ -124,27 +167,44 @@ class PortScanViewModel @Inject constructor(
     private val _host = MutableStateFlow("")
     val host: StateFlow<String> = _host.asStateFlow()
 
-    private val _selectedPreset = MutableStateFlow(PortScanPreset.COMMON)
+    private val _selectedPreset =
+        MutableStateFlow(
+            enumFromSavedName(savedStateHandle.get<String>(PORT_PRESET_KEY), PortScanPreset.entries)
+                ?: restoredSession?.preset
+                ?: PortScanPreset.COMMON,
+        )
     val selectedPreset: StateFlow<PortScanPreset> = _selectedPreset.asStateFlow()
 
-    private val _startPort = MutableStateFlow("1")
+    private val _startPort =
+        MutableStateFlow(savedStateHandle.get<String>(PORT_START_KEY) ?: restoredSession?.startPort ?: "1")
     val startPort: StateFlow<String> = _startPort.asStateFlow()
 
-    private val _endPort = MutableStateFlow("1024")
+    private val _endPort =
+        MutableStateFlow(savedStateHandle.get<String>(PORT_END_KEY) ?: restoredSession?.endPort ?: "1024")
     val endPort: StateFlow<String> = _endPort.asStateFlow()
 
-    private val _timeoutMs = MutableStateFlow(2000)
+    private val _timeoutMs = MutableStateFlow(restoredTimeoutMs ?: 2000)
     val timeoutMs: StateFlow<Int> = _timeoutMs.asStateFlow()
 
-    private val _concurrency = MutableStateFlow(PortScanDefaults.CONCURRENCY)
+    private val _concurrency = MutableStateFlow(restoredConcurrency ?: PortScanDefaults.CONCURRENCY)
     val concurrency: StateFlow<Int> = _concurrency.asStateFlow()
 
-    private val _aggressiveProbes = MutableStateFlow(true)
+    private val _aggressiveProbes =
+        MutableStateFlow(
+            savedStateHandle.get<Boolean>(PORT_AGGRESSIVE_KEY) ?: restoredSession?.aggressiveProbes ?: true,
+        )
     val aggressiveProbes: StateFlow<Boolean> = _aggressiveProbes.asStateFlow()
 
     val recentHosts: StateFlow<List<String>> = recentHostsRepository
         .getRecents(AppPreferenceKeys.RECENT_PORTS_HOSTS)
+        .validHostRecents()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    init {
+        viewModelScope.launch {
+            recentHostsRepository.purgeInvalidHostRecents(AppPreferenceKeys.RECENT_PORTS_HOSTS)
+        }
+    }
 
     private var scanJob: Job? = null
     private var scanStartedAtNanos: Long? = null
@@ -158,11 +218,12 @@ class PortScanViewModel @Inject constructor(
             // the saved form snapshot is authoritative, including an intentional blank.
             _host.value = restoredEdit.orEmpty()
         } else {
+            // Back and return brings no route argument, so the host left behind is the fallback.
             val initialHost = when {
                 restoredEdit != null -> restoredEdit
                 _hasInvalidHandoff.value -> null
                 hasIntentArgument -> intentHost?.host?.value
-                else -> routeHost
+                else -> routeHost ?: restoredSession?.host?.takeIf { it.isNotBlank() }
             }
             initialHost?.let { host ->
                 _host.value = host
@@ -173,11 +234,17 @@ class PortScanViewModel @Inject constructor(
             } ?: savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
             savedStateHandle[HANDOFF_CONSUMED_KEY] = true
         }
+        // A finished result is shown again only for the host it scanned.
+        restoredSession?.takeIf { it.host == _host.value }?.finished?.let { _uiState.value = it }
         viewModelScope.launch {
             val prefs = dataStore.data.first()
-            _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 2_000
-            _concurrency.value = (prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: PortScanDefaults.CONCURRENCY)
-                .coerceIn(1, 500)
+            if (restoredTimeoutMs == null) {
+                _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 2_000
+            }
+            if (restoredConcurrency == null) {
+                _concurrency.value = (prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: PortScanDefaults.CONCURRENCY)
+                    .coerceIn(1, 500)
+            }
         }
     }
 
@@ -191,6 +258,10 @@ class PortScanViewModel @Inject constructor(
         }
         _host.value = value
         savedStateHandle[EDITED_HOST_KEY] = value
+        // A finished or failed result describes the previous host; do not leave it on screen.
+        if (_uiState.value !is PortScanUiState.Scanning && _uiState.value !is PortScanUiState.Idle) {
+            _uiState.value = PortScanUiState.Idle
+        }
         if (value.isEmpty()) {
             _sourceContext.value = null
             savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
@@ -212,16 +283,35 @@ class PortScanViewModel @Inject constructor(
         savedStateHandle[HANDOFF_CONSUMED_KEY] = true
     }
 
-    fun onPresetChange(preset: PortScanPreset) { _selectedPreset.value = preset }
+    fun onPresetChange(preset: PortScanPreset) {
+        _selectedPreset.value = preset
+        savedStateHandle[PORT_PRESET_KEY] = preset.name
+    }
 
-    fun onStartPortChange(value: String) { _startPort.value = value }
+    fun onStartPortChange(value: String) {
+        _startPort.value = value
+        savedStateHandle[PORT_START_KEY] = value
+    }
 
-    fun onEndPortChange(value: String) { _endPort.value = value }
+    fun onEndPortChange(value: String) {
+        _endPort.value = value
+        savedStateHandle[PORT_END_KEY] = value
+    }
 
-    fun onTimeoutChange(value: Int) { _timeoutMs.value = value }
+    fun onTimeoutChange(value: Int) {
+        _timeoutMs.value = value
+        savedStateHandle[PORT_TIMEOUT_KEY] = value
+    }
 
-    fun onConcurrencyChange(value: Int) { _concurrency.value = value.coerceIn(1, 500) }
-    fun onAggressiveProbesChange(value: Boolean) { _aggressiveProbes.value = value }
+    fun onConcurrencyChange(value: Int) {
+        _concurrency.value = value.coerceIn(1, 500)
+        savedStateHandle[PORT_CONCURRENCY_KEY] = _concurrency.value
+    }
+
+    fun onAggressiveProbesChange(value: Boolean) {
+        _aggressiveProbes.value = value
+        savedStateHandle[PORT_AGGRESSIVE_KEY] = value
+    }
 
     fun removeRecentHost(host: String) {
         viewModelScope.launch {
@@ -252,8 +342,13 @@ class PortScanViewModel @Inject constructor(
         }
     }
 
-    /** Stops socket probes when the screen leaves the foreground. */
-    fun onLifecyclePause() {
+    /**
+     * Stops socket probes when the screen leaves the foreground. A configuration change
+     * (rotation, theme or density change) also pauses the Activity, but the ViewModel and its
+     * scan survive it, so the caller passes [configurationChange] and the scan keeps going.
+     */
+    fun onLifecyclePause(configurationChange: Boolean = false) {
+        if (configurationChange) return
         val session = scanOperationSession ?: return
         cancelPreservingExpiredDeadline(session, CancellationReason.LIFECYCLE_PAUSE)
         when (session.cancellationReason) {
@@ -303,6 +398,7 @@ class PortScanViewModel @Inject constructor(
             _uiState.value = PortScanUiState.Finished(
                 summary = partial,
                 completion = PortScanUiState.Completion.USER_STOPPED,
+                requestedPorts = current.totalCount.takeIf { it > 0 },
             )
         }
     }
@@ -338,7 +434,7 @@ class PortScanViewModel @Inject constructor(
         val totalPorts = if (_selectedPreset.value == PortScanPreset.CUSTOM) {
             val start = params.startPort
             val end = params.endPort
-            if (start in 1..65_535 && end in start..65_535 && end - start + 1 <= 10_000) {
+            if (PortScanRange.problemOf(start, end) == null) {
                 end - start + 1
             } else {
                 0
@@ -454,5 +550,20 @@ class PortScanViewModel @Inject constructor(
 
     override fun onCleared() {
         cancelScan(CancellationReason.LIFECYCLE_PAUSE)
+        // A scan still running when the tool is left is kept as the stopped-early result it became.
+        finishPartialScan()
+        sessionMemory.put(
+            PORT_SESSION_KEY,
+            PortScanSessionSnapshot(
+                host = _host.value,
+                preset = _selectedPreset.value,
+                startPort = _startPort.value,
+                endPort = _endPort.value,
+                timeoutMs = _timeoutMs.value,
+                concurrency = _concurrency.value,
+                aggressiveProbes = _aggressiveProbes.value,
+                finished = _uiState.value as? PortScanUiState.Finished,
+            ),
+        )
     }
 }

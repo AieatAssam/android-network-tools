@@ -9,6 +9,7 @@ import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.elapsedMillisSince
+import net.aieat.netswissknife.core.network.resolverErrorMessage
 import net.aieat.netswissknife.core.network.net.NetworkBinder
 import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
 import net.aieat.netswissknife.core.network.operation.CancellationReason
@@ -29,6 +30,9 @@ internal fun interface TlsInspectorSocketFactory {
     fun create(context: SSLContext): SSLSocket
 }
 
+/** Developer message for a handshake that ran out of time; the app shows it under the error title. */
+private const val TLS_TIMEOUT_MESSAGE = "The server did not answer in time. Check the host and port."
+
 class TlsInspectorRepositoryImpl(
     private val networkBinder: NetworkBinder = NoOpNetworkBinder,
 ) : TlsInspectorRepository {
@@ -40,6 +44,9 @@ class TlsInspectorRepositoryImpl(
     }
     /** Tests can inject a fully fake engine; the socket-factory seam remains for cancellation regressions. */
     internal var handshakeEngine: TlsHandshakeEngine? = null
+
+    /** Tests can force the trust-store decision so hostname, pin and expiry logic is exercised in isolation. */
+    internal var chainTrustOverride: ((List<X509Certificate>) -> Boolean)? = null
 
     override suspend fun inspect(
         host: String,
@@ -99,14 +106,23 @@ class TlsInspectorRepositoryImpl(
                     val engine = handshakeEngine ?: SocketTlsHandshakeEngine(socketFactory, networkBinder)
                     val primary = performHandshake(engine, host, port, timeoutMs, operationSession, protocol = null)
                     val certificates = primary.snapshot.peerCertificates
-                    val trusted = checkTrust(certificates)
+                    val trusted = chainTrustOverride?.invoke(certificates) ?: checkTrust(certificates)
                     val now = wallClockMillis()
                     val hostnameMatches = certificates.firstOrNull()?.let { HostnameMatcher.matches(host, it) }
                     val chain = certificates.map { TlsCertificateParser.parse(it, now) }
-                    val issues = ChainAnalyzer.analyze(certificates, trusted, now, hostnameMatches)
                     val leafPin = certificates.firstOrNull()?.let {
                         TlsCertificateParser.sha256Fingerprint(it.encoded).replace(":", "").uppercase()
                     }
+                    // String.equals is false for a null leaf pin, so no separate null check is needed.
+                    val pinMatch = options.expectedPinSha256?.equals(leafPin, ignoreCase = true)
+                    val issues = ChainAnalyzer.analyze(certificates, trusted, now, hostnameMatches, pinMatch)
+                    // Only a sole untrusted-chain finding can be explained by one missing root.
+                    val rootName =
+                        if (issues == listOf(ChainIssue.UNTRUSTED)) {
+                            ChainAnalyzer.untrustedRootName(certificates)
+                        } else {
+                            null
+                        }
                     val protocolProbes = if (options.probeProtocols) {
                         probeProtocols(engine, host, port, timeoutMs, operationSession)
                     } else {
@@ -129,7 +145,8 @@ class TlsInspectorRepositoryImpl(
                             protocolSupport = protocolProbes?.support,
                             protocolProbeUnknown = protocolProbes?.unknown.orEmpty(),
                             protocolProbeNotTestable = protocolProbes?.notTestable.orEmpty(),
-                            pinMatch = options.expectedPinSha256?.let { expected -> leafPin == expected },
+                            pinMatch = pinMatch,
+                            untrustedRootName = rootName,
                         )
                     )
                 }
@@ -137,7 +154,11 @@ class TlsInspectorRepositoryImpl(
                 if (cancelled is OperationCancellationException &&
                     cancelled.reason == CancellationReason.DEADLINE_EXCEEDED
                 ) {
-                    return@withContext NetworkResult.error(ErrorCode.TLS_INSPECTION_FAILED, developerMessage = "TLS inspection timed out", cancelled)
+                    return@withContext NetworkResult.error(
+                        ErrorCode.TLS_INSPECTION_FAILED,
+                        developerMessage = TLS_TIMEOUT_MESSAGE,
+                        cancelled,
+                    )
                 }
                 throw cancelled
             } catch (failure: Exception) {
@@ -146,14 +167,23 @@ class TlsInspectorRepositoryImpl(
                     CancellationReason.DEADLINE_EXCEEDED ->
                         return@withContext NetworkResult.error(
                             ErrorCode.TLS_INSPECTION_FAILED,
-                            developerMessage = "TLS inspection timed out",
+                            developerMessage = TLS_TIMEOUT_MESSAGE,
                             cause = failure,
                         )
                     else -> throw OperationCancellationException(operationSession.cancellationReason!!, failure)
                 }
+                if (failure is SSLException && isPlaintextResponse(failure)) {
+                    return@withContext NetworkResult.error(
+                        ErrorCode.TLS_HANDSHAKE_FAILED,
+                        developerMessage = "Port does not appear to speak TLS",
+                        cause = failure,
+                        descriptionKey = NOT_TLS_PORT_DESCRIPTION,
+                    )
+                }
+                val message = resolverErrorMessage(failure, host) ?: failure.message ?: "TLS inspection failed"
                 NetworkResult.error(
                     ErrorCode.TLS_INSPECTION_FAILED,
-                    developerMessage = failure.message ?: "TLS inspection failed",
+                    developerMessage = message,
                     cause = failure,
                 )
             }
@@ -258,6 +288,20 @@ class TlsInspectorRepositoryImpl(
         return ProtocolProbeResults(results, unknown, notTestable)
     }
 
+    /**
+     * A plain-text server (for example port 80 answering HTTP) answers the ClientHello with bytes
+     * that are not a TLS record. Providers report that as one of these record-layer errors.
+     */
+    private fun isPlaintextResponse(failure: Throwable): Boolean {
+        var current: Throwable? = failure
+        while (current != null) {
+            val message = current.message.orEmpty()
+            if (PLAINTEXT_RESPONSE_ALERT.containsMatchIn(message)) return true
+            current = current.cause
+        }
+        return false
+    }
+
     private fun isProtocolVersionRejection(failure: SSLException): Boolean {
         var current: Throwable? = failure
         while (current != null) {
@@ -307,6 +351,15 @@ class TlsInspectorRepositoryImpl(
     private companion object {
         val PIN_PATTERN = Regex("[0-9A-Fa-f]{64}")
         val PROTOCOL_VERSION_ALERT = Regex("fatal alert:\\s*protocol_version\\b", RegexOption.IGNORE_CASE)
+        val PLAINTEXT_RESPONSE_ALERT = Regex(PLAINTEXT_RESPONSE_PATTERN, RegexOption.IGNORE_CASE)
+
+        // Spellings differ by provider: OpenSSL/Conscrypt print WRONG_VERSION_NUMBER with underscores,
+        // Conscrypt's record parser says "Unable to parse TLS packet header", and JSSE says
+        // "Unrecognized SSL message, plaintext connection?".
+        const val PLAINTEXT_RESPONSE_PATTERN =
+            "wrong version number|wrong_version_number|unsupported or unrecognized ssl message|" +
+                "unrecognized ssl message|plaintext connection|unable to parse tls packet header|unknown protocol"
+        const val NOT_TLS_PORT_DESCRIPTION = "tls_not_tls_port"
         val CANDIDATE_PROTOCOLS = listOf("TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3")
     }
 }

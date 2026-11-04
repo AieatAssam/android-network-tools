@@ -3,7 +3,9 @@ package net.aieat.netswissknife.core.domain
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.traceroute.GeoIpRepository
+import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.TracerouteRepository
+import net.aieat.netswissknife.core.network.traceroute.TracerouteStopPolicy
 import net.aieat.netswissknife.core.network.traceroute.TracerouteReverseDnsRepository
 import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
 import net.aieat.netswissknife.core.network.operation.OperationCancellationException
@@ -37,6 +39,8 @@ class TracerouteUseCase(
     private val tracerouteRepository: TracerouteRepository,
     private val geoIpRepository: GeoIpRepository,
     private val reverseDnsRepository: TracerouteReverseDnsRepository? = null,
+    /** Addresses that belong to this device; replies from them alone mean the host is unreachable. */
+    private val localAddresses: () -> Set<String> = { emptySet() },
 ) {
     operator fun invoke(params: TracerouteParams): Flow<TracerouteFlowResult> =
         invokeInternal(params, operationSession = null)
@@ -93,6 +97,7 @@ class TracerouteUseCase(
                     val lookups = Semaphore(
                         minOf(MAX_ENRICHMENT_CONCURRENCY, session.budget.maxConcurrentProbes),
                     )
+                    val observed = mutableListOf<HopResult>()
                     tracerouteRepository.trace(
                         host = trimmedHost,
                         maxHops = params.maxHops,
@@ -102,6 +107,7 @@ class TracerouteUseCase(
                         packetSize = params.packetSize,
                         operationSession = session,
                     ).collect { hop ->
+                        observed += hop
                         output.send(TracerouteFlowResult.Hop(hop))
                         val hopIp = hop.ip ?: return@collect
 
@@ -142,6 +148,9 @@ class TracerouteUseCase(
                                 ),
                             )
                         }
+                    }
+                    if (TracerouteStopPolicy.isUnreachableFromThisDevice(observed, localAddresses())) {
+                        output.send(TracerouteFlowResult.UnreachableFromThisDevice)
                     }
                 }
             }

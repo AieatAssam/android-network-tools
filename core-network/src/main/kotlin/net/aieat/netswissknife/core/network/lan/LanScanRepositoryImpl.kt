@@ -344,7 +344,7 @@ class LanScanRepositoryImpl(
 
     private data class Presence(
         val methods: MutableSet<DiscoveryMethod>,
-        val pingMs: Long,
+        val pingMs: Long?,
         val presenceName: String? = null,
     )
 

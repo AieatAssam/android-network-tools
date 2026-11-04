@@ -44,6 +44,7 @@
     <string name="err_dns_no_result">The DNS lookup returned no results.</string>
     <string name="err_network_timeout">The network request timed out.</string>
     <string name="err_network_request_failed">The network request failed.</string>
+    <string name="err_network_connection_refused">The server refused the connection.</string>
     <string name="err_whois_invalid_query">The WHOIS query is invalid.</string>
     <string name="err_whois_iana_failed">The IANA registry lookup failed.</string>
     <string name="err_whois_response_too_large">The WHOIS response is too large.</string>
@@ -67,9 +68,19 @@
     <string name="err_mac_invalid">The MAC address is invalid.</string>
     <string name="err_local_network_permission_denied">Local network access is not available.</string>
     <string name="err_wol_send_failed">The Wake-on-LAN packet could not be sent.</string>
+    <string name="err_wol_no_network">No Wi-Fi or Ethernet network is available for this packet. Connect to the target\'s network and try again.</string>
+    <string name="err_broadcast_invalid">The broadcast address must be an IPv4 address such as 192.168.1.255.</string>
     <string name="err_subnet_blank">Enter a subnet.</string>
     <string name="err_subnet_invalid">The subnet is invalid.</string>
     <string name="err_subnet_range_invalid">The subnet range is invalid.</string>
+    <string name="err_subnet_address_invalid">%1$s is not a valid IPv4 address. Use four numbers from 0 to 255, such as 192.168.1.0.</string>
+    <string name="err_subnet_prefix_missing">Enter a prefix length after the slash, for example /24.</string>
+    <string name="err_subnet_prefix_invalid">/%1$s is not a valid prefix. Use a number from 0 to 32, such as /24.</string>
+    <string name="err_subnet_leading_zero">%1$s has a leading zero. Remove it, for example 8 instead of 08.</string>
+    <string name="err_subnet_mask_non_contiguous">That subnet mask is not contiguous, so it is not a valid mask.</string>
+    <string name="err_subnet_ipv6_unsupported">IPv6 is not supported yet. Enter an IPv4 address or subnet.</string>
+    <string name="err_subnet_split_prefix_invalid">The new prefix must be longer than the current one and no longer than /32.</string>
+    <string name="err_subnet_split_count_invalid">Choose between 1 and %1$s subnets for this network.</string>
     <string name="err_no_response">No response was received.</string>
     <string name="err_network_io">A network error occurred.</string>
 
@@ -116,7 +127,7 @@
     <string name="tool_httprobe_label">HTTP Probe</string>
     <string name="tool_httprobe_short_label">HTTP</string>
     <string name="tool_httprobe_description">HTTPS request tester with security header analysis</string>
-    <string name="tool_subnet_label">Subnet Calc</string>
+    <string name="tool_subnet_label">Subnet Calculator</string>
     <string name="tool_subnet_short_label">Subnet</string>
     <string name="tool_subnet_description">IPv4 subnet calculator with binary breakdown and notation conversion</string>
     <string name="tool_mdns_label">mDNS Browser</string>
@@ -174,7 +185,6 @@
     <string name="dns_server_quad9_name">Quad9</string>
     <string name="dns_server_quad9_description">9.9.9.9 - Security-focused resolver that blocks malicious domains</string>
     <string name="dns_server_custom_name">Custom</string>
-    <string name="dns_result_server">via %1$s</string>
     <string name="dns_share_server">Server: %1$s</string>
     <string name="dns_custom_server_placeholder">e.g. 192.168.1.1</string>
     <string name="dns_lookup_button">Look up</string>
@@ -202,17 +212,23 @@
     <string name="dns_copy_raw">Copy raw response</string>
     <string name="dns_raw_response">Raw DNS response</string>
     <string name="dns_no_records_title">No records found</string>
-    <string name="dns_no_records_subtitle">No %1$s records were returned for %2$s.</string>
-    <string name="dns_nxdomain_title">Domain does not exist</string>
-    <string name="dns_nxdomain_subtitle">The DNS server reports that %1$s does not exist.</string>
+    <string name="dns_no_records_subtitle">No %1$s records were returned.</string>
+    <string name="dns_nxdomain_title">Domain not found</string>
+    <string name="dns_nxdomain_subtitle">The DNS server reports that the name does not exist.</string>
     <string name="dns_rcode_error_title">DNS lookup was not completed</string>
-    <string name="dns_rcode_error_subtitle">The DNS server returned %1$s for %2$s.</string>
+    <string name="dns_rcode_error_subtitle">The DNS server returned %1$s.</string>
     <string name="dns_rcode">RCODE: %1$s</string>
     <string name="dns_flags">Flags: %1$s</string>
     <string name="dns_server_used">Server used: %1$s</string>
     <string name="dns_private_notice">Private DNS is active%1$s. Plain DNS queries may be handled differently by the device.</string>
     <string name="dns_authority_section">Authority</string>
     <string name="dns_additional_section">Additional</string>
+    <string name="dns_answer_section">Answer</string>
+    <string name="dns_name_whitespace">Domain names cannot contain spaces</string>
+    <string name="dns_name_idn">This name has characters that cannot be converted to a DNS name. Check for unusual punctuation or symbols.</string>
+    <string name="dns_name_ipv6_needs_ptr">IPv6 addresses can only be looked up with the PTR record type</string>
+    <string name="dns_name_invalid">Enter a valid domain name, IPv4 address or IPv6 address</string>
+    <string name="dns_null_mx_note">Null MX: this domain does not accept mail</string>
 
     <!-- Ping Screen -->
     <string name="ping_screen_title">Ping</string>
@@ -244,12 +260,19 @@
     <!-- Ping States -->
     <string name="ping_idle_title">Enter a host to ping</string>
     <string name="ping_idle_subtitle">Supports hostnames and IPv4 addresses</string>
+    <string name="ping_idle_ready_title">Ready to ping</string>
+    <string name="ping_idle_ready_subtitle">Press Start Ping to run it</string>
     <string name="ping_running_title">Pinging…</string>
     <string name="ping_error_title">Ping failed</string>
 
     <!-- Ping Results -->
     <string name="ping_result_header">Ping Results</string>
     <string name="ping_showing_recent">Showing the most recent %1$d of %2$d pings</string>
+    <string name="ping_interrupted_banner">Stopped early after %1$d probes. Statistics cover only the probes that were sent.</string>
+    <string name="ping_stale_result">Showing the previous result for %1$s. Run again to update it for the new host.</string>
+    <string name="ping_start_disabled_hint">Enter a host to enable Start Ping.</string>
+    <string name="ping_unresolved_message">Could not find an address for %1$s. Check the name, then try again.</string>
+    <string name="ping_reset_advanced">Reset to defaults</string>
     <string name="ping_stats_header">Statistics</string>
     <string name="ping_packets_sent">Sent</string>
     <string name="ping_packets_received">Received</string>
@@ -264,7 +287,6 @@
     <string name="ping_error_label_result">Error</string>
     <string name="ping_raw_output">Raw Output</string>
     <string name="ping_copy_raw">Copy raw output</string>
-    <string name="ping_copy_csv">Copy as CSV</string>
     <string name="ping_chart_title">RTT Chart</string>
     <string name="ping_chart_a11y">RTT chart: successful sample count %1$d; axis from %2$d to %3$d ms; %4$s %5$d ms, %6$s %7$.1f ms, %8$s %9$d ms; %10$s</string>
     <plurals name="ping_chart_failed_markers">
@@ -294,6 +316,7 @@
     <string name="ports_end_port_label">End port</string>
     <string name="ports_range_error">1–65535</string>
     <string name="ports_range_order_error">Start port must be ≤ end port</string>
+    <string name="ports_range_too_large_error">Custom range must not exceed 10,000 ports</string>
     <plurals name="ports_range_count">
         <item quantity="one">%1$d port selected</item>
         <item quantity="other">%1$d ports selected</item>
@@ -338,12 +361,10 @@
     <string name="ports_filtered_label">FILTERED</string>
     <string name="ports_section_open">Open Ports</string>
     <string name="ports_section_all">All Results</string>
-    <string name="ports_copy_report">Copy report</string>
     <string name="ports_show_all">Show all ports</string>
     <string name="ports_show_all_with_counts">Show all (%1$d closed, %2$d filtered)</string>
     <string name="ports_show_open">Show open only</string>
     <string name="ports_resolved_ip">Resolved IP: %1$s</string>
-    <string name="ports_scan_duration">%1$d ms</string>
 
     <!-- LAN Scanner Screen -->
     <string name="lan_screen_title">LAN Scanner</string>
@@ -370,12 +391,12 @@
 
     <!-- LAN States -->
     <string name="lan_idle_title">Enter a subnet to scan</string>
-    <string name="lan_idle_subtitle">Discovers live hosts, MAC addresses, vendors and open ports</string>
+    <string name="lan_idle_subtitle">Discovers devices, MAC addresses, vendors and open ports</string>
     <string name="lan_scanning_title">Scanning…</string>
     <string name="lan_canceling_title">Stopping scan…</string>
     <string name="lan_scan_complete_title">Scan Complete</string>
     <string name="lan_scan_paused_title">Scan paused</string>
-    <string name="lan_scan_paused_subtitle">These are partial results from the scan paused when the app went to the background.</string>
+    <string name="lan_scan_paused_subtitle">These are partial results from the scan paused when you left this screen.</string>
     <string name="lan_scan_canceled_title">Scan stopped</string>
     <string name="lan_scan_canceled_subtitle">These are partial results from the stopped scan.</string>
     <string name="lan_error_title">Scan failed</string>
@@ -383,28 +404,45 @@
     <!-- LAN Results -->
     <string name="lan_progress_format">%1$d / %2$d</string>
     <plurals name="lan_hosts_found_format">
-        <item quantity="one">%1$d host found so far</item>
-        <item quantity="other">%1$d hosts found so far</item>
+        <item quantity="one">%1$d device found so far</item>
+        <item quantity="other">%1$d devices found so far</item>
     </plurals>
-    <string name="lan_live_hosts_header">Confirmed Hosts</string>
-    <string name="lan_hosts_header">Discovered Hosts (%1$d)</string>
-    <string name="lan_empty_title">No hosts found</string>
-    <string name="lan_empty_body">No endpoints were confirmed during this scan. Inconclusive probe attempts may be available under diagnostics. Verify the network range and try increasing the timeout.</string>
-    <string name="lan_stat_scanned">Scanned</string>
-    <string name="lan_stat_alive">Confirmed</string>
-    <string name="lan_stat_subnet">Subnet</string>
-    <string name="lan_show_diagnostics">Show uncertain probes (%1$d)</string>
-    <string name="lan_hide_diagnostics">Hide uncertain probes</string>
+    <string name="lan_live_hosts_header">Devices</string>
+    <string name="lan_devices_header">Devices</string>
+    <string name="lan_devices_filtered_count">%1$d of %2$d</string>
+    <string name="lan_empty_body">No devices were confirmed during this scan. Inconclusive probe attempts may be available under diagnostics. Verify the network range and try increasing the timeout.</string>
+    <plurals name="lan_summary_headline_format">
+        <item quantity="one">%1$d device found</item>
+        <item quantity="other">%1$d devices found</item>
+    </plurals>
+    <plurals name="lan_addresses_count">
+        <item quantity="one">%1$d address</item>
+        <item quantity="other">%1$d addresses</item>
+    </plurals>
+    <string name="lan_uncertain_probes_title">Uncertain probes</string>
+    <string name="lan_share_facts_format">%1$s · %2$s</string>
+    <string name="lan_share_latency_format">%d ms</string>
+    <string name="lan_share_ports_format">ports:%s</string>
+    <plurals name="lan_uncertain_probes_count">
+        <item quantity="one">%1$d uncertain probe</item>
+        <item quantity="other">%1$d uncertain probes</item>
+    </plurals>
+    <string name="lan_uncertain_probes_body">Addresses that did not answer, refused the connection, or were unreachable. They are not counted as devices.</string>
     <string name="lan_diagnostic_entry">%1$s: %2$s%3$s</string>
+    <string name="lan_diagnostic_port">, port %1$d</string>
     <string name="lan_diagnostic_tcp_refused">TCP connection refusal reported</string>
     <string name="lan_diagnostic_tcp_timed_out">TCP probe timed out</string>
     <string name="lan_diagnostic_tcp_unreachable">TCP route unreachable</string>
     <string name="lan_diagnostic_tcp_policy_denied">TCP probe denied by policy</string>
     <string name="lan_diagnostic_tcp_unknown">TCP probe failed (unknown cause)</string>
     <string name="lan_diagnostics_truncated">Showing %1$d of %2$d uncertain probe details.</string>
-    <string name="lan_duration_format">%1$d ms</string>
-    <string name="lan_ping_format">%1$d ms</string>
+    <string name="duration_milliseconds_format">%1$d ms</string>
+    <string name="duration_seconds_format">%1$.1f s</string>
+    <string name="duration_minutes_format">%1$d min</string>
+    <string name="duration_minutes_seconds_format">%1$d min %2$d s</string>
     <string name="lan_ping_status_format">Latency %1$d ms</string>
+    <string name="lan_ping_under_1ms">Latency under 1 ms</string>
+    <string name="lan_ping_unavailable">No ping reply</string>
     <plurals name="lan_open_ports_count">
         <item quantity="one">%1$d port</item>
         <item quantity="other">%1$d ports</item>
@@ -415,7 +453,12 @@
 
     <!-- LAN Topology -->
     <string name="lan_topology_title">Network Map</string>
+    <string name="lan_view_list">List</string>
+    <string name="lan_view_map">Map</string>
     <string name="lan_more_devices">more…</string>
+    <string name="lan_map_more_count">+%1$d</string>
+    <string name="lan_map_more_action">Show all devices on the map</string>
+    <string name="lan_map_node_action">Show %1$s in the device list</string>
 
     <!-- LAN Host Details -->
     <string name="lan_details_title">Device Details</string>
@@ -423,8 +466,6 @@
     <string name="lan_detail_hostname">Hostname</string>
     <string name="lan_detail_mac">MAC Address</string>
     <string name="lan_detail_vendor">Vendor</string>
-    <string name="lan_detail_ping">Ping</string>
-    <string name="lan_detail_role">Role</string>
     <string name="lan_mac_unavailable_api29">Not available on Android 10+ (ARP is restricted)</string>
     <string name="lan_action_scan_ports">Scan ports</string>
     <string name="lan_action_ping">Ping host</string>
@@ -437,8 +478,6 @@
     <string name="lan_discovery_netbios">NetBIOS</string>
     <string name="lan_discovery_mdns">mDNS</string>
     <string name="lan_discovery_rdns">rDNS</string>
-    <string name="lan_role_gateway">Gateway / Router</string>
-    <string name="lan_role_device">Network device</string>
     <string name="lan_open_ports_title">Open Ports (%1$d)</string>
     <string name="lan_no_open_ports">None detected</string>
 
@@ -447,13 +486,15 @@
     <string name="lan_filter_all">All</string>
     <string name="lan_filter_gateway">Gateway</string>
     <string name="lan_filter_has_ports">Has Ports</string>
+    <string name="lan_sort_by">Sort by</string>
     <string name="lan_sort_ip">IP</string>
     <string name="lan_sort_latency">Latency</string>
     <string name="lan_sort_hostname">Hostname</string>
     <string name="lan_sort_vendor">Vendor</string>
     <string name="lan_sort_open_ports">Port count</string>
-    <string name="lan_hosts_filtered_header">Results (%1$d of %2$d)</string>
     <string name="lan_no_search_results">No devices match your search</string>
+    <string name="lan_recent_remove">Remove recent subnet</string>
+    <string name="lan_recent_clear">Clear recent subnets</string>
     <string name="lan_no_filter_results">No devices match this filter</string>
     <string name="lan_no_search_filter_results">No devices match your search and filter</string>
     <string name="lan_show_all_devices">Show all devices</string>
@@ -487,6 +528,7 @@
     <!-- Wi-Fi Scanner Screen -->
     <string name="wifi_screen_title">Wi-Fi Scanner</string>
     <string name="wifi_search_label">Search SSID, BSSID or vendor</string>
+    <string name="wifi_search_no_match">No networks match \"%1$s\". Clear the search to see every network.</string>
     <string name="wifi_scan_button">Scan</string>
     <string name="wifi_no_permission_title">Location Permission Required</string>
     <string name="wifi_no_permission_body">Android requires Location permission to scan for nearby Wi-Fi networks. Your location is not sent anywhere.</string>
@@ -523,12 +565,13 @@
     <string name="wifi_scan_failed_cached">Scan failed; showing cached results</string>
     <string name="wifi_scan_permission_denied_cached">Scan permission unavailable; showing cached results</string>
     <string name="wifi_connected_badge">Connected</string>
-    <string name="wifi_hidden_badge">Hidden</string>
     <string name="wifi_detail_band">Band</string>
     <string name="wifi_detail_channel">Channel</string>
     <string name="wifi_detail_width">Width</string>
     <string name="wifi_detail_standard">Standard</string>
-    <string name="wifi_detail_max_speed">Max Speed</string>
+    <string name="wifi_detail_max_speed">Standard max (theoretical)</string>
+    <string name="wifi_max_rate_at_width">Up to %1$s at %2$d MHz</string>
+    <string name="wifi_max_rate_ceiling">Up to %1$s (theoretical ceiling)</string>
     <string name="wifi_detail_vendor">Vendor</string>
     <string name="wifi_detail_security">Security</string>
     <string name="wifi_security_unknown">Security type unknown</string>
@@ -579,6 +622,7 @@
     <string name="traceroute_mtu_discovery_label">MTU discovery (auto packet size)</string>
     <string name="traceroute_packet_size_label">Packet size</string>
     <string name="traceroute_start_button">Start Trace</string>
+    <string name="traceroute_start_disabled_hint">Enter a host to enable Start Trace.</string>
     <string name="traceroute_stop_button">Stop</string>
     <string name="traceroute_canceling_button">Stopping…</string>
     <string name="traceroute_retry_button">Retry</string>
@@ -594,6 +638,17 @@
         <item quantity="one">Trace canceled. %1$d hop retained as a partial result.</item>
         <item quantity="other">Trace canceled. %1$d hops retained as partial results.</item>
     </plurals>
+    <plurals name="traceroute_stopped_when_left_status">
+        <item quantity="one">Trace stopped when you left the screen. %1$d hop kept as a partial result.</item>
+        <item quantity="other">Trace stopped when you left the screen. %1$d hops kept as partial results.</item>
+    </plurals>
+    <string name="traceroute_settings_summary">%1$d hops · %2$s · %3$d ms timeout</string>
+    <plurals name="traceroute_probes_per_hop">
+        <item quantity="one">%1$d probe per hop</item>
+        <item quantity="other">%1$d probes per hop</item>
+    </plurals>
+    <string name="traceroute_settings_show">Show settings</string>
+    <string name="traceroute_settings_hide">Hide settings</string>
     <plurals name="traceroute_running_subtitle">
         <item quantity="one">%1$d hop discovered so far</item>
         <item quantity="other">%1$d hops discovered so far</item>
@@ -609,14 +664,16 @@
     <string name="traceroute_stats_distance">Distance</string>
     <string name="traceroute_stats_countries">Countries</string>
     <string name="traceroute_stats_isps">ISPs</string>
-    <string name="traceroute_stats_packet_speed">Pkt Speed</string>
-    <string name="traceroute_stats_packet_speed_value">~%1$d%% of ☀</string>
+    <string name="traceroute_stats_packet_speed">Speed vs light</string>
+    <string name="traceroute_stats_packet_speed_value">~%1$d%% of light speed in fibre</string>
     <string name="traceroute_stats_avg_rtt">Avg RTT</string>
     <string name="traceroute_stats_min_rtt">Fastest</string>
     <string name="traceroute_stats_max_rtt">Slowest</string>
     <string name="traceroute_stats_timeout_rate">Timeouts</string>
     <string name="traceroute_stats_hop_label">hop %1$d</string>
     <string name="traceroute_stats_country_path">Route: %1$s</string>
+    <string name="traceroute_stats_geo_approximate">Locations come from GeoIP data and are approximate. Anycast and cloud addresses can be placed in the wrong country.</string>
+    <string name="traceroute_stats_geo_conflict">Some hop locations conflict with the measured round-trip times, so distance, route and speed are hidden.</string>
     <string name="traceroute_stats_no_geo">No public IPs resolved - geographic stats unavailable</string>
     <string name="traceroute_stats_light_speed_note">Estimate based on speed of light in fibre ≈ 200 km/ms</string>
     <string name="traceroute_tab_hops">Hop Details</string>
@@ -676,6 +733,8 @@
     <string name="topology_reported_neighbor_label">Reported neighbor: %1$s</string>
     <string name="topology_reported_only">Reported only; device not queried</string>
     <string name="topology_discover_button">Discover Topology</string>
+    <string name="topology_discover_disabled_target">Enter a target IP to enable Discover Topology.</string>
+    <string name="topology_discover_disabled_v3">Choose the SNMPv3 authentication and privacy settings to enable Discover Topology.</string>
     <string name="topology_cancel_button">Cancel discovery</string>
     <string name="topology_canceling_button">Canceling…</string>
     <string name="topology_canceling_status">Canceling discovery. Keeping discovered nodes until cleanup finishes.</string>
@@ -698,6 +757,7 @@
     <string name="topology_node_detail_vlans">VLANs</string>
     <string name="topology_node_detail_neighbours">Neighbours</string>
     <string name="topology_error_retry">Retry</string>
+    <string name="topology_error_title">Discovery Failed</string>
     <string name="topology_fit_button_cd">Fit graph to screen</string>
     <string name="topology_search_nodes">Search nodes</string>
     <string name="topology_partial_results">Partial results. Some details were omitted because of resource limits or SNMP errors.</string>
@@ -733,22 +793,22 @@
     <string name="tls_error_title">Inspection failed</string>
     <string name="tls_retry">Retry</string>
     <string name="tls_inspection_canceled">Inspection canceled</string>
+    <string name="tls_inspection_canceled_body">The inspection stopped before it finished. Retry to check the server again.</string>
 
     <!-- TLS Connection Card -->
     <string name="tls_connection_header">Connection</string>
     <string name="tls_trusted">Trusted</string>
     <string name="tls_untrusted">Untrusted</string>
-    <string name="tls_host_port">Host / Port</string>
+    <string name="tls_verdict_trusted">Chain, hostname and expiry checks passed.</string>
+    <string name="tls_verdict_trusted_pinned">Chain, hostname, expiry and expected pin checks passed.</string>
+    <string name="tls_verdict_untrusted_findings">Failed checks are listed under Certificate findings.</string>
+    <string name="tls_verdict_untrusted_generic">The connection failed a trust check.</string>
     <string name="tls_version">TLS Version</string>
     <string name="tls_cipher_suite">Cipher Suite</string>
     <string name="tls_handshake_time">Handshake</string>
     <string name="tls_ms_format">%1$d ms</string>
     <string name="tls_connect_time">Connect time</string>
-    <string name="tls_hostname_match">Hostname</string>
-    <string name="tls_match">Match</string>
-    <string name="tls_no_match">Mismatch</string>
     <string name="tls_alpn">ALPN</string>
-    <string name="tls_pin_match">Expected pin</string>
     <string name="tls_supported">Supported</string>
     <string name="tls_not_supported">Not supported</string>
     <string name="tls_probe_unknown">Could not determine</string>
@@ -758,7 +818,10 @@
     <string name="tls_issue_not_yet_valid">A certificate is not yet valid</string>
     <string name="tls_issue_expires_soon">A certificate expires soon</string>
     <string name="tls_issue_self_signed">The chain contains a self-signed certificate</string>
-    <string name="tls_issue_untrusted">The certificate chain is not trusted</string>
+    <string name="tls_issue_untrusted">The certificate chain is not trusted by this device\'s certificate store</string>
+    <string name="tls_issue_untrusted_root">This device\'s trust store does not include the issuing root (%1$s)</string>
+    <string name="tls_issue_pin_mismatch">The certificate does not match the expected SHA-256 pin</string>
+    <string name="tls_not_tls_port">This port answered with plain text, not TLS. Check the port, or use HTTP Probe for a plain-HTTP service.</string>
     <string name="tls_issue_hostname_mismatch">The certificate does not match this hostname</string>
     <string name="tls_issue_weak_signature">A weak signature algorithm was found</string>
     <string name="tls_issue_weak_key">A weak public key was found</string>
@@ -774,12 +837,11 @@
     <!-- TLS Expiry Badges -->
     <string name="tls_expired">EXPIRED</string>
     <plurals name="tls_days_left">
-        <item quantity="one">%1$d day</item>
-        <item quantity="other">%1$d days</item>
+        <item quantity="one">%1$d day left</item>
+        <item quantity="other">%1$d days left</item>
     </plurals>
 
     <!-- TLS Certificate Detail Fields -->
-    <string name="tls_subject_cn">Subject CN</string>
     <string name="tls_subject_org">Subject Org</string>
     <string name="tls_issuer_cn">Issuer CN</string>
     <string name="tls_issuer_org">Issuer Org</string>
@@ -802,6 +864,7 @@
     <string name="whois_screen_subtitle">Domain and IP registration lookup</string>
     <string name="whois_query_label">Domain, IP, or ASN</string>
     <string name="whois_query_placeholder">e.g. example.com, 8.8.8.8, AS15169</string>
+    <string name="whois_query_invalid">Enter a domain or IP address (or an ASN such as AS15169), with no spaces or symbols.</string>
     <string name="whois_protocol_label">Lookup protocol</string>
     <string name="whois_protocol_auto">Auto</string>
     <string name="whois_protocol_rdap">RDAP</string>
@@ -816,7 +879,10 @@
     <string name="whois_lifecycle_paused_message">The lookup stopped when WHOIS left the foreground. Retry when ready.</string>
     <string name="ports_scan_budget_exceeded">This scan may exceed the 15-minute limit. Increase concurrency or reduce the port range or timeout.</string>
     <string name="ports_scan_deadline_partial">The 15-minute time limit was reached. Showing the results completed so far.</string>
+    <string name="ports_scan_stopped_partial">Stopped at %1$d of %2$d ports. Showing the results collected so far.</string>
+    <string name="ports_scan_stopped_early">Scan stopped early. Showing the results collected so far.</string>
     <string name="traceroute_time_limit_reached">Time limit reached. Showing hops found so far.</string>
+    <string name="traceroute_unreachable_from_device">Host unreachable from this network (no route / destination host unreachable)</string>
     <string name="lan_scan_estimate_too_large">Estimated scan time exceeds the 10-minute limit. Use a smaller subnet, increase concurrency, or lower the probe timeout.</string>
     <string name="lan_subnet_narrowed_hint">Your network (%1$s) is too large to scan within 10 minutes, so the range around this device is filled in. Edit it to scan another part.</string>
     <string name="lan_scan_suggested_button">Scan %1$s</string>
@@ -830,7 +896,7 @@
     <string name="whois_hop_latency_ms">%1$d ms</string>
     <string name="whois_querying_server">Querying %1$s…</string>
     <string name="whois_raw_responses">Raw RDAP/WHOIS Responses</string>
-    <string name="whois_show_raw">Show raw response</string>
+    <string name="whois_rdap_fallback_note">RDAP could not answer (%1$s), so WHOIS answered instead.</string>
     <string name="whois_lifecycle">Lifecycle</string>
     <string name="whois_registered">Registered</string>
     <string name="whois_updated">Updated</string>
@@ -838,6 +904,8 @@
     <string name="whois_domain_status">Domain Status</string>
     <string name="whois_name_servers">Name Servers</string>
     <string name="whois_dnssec">DNSSEC</string>
+    <string name="whois_dnssec_signed">Signed</string>
+    <string name="whois_dnssec_unsigned">Unsigned</string>
     <string name="whois_registrant">Registrant</string>
     <string name="whois_net_range">Network Range</string>
     <string name="whois_org">Organization</string>
@@ -848,7 +916,7 @@
 
     <!-- HTTP Probe Screen -->
     <string name="httprobe_screen_title">HTTP Probe</string>
-    <string name="httprobe_screen_subtitle">Test HTTPS requests with full header and security analysis. Plain HTTP is disabled in this release.</string>
+    <string name="httprobe_screen_subtitle">Test HTTPS requests with full header and security analysis.</string>
 
     <!-- HTTP Probe Input -->
     <string name="httprobe_url_label">URL</string>
@@ -874,7 +942,7 @@
 
     <!-- HTTP Probe States -->
     <string name="httprobe_idle_title">Enter a URL to probe</string>
-    <string name="httprobe_idle_subtitle">Supports HTTPS GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS. Includes security header analysis.</string>
+    <string name="httprobe_idle_subtitle">Sends the request and reports status, timings, headers and a security header check.</string>
     <string name="httprobe_error_title">Request failed</string>
     <string name="httprobe_blocked_redirect_title">Insecure redirect blocked</string>
     <string name="httprobe_blocked_redirect_message">The HTTPS server returned HTTP %1$d and pointed to an insecure HTTP address. The destination was not contacted.</string>
@@ -896,9 +964,7 @@
         <item quantity="one">%1$d redirect</item>
         <item quantity="other">%1$d redirects</item>
     </plurals>
-    <string name="httprobe_method_used">Method</string>
     <string name="httprobe_protocol_label">Protocol</string>
-    <string name="httprobe_final_url">Final URL</string>
     <string name="httprobe_response_size">Body size</string>
     <string name="httprobe_content_type">Content-Type</string>
     <string name="httprobe_redirect_chain">Redirect chain</string>
@@ -912,6 +978,7 @@
     <string name="httprobe_response_size_at_least">≥ %1$s</string>
     <string name="httprobe_empty_body">Empty body (HEAD or no content)</string>
     <string name="httprobe_copy_curl">Copy as cURL</string>
+    <string name="httprobe_curl_copied">cURL command copied to clipboard</string>
     <string name="httprobe_curl_redirect_safety">Redirect following was disabled to avoid forwarding custom headers or a body, or changing the app’s redirect method behavior. The command sends only the initial request.</string>
     <string name="httprobe_pretty_json">Pretty JSON</string>
     <string name="httprobe_json_valid">Valid JSON</string>
@@ -947,8 +1014,6 @@
     <string name="httprobe_sec_cookie_malformed">Cookie does not contain a valid name and value pair.</string>
 
     <!-- DNS Record labels -->
-    <string name="dns_ipv4_prefix">IPv4</string>
-    <string name="dns_ipv6_prefix">IPv6</string>
     <string name="dns_mx_priority">Priority</string>
     <string name="dns_mx_host">Mail server</string>
     <string name="dns_srv_priority">Priority</string>
@@ -965,8 +1030,10 @@
     <string name="subnet_idle_title">Enter an IPv4 address or network</string>
     <string name="subnet_idle_body">Supports CIDR (192.168.1.0/24), dot-decimal mask (192.168.1.0/255.255.255.0) or a bare IP (/32 assumed).</string>
     <string name="subnet_error_title">Invalid Input</string>
-    <string name="subnet_retry">Retry</string>
-    <string name="subnet_overview_hosts">%1$s usable hosts</string>
+    <plurals name="subnet_overview_hosts">
+        <item quantity="one">%1$s usable host</item>
+        <item quantity="other">%1$s usable hosts</item>
+    </plurals>
     <string name="subnet_network_address">Network address</string>
     <string name="subnet_broadcast">Broadcast</string>
     <string name="subnet_first_host">First host</string>
@@ -984,26 +1051,27 @@
     </plurals>
     <string name="subnet_binary_ip">IP address</string>
     <string name="subnet_binary_mask">Subnet mask</string>
-    <string name="subnet_binary_network">Network addr</string>
+    <string name="subnet_binary_network">Network address</string>
     <string name="subnet_notations_title">Notation Equivalents</string>
     <string name="subnet_notation_cidr">CIDR</string>
     <string name="subnet_notation_mask">Dot-decimal mask</string>
     <string name="subnet_notation_wildcard">Wildcard mask</string>
     <string name="subnet_notation_hex">Hex mask</string>
-    <string name="subnet_notation_binary">Binary mask</string>
     <string name="subnet_properties_title">Address Properties</string>
     <string name="subnet_ip_class">IP class</string>
     <string name="subnet_class_label">Class %1$s</string>
     <string name="subnet_scope">Scope</string>
-    <string name="subnet_scope_private">Private</string>
+    <string name="subnet_scope_private">Private (RFC 1918)</string>
+    <string name="subnet_scope_shared">Shared (CGNAT, RFC 6598)</string>
+    <string name="subnet_scope_loopback">Loopback</string>
+    <string name="subnet_scope_link_local">Link-local</string>
+    <string name="subnet_scope_this_network">This network</string>
+    <string name="subnet_scope_documentation">Documentation only</string>
+    <string name="subnet_scope_benchmark">Benchmarking</string>
+    <string name="subnet_scope_multicast">Multicast</string>
+    <string name="subnet_scope_reserved">Reserved</string>
     <string name="subnet_scope_public">Public</string>
-    <string name="subnet_prefix_bits">Prefix / host bits</string>
-    <string name="subnet_prefix_of_32">%1$d / 32</string>
-    <string name="subnet_host_bit_count">Host bits</string>
-    <plurals name="subnet_bits_count">
-        <item quantity="one">%1$d bit</item>
-        <item quantity="other">%1$d bits</item>
-    </plurals>
+    <string name="subnet_scope_mixed">Mixed (spans several ranges)</string>
     <!-- Mode toggle -->
     <string name="subnet_mode_cidr">CIDR / Mask</string>
     <string name="subnet_mode_range">IP Range</string>
@@ -1019,15 +1087,48 @@
     <string name="subnet_alignment_warning_title">IP Not on Network Boundary</string>
     <string name="subnet_alignment_warning_body">%1$s is not a valid network address for /%2$d. The actual network starts at %3$s. Cloud providers like Azure require the exact network address in subnet definitions.</string>
     <!-- Tooltips -->
+    <string name="subnet_explain_field">Explain %1$s</string>
+    <plurals name="subnet_describe_network_bits">
+        <item quantity="one">%1$d network bit</item>
+        <item quantity="other">%1$d network bits</item>
+    </plurals>
+    <plurals name="subnet_describe_host_bits">
+        <item quantity="one">%1$d host bit</item>
+        <item quantity="other">%1$d host bits</item>
+    </plurals>
+    <string name="subnet_binary_row_description">%1$s, %2$s, %3$s</string>
+    <string name="subnet_share_subject">Subnet %1$s</string>
+    <string name="subnet_check_title">Is this address in the subnet?</string>
+    <string name="subnet_check_label">IP address to check</string>
+    <string name="subnet_check_placeholder">e.g. 192.168.1.50</string>
+    <string name="subnet_check_idle">Type an address to see whether it belongs to this subnet.</string>
+    <string name="subnet_check_yes">Yes, %1$s is inside %2$s.</string>
+    <string name="subnet_check_no">No, %1$s is outside %2$s.</string>
+    <string name="subnet_check_reason_usable">It is a usable host address in this subnet.</string>
+    <string name="subnet_check_reason_network">It is the network address. It identifies the subnet and cannot be assigned to a device.</string>
+    <string name="subnet_check_reason_broadcast">It is the broadcast address. Packets sent to it reach every device in the subnet.</string>
+    <string name="subnet_check_reason_outside">The subnet covers %1$s to %2$s.</string>
+    <string name="subnet_split_title">Split into equal subnets</string>
+    <string name="subnet_split_by_prefix">New prefix</string>
+    <string name="subnet_split_by_count">Number of subnets</string>
+    <string name="subnet_split_prefix_label">New prefix length</string>
+    <string name="subnet_split_prefix_placeholder">e.g. 26</string>
+    <string name="subnet_split_count_label">Number of subnets</string>
+    <string name="subnet_split_count_placeholder">e.g. 4</string>
+    <string name="subnet_split_button">Split</string>
+    <plurals name="subnet_split_summary">
+        <item quantity="one">%1$s subnet of /%2$d</item>
+        <item quantity="other">%1$s subnets of /%2$d</item>
+    </plurals>
+    <string name="subnet_split_rounded">You asked for %1$s. Equal subnets come in powers of two, so the split uses %2$s.</string>
+    <string name="subnet_split_truncated">Showing the first %1$d of %2$s subnets.</string>
     <string name="tooltip_network_address">The network address is the first address in a subnet, with all host bits set to 0. It identifies the subnet itself and cannot be assigned to any device. Example: in 192.168.1.0/24 the network address is 192.168.1.0.</string>
     <string name="tooltip_broadcast">The broadcast address is the last address in a subnet, with all host bits set to 1. Packets sent here are delivered to every device in the subnet. Example: in 192.168.1.0/24 the broadcast is 192.168.1.255.</string>
-    <string name="tooltip_first_host">The first usable IP address - one above the network address. This is the lowest address you can assign to a device.</string>
-    <string name="tooltip_last_host">The last usable IP address - one below the broadcast address. This is the highest address you can assign to a device.</string>
-    <string name="tooltip_usable_hosts">The count of addresses that can be assigned to devices. Always (2^host_bits − 2) because the network and broadcast addresses are reserved.</string>
+    <string name="tooltip_first_host">The first usable IP address, one above the network address. This is the lowest address you can assign to a device. For /31 and /32 no address is reserved, so it is the network address itself.</string>
+    <string name="tooltip_last_host">The last usable IP address, one below the broadcast address. This is the highest address you can assign to a device. For /31 and /32 no address is reserved, so it is the broadcast address itself.</string>
     <string name="tooltip_wildcard">The wildcard mask is the bitwise inverse of the subnet mask. Bits set to 1 are "don\'t care" bits. Used in ACLs and OSPF configurations.</string>
-    <string name="tooltip_cidr">Classless Inter-Domain Routing notation combines an IP address with a prefix length (the number of network bits). Example: 192.168.1.0/24 means 24 network bits and 8 host bits.</string>
     <string name="tooltip_ip_class">A legacy classification of IPv4 ranges before CIDR replaced it. Class A covers 0–127, B covers 128–191, C covers 192–223. Class D is multicast, E is reserved.</string>
-    <string name="tooltip_scope">Whether the address falls within RFC 1918 private ranges (10.x, 172.16–31.x, 192.168.x) or is publicly routable on the internet.</string>
+    <string name="tooltip_scope">Which special-purpose block the whole subnet sits in. RFC 1918 private addresses are not routed on the internet. Shared CGNAT space (100.64.0.0/10) is used by carriers. A subnet that spans several blocks, such as 0.0.0.0/0, is labelled mixed.</string>
 
     <!-- Settings Screen -->
     <string name="settings_screen_title">Settings</string>
@@ -1084,6 +1185,7 @@
     <!-- Share action -->
     <string name="action_share">Share results</string>
     <string name="action_copy">Copy</string>
+    <string name="action_share_short">Share</string>
 
     <!-- Share subjects per tool -->
     <string name="share_subject_ping">Ping – %1$s</string>
@@ -1096,6 +1198,7 @@
     <string name="share_subject_http">HTTP – %1$s</string>
     <string name="share_subject_dns">DNS %1$s – %2$s</string>
     <string name="share_subject_speedtest">Speed Test – %1$s</string>
+    <string name="share_subject_wol">Wake-on-LAN – %1$s</string>
 
     <!-- mDNS Screen -->
     <string name="mdns_screen_title">mDNS Browser</string>
@@ -1103,10 +1206,9 @@
     <string name="mdns_screen_subtitle">Discover services on your local network via multicast DNS</string>
     <string name="mdns_stat_found">found</string>
     <string name="mdns_stat_elapsed">elapsed</string>
-    <string name="mdns_idle_hint">Tap Scan to discover services</string>
+    <string name="mdns_idle_hint">Tap Scan Network to find services</string>
     <string name="mdns_idle_body">Finds printers, Chromecasts, AirPlay, HomeKit, and more</string>
     <string name="mdns_scanning_hint">Listening for mDNS announcements…</string>
-    <string name="mdns_scanning_inline_label">Scanning…</string>
     <string name="mdns_error_title">Discovery failed</string>
     <string name="mdns_error_dismiss">Dismiss</string>
     <string name="mdns_scan_button">Scan Network</string>
@@ -1116,7 +1218,18 @@
     <string name="mdns_canceled_title">Discovery canceled</string>
     <string name="mdns_canceled_empty_body">No services were found before discovery stopped.</string>
     <string name="mdns_canceled_partial">Discovery canceled. Showing services found so far.</string>
-    <string name="mdns_partial_results_status">Discovery reached a safety limit. Showing the services found so far.</string>
+    <string name="mdns_partial_results_status">Some devices reported more than we show (%1$s).</string>
+    <string name="mdns_partial_results_notice">%1$s %2$s</string>
+    <string name="mdns_showing_so_far">Showing the services found so far.</string>
+    <string name="mdns_showing_all">Showing all services found.</string>
+    <string name="mdns_limit_service_types">first %1$d service types</string>
+    <string name="mdns_limit_services">first %1$d services</string>
+    <string name="mdns_limit_addresses">first %1$d addresses per service</string>
+    <string name="mdns_limit_txt">first %1$d bytes of TXT data per service</string>
+    <string name="mdns_limit_queries">first %1$d queries</string>
+    <string name="mdns_limit_records">first %1$d records per packet</string>
+    <string name="mdns_no_match_title">No services match \"%1$s\"</string>
+    <string name="mdns_no_match_clear">Clear search</string>
     <string name="mdns_clear_button">Clear</string>
     <string name="mdns_empty_title">No services found</string>
     <string name="mdns_empty_body">No mDNS services responded. Ensure devices are on the same network and try again.</string>
@@ -1127,6 +1240,7 @@
     <string name="mdns_http_probe_description">Open %1$s in HTTP Probe</string>
     <string name="httprobe_source_mdns">Prefilled from mDNS Browser</string>
     <string name="httprobe_source_lan">Prefilled from LAN Scanner</string>
+    <string name="httprobe_plain_http_handoff">%1$s uses plain HTTP on port %2$d. HTTP Probe sends HTTPS only, so no URL was filled in. Enter an https:// URL if this service supports TLS.</string>
     <string name="httprobe_invalid_handoff">The supplied destination could not be verified. Enter a valid HTTP URL to continue.</string>
     <string name="mdns_ping_address">Ping %1$s</string>
 
@@ -1196,7 +1310,7 @@
     <string-array name="help_ping_results_bullets">
         <item>Min / Avg / Max - the fastest, typical, and slowest round-trip times seen.</item>
         <item>Jitter - how much RTT varies between pings; high jitter means an unstable connection, even if the average looks fine.</item>
-        <item>Packet loss - the percentage of pings that got no reply; anything above 0%% suggests congestion or a firewall dropping packets.</item>
+        <item>Packet loss - the percentage of pings that got no reply; anything above 0% suggests congestion or a firewall dropping packets.</item>
         <item>Unreachable - the network explicitly rejected the probe before the timeout; this is different from a silent timeout.</item>
     </string-array>
 
@@ -1228,7 +1342,7 @@
     <string name="help_portscan_params_heading">Key parameters</string>
     <string name="help_portscan_results_heading">Reading the results</string>
     <string-array name="help_portscan_params_bullets">
-        <item>Port range - use a preset (Common, Web, All) or enter a custom range.</item>
+        <item>Port range - use a preset (Common services, Well-known 1–1024, Web, Databases, Mail, Remote access) or enter a custom range of up to 10,000 ports.</item>
         <item>Timeout - how long to wait for each port before giving up.</item>
         <item>Concurrency - how many ports to check at the same time.</item>
     </string-array>
@@ -1244,7 +1358,7 @@
     <string name="help_lan_concept_heading">What is a subnet sweep?</string>
     <string name="help_lan_concept_body">Devices on your home or office network share a private range of addresses, like 192.168.1.1 through 192.168.1.254. That range is written in CIDR notation as 192.168.1.0/24, where the "/24" says how many addresses are included. The scanner confirms endpoints that answer ICMP, complete a TCP connection, or return a validated local protocol reply. Failed probes remain inconclusive diagnostics.</string>
     <string name="help_lan_what_heading">What it does</string>
-    <string name="help_lan_what_body">Checks every address in a subnet with ICMP and TCP, then uses correlated NetBIOS or mDNS replies as additional presence evidence. Confirmed hosts are enriched with hostnames, open ports, and a best-effort ARP MAC/vendor lookup. Refusals, timeouts, and unreachable routes can be viewed separately without affecting the confirmed count.</string>
+    <string name="help_lan_what_body">Checks every address in a subnet with ICMP and TCP, then uses correlated NetBIOS or mDNS replies as additional presence evidence. Confirmed devices are enriched with hostnames, open ports, and a best-effort ARP MAC/vendor lookup. Refusals, timeouts, and unreachable routes can be viewed separately without affecting the confirmed count.</string>
     <string name="help_lan_params_heading">Key parameters</string>
     <string name="help_lan_results_heading">Reading the results</string>
     <string-array name="help_lan_params_bullets">
@@ -1410,7 +1524,7 @@
     <string name="help_subnet_concept_heading">What is a subnet?</string>
     <string name="help_subnet_concept_body">An IP address has two parts: a network part shared by every device on that local network, and a host part unique to each device - like a street name shared by a block of houses and a house number unique to each one. The subnet mask (the "/24" in CIDR notation) says how many bits belong to each part, which determines how many devices fit and where one network\'s addresses end and the next begins. Splitting a large network into smaller subnets is how organizations keep traffic organized, secure, and easier to manage.</string>
     <string name="help_subnet_what_heading">What it does</string>
-    <string name="help_subnet_what_body">Calculates network details from a CIDR notation or dot-decimal mask input, and can find the smallest subnet that covers a given IP range.</string>
+    <string name="help_subnet_what_body">Calculates network details from a CIDR notation or dot-decimal mask input, and can find the smallest subnet that covers a given IP range. Under the result you can check whether an address is inside the subnet, split it into equal subnets, copy the result, or share it as text.</string>
     <string name="help_subnet_params_heading">Input modes</string>
     <string name="help_subnet_results_heading">Reading the results</string>
     <string-array name="help_subnet_params_bullets">
@@ -1435,7 +1549,7 @@
     <string-array name="help_mdns_params_bullets">
         <item>Scan - starts an 8-second discovery window; run it multiple times to catch devices that announce infrequently.</item>
         <item>Stop - end the current scan early.</item>
-        <item>Reset - clear all results.</item>
+        <item>Clear - remove all results from the list.</item>
     </string-array>
     <string-array name="help_mdns_results_bullets">
         <item>Services are grouped by type (e.g. _http._tcp, _airplay._tcp).</item>
@@ -1465,15 +1579,13 @@
 
     <!-- Speed Test -->
     <string name="speedtest_screen_title">Speed Test</string>
-    <string name="speedtest_screen_subtitle">Measure download, upload speed and latency against Cloudflare\'s global network</string>
-    <string name="speedtest_attribution">Powered by Cloudflare Speed Test</string>
+    <string name="speedtest_screen_subtitle">Measure download, upload speed and latency</string>
     <string name="speedtest_attribution_note">Test traffic is sent to and measured by Cloudflare\'s speed.cloudflare.com service. Net Swiss Knife is not affiliated with, sponsored by, or endorsed by Cloudflare, Inc.</string>
 
     <string name="speedtest_idle_title">Ready to test your connection</string>
-    <string name="speedtest_idle_subtitle">Measures latency, download, and upload speed in sequence</string>
-    <string name="speedtest_download_streams">Download streams: %1$d</string>
-    <string name="speedtest_upload_streams">Upload streams: %1$d</string>
-    <string name="speedtest_server_info">Cloudflare %1$s · %2$s</string>
+    <string name="speedtest_download_streams_label">Download streams</string>
+    <string name="speedtest_upload_streams_label">Upload streams</string>
+    <string name="speedtest_server_info">Edge %1$s · %2$s</string>
     <string name="speedtest_server_global_edge">Global edge</string>
     <string name="speedtest_server_unknown_asn">ASN unavailable</string>
     <string name="speedtest_connect_latency">Connect</string>
@@ -1483,7 +1595,6 @@
     <string name="speedtest_start_button">Start Test</string>
     <string name="speedtest_cancel_button">Cancel</string>
     <string name="speedtest_retry">Run again</string>
-    <string name="speedtest_share">Share results</string>
 
     <string name="speedtest_phase_latency">Latency</string>
     <string name="speedtest_phase_download">Download</string>
@@ -1494,6 +1605,10 @@
     <string name="speedtest_running_upload">Testing upload speed…</string>
     <string name="speedtest_error_title">Speed test failed</string>
     <string name="speedtest_error_phase">Failed during %1$s</string>
+    <string name="speedtest_error_reason_timeout">The connection stopped responding before the test finished. Try again, or move closer to your router.</string>
+    <string name="speedtest_error_reason_generic">A network error interrupted the test. Check your connection and try again.</string>
+    <string name="speedtest_canceled">Test canceled</string>
+    <string name="speedtest_partial_heading">Results so far</string>
 
     <string name="speedtest_mbps_suffix">Mbps</string>
     <string name="speedtest_ms_suffix">ms</string>
@@ -1505,7 +1620,7 @@
 
     <string name="speedtest_download_header">Download</string>
     <string name="speedtest_upload_header">Upload</string>
-    <string name="speedtest_avg_speed">Average</string>
+    <string name="speedtest_avg_speed">Avg</string>
     <string name="speedtest_peak_speed">Peak</string>
     <string name="speedtest_data_transferred">Data transferred</string>
     <string name="speedtest_chart_title">Throughput over time</string>
@@ -1513,6 +1628,14 @@
 
     <!-- Input validation -->
     <string name="error_invalid_host">Hostname or IP cannot contain spaces</string>
+    <string name="error_host_blank">Enter a hostname or IP address</string>
+    <string name="error_host_ipv4_invalid">An IPv4 address needs four numbers from 0 to 255</string>
+    <string name="error_host_ipv6_invalid">That IPv6 address is not valid</string>
+    <string name="error_host_empty_label">A hostname cannot have an empty part between two dots</string>
+    <string name="error_host_invalid_label">Each part of a hostname must be 1 to 63 characters and cannot start or end with a hyphen</string>
+    <string name="error_host_invalid_characters">Hostnames can only contain letters, digits, hyphens and dots</string>
+    <string name="error_host_too_long">A hostname can be at most 253 characters long</string>
+    <string name="error_host_invalid">Enter a valid hostname or IP address</string>
     <string name="error_invalid_url">Enter a valid URL (e.g. https://example.com)</string>
 
     <!-- Wake-on-LAN -->
@@ -1522,19 +1645,40 @@
     <string name="wol_invalid_handoff">The supplied MAC could not be verified. Enter a valid MAC address to continue.</string>
     <string name="wol_mac_label">MAC address</string>
     <string name="wol_mac_placeholder">AA:BB:CC:DD:EE:FF</string>
-    <string name="wol_mac_invalid">Enter a valid unicast MAC address (AA:BB:CC:DD:EE:FF)</string>
+    <string name="wol_mac_problem_length">A MAC address has 12 hex digits, for example AA:BB:CC:DD:EE:FF.</string>
+    <string name="wol_mac_problem_characters">A MAC address uses only the digits 0-9 and the letters A-F.</string>
+    <string name="wol_mac_problem_separators">Use one notation: AA:BB:CC:DD:EE:FF, AA-BB-CC-DD-EE-FF, AABB.CCDD.EEFF or AABBCCDDEEFF.</string>
+    <string name="wol_mac_problem_multicast">Multicast addresses are not devices. Use the device\'s own address, whose first octet is even.</string>
+    <string name="wol_mac_problem_broadcast">FF:FF:FF:FF:FF:FF is the broadcast address, not a device.</string>
+    <string name="wol_mac_problem_zero">00:00:00:00:00:00 is not a device address.</string>
     <string name="wol_advanced_options">Advanced options</string>
     <string name="wol_broadcast_label">Broadcast address</string>
-    <string name="wol_broadcast_hint">255.255.255.255 reaches the whole local network</string>
+    <string name="wol_broadcast_hint">Reaches every device on the local network</string>
+    <string name="wol_broadcast_invalid">Enter an IPv4 address such as 192.168.1.255. Host names are not supported.</string>
     <string name="wol_port_label">UDP port</string>
-    <string name="wol_port_hint">Port 9 (discard) is the convention; some devices use 7</string>
+    <string name="wol_port_hint">Discard port; some devices use 7</string>
     <string name="wol_port_invalid">Enter a UDP port from 1 to 65535</string>
     <string name="wol_send_button">Send magic packet</string>
     <string name="wol_sending">Sending magic packet…</string>
     <string name="wol_success_title">Magic packet sent</string>
     <string name="wol_success_detail">Sent to %1$s via %2$s port %3$d (%4$d packets)</string>
-    <string name="wol_success_note">Delivery is fire-and-forget: the target machine must have Wake-on-LAN enabled in its firmware/OS and be on the same network.</string>
+    <string name="wol_success_note">Sent. Wake-on-LAN is fire-and-forget: no delivery confirmation is returned. The target needs Wake-on-LAN enabled in firmware and OS and must be on this network.</string>
     <string name="wol_send_again">Send again</string>
+    <string name="wol_saved_title">Saved devices</string>
+    <string name="wol_saved_empty">No saved devices yet. Enter a MAC address, then save it here.</string>
+    <string name="wol_device_name_label">Device name (optional)</string>
+    <string name="wol_save_device">Save device</string>
+    <string name="wol_update_device">Update device</string>
+    <string name="wol_cancel_edit">Cancel edit</string>
+    <string name="wol_use_device">Use</string>
+    <string name="wol_edit_device_description">Edit saved device %1$s</string>
+    <string name="wol_delete_device_description">Delete saved device %1$s</string>
+    <string name="wol_device_conflict">That MAC address is already saved as another device.</string>
+    <string name="wol_device_name_kept">Already saved as %1$s. The saved name was kept.</string>
+    <string name="wol_device_renamed">Already saved as %1$s. Renamed to %2$s.</string>
+    <string name="wol_delete_confirm_title">Delete saved device?</string>
+    <string name="wol_delete_confirm_body">%1$s will be removed from Saved devices. You can save it again later.</string>
+    <string name="wol_delete_confirm_action">Delete</string>
     <string name="wol_error_title">Failed to send</string>
     <string name="wol_retry_button">Retry</string>
     <string name="help_wol_concept_heading">What is Wake-on-LAN?</string>
@@ -1584,4 +1728,165 @@
         <item quantity="other">%1$d records found</item>
     </plurals>
 
+
+    <!-- Network Info (WP16) -->
+    <string name="tool_netinfo_label">Network Info</string>
+    <string name="tool_netinfo_short_label">Info</string>
+    <string name="tool_netinfo_description">Active network, IP configuration and public IP</string>
+    <string name="netinfo_screen_title">Network Info</string>
+    <string name="netinfo_screen_subtitle">Your active network, addresses, DNS and public IP</string>
+    <string name="netinfo_section_network">Active network</string>
+    <string name="netinfo_section_wifi">Wi-Fi link</string>
+    <string name="netinfo_section_ip">IP configuration</string>
+    <string name="netinfo_section_public">Public IP</string>
+    <string name="netinfo_loading">Reading network details…</string>
+    <string name="netinfo_transports">Transport</string>
+    <string name="netinfo_transport_wifi">Wi-Fi</string>
+    <string name="netinfo_transport_cellular">Cellular</string>
+    <string name="netinfo_transport_ethernet">Ethernet</string>
+    <string name="netinfo_transport_vpn">VPN</string>
+    <string name="netinfo_transport_bluetooth">Bluetooth</string>
+    <string name="netinfo_transport_other">Other</string>
+    <string name="netinfo_metered">Metered</string>
+    <string name="netinfo_roaming">Roaming</string>
+    <string name="netinfo_yes">Yes</string>
+    <string name="netinfo_no">No</string>
+    <string name="netinfo_no_network_title">No active network</string>
+    <string name="netinfo_no_network_body">Connect to Wi-Fi, Ethernet or mobile data to see its details.</string>
+    <string name="netinfo_ssid">Network name</string>
+    <string name="netinfo_ssid_unavailable">Unavailable (location permission needed)</string>
+    <string name="netinfo_ssid_permission_hint">Android hides the Wi-Fi network name until location permission is granted. Grant it from the Wi-Fi Scanner to show the name here. This tool does not request any new permission.</string>
+    <string name="netinfo_not_available">Not available</string>
+    <string name="netinfo_signal">Signal strength</string>
+    <string name="netinfo_link_speed">Link speed</string>
+    <string name="netinfo_frequency">Frequency</string>
+    <string name="netinfo_value_dbm">%1$d dBm</string>
+    <string name="netinfo_value_mbps">%1$d Mbps</string>
+    <string name="netinfo_value_mhz">%1$d MHz</string>
+    <string name="netinfo_frequency_full">%1$d MHz, %2$s, channel %3$d</string>
+    <string name="netinfo_interface">Interface</string>
+    <string name="netinfo_addresses">Addresses</string>
+    <string name="netinfo_address_detail_v4">Prefix /%1$d, mask %2$s</string>
+    <string name="netinfo_address_detail_v6">Prefix /%1$d</string>
+    <string name="netinfo_family_ipv4">IPv4</string>
+    <string name="netinfo_family_ipv6">IPv6</string>
+    <string name="netinfo_gateway">Gateway</string>
+    <string name="netinfo_dns">DNS servers</string>
+    <string name="netinfo_mtu">MTU</string>
+    <string name="netinfo_mac">MAC address</string>
+    <string name="netinfo_mac_randomized">Locally administered (randomized or private) address.</string>
+    <string name="netinfo_mac_hidden">Hidden by Android 10 and newer. Apps cannot read the hardware address on this version.</string>
+    <string name="netinfo_mac_not_reported">Not reported by this Android version.</string>
+    <string name="netinfo_domains">Search domains</string>
+    <string name="netinfo_proxy">Proxy</string>
+    <string name="netinfo_none">None</string>
+    <string name="netinfo_scope_loopback">Loopback</string>
+    <string name="netinfo_scope_link_local">Link-local</string>
+    <string name="netinfo_scope_private">Private</string>
+    <string name="netinfo_scope_shared">Shared (carrier NAT)</string>
+    <string name="netinfo_scope_unique_local">Unique local</string>
+    <string name="netinfo_scope_global">Global</string>
+    <string name="netinfo_scope_multicast">Multicast</string>
+    <string name="netinfo_scope_unspecified">Unspecified</string>
+    <string name="netinfo_scope_other">Special-purpose</string>
+    <string name="netinfo_public_intro">Runs only when you ask. Sends an HTTPS request to api4.ipify.org and api6.ipify.org, then looks up reverse DNS and approximate location for each address found.</string>
+    <string name="netinfo_public_check">Check public IP</string>
+    <string name="netinfo_public_checking">Checking public addresses…</string>
+    <string name="netinfo_public_ipv4">Public IPv4</string>
+    <string name="netinfo_public_ipv6">Public IPv6</string>
+    <string name="netinfo_public_ipv6_unavailable">No public IPv6 address. This network may not have IPv6.</string>
+    <string name="netinfo_public_ipv4_unavailable">Public IPv4 could not be determined.</string>
+    <string name="netinfo_public_error_title">Public IP lookup failed</string>
+    <string name="netinfo_public_error_body">Check your internet connection, then try again.</string>
+    <string name="netinfo_public_check_again">Check again</string>
+    <string name="netinfo_retry">Retry</string>
+    <string name="netinfo_hostname">Reverse DNS</string>
+    <string name="netinfo_location">Approximate location</string>
+    <string name="netinfo_asn">ASN</string>
+    <string name="netinfo_not_checked">Not checked</string>
+    <string name="netinfo_refresh">Refresh</string>
+    <string name="netinfo_share_subject">Network Info summary</string>
+    <string name="netinfo_copy_description">Copy %1$s</string>
+    <string name="netinfo_copy_hint">Tap the copy icon or press and hold a value to copy it.</string>
+    <string name="netinfo_copied">Copied</string>
+    <string name="help_netinfo_concept_heading">What this shows</string>
+    <string name="help_netinfo_concept_body">Network Info reads the settings Android has applied to your active network: the addresses on each interface, the gateway and DNS servers, and the Wi-Fi link when you are on Wi-Fi.</string>
+    <string name="help_netinfo_public_heading">Public IP</string>
+    <string name="help_netinfo_public_body">The public address is the one internet services see. It is checked only when you tap Check public IP. The check sends an HTTPS request to api4.ipify.org and api6.ipify.org, then looks up reverse DNS and approximate location for each address.</string>
+    <string name="help_netinfo_privacy_heading">Hardware address and network name</string>
+    <string name="help_netinfo_privacy_body">Android 10 and newer hide hardware addresses from apps, so the MAC address is shown only when the system provides it. The Wi-Fi network name needs location permission, which this tool does not request. Grant it from the Wi-Fi Scanner.</string>
+    <string name="help_netinfo_scope_heading">IPv6 scopes</string>
+    <string name="help_netinfo_scope_body">Link-local (fe80::/10) works only on this link. Unique local (fc00::/7) is private, like RFC 1918 IPv4. Global addresses are routable on the internet. A missing public IPv6 usually means this network has no IPv6 route.</string>
+
+    <!-- MAC / OUI Vendor Lookup -->
+    <string name="tool_oui_label">MAC Lookup</string>
+    <string name="tool_oui_short_label">MAC</string>
+    <string name="tool_oui_description">Vendor and address type for MAC addresses and OUI prefixes, offline</string>
+    <string name="oui_screen_title">MAC Lookup</string>
+    <string name="oui_screen_subtitle">Identify the vendor behind a MAC address or OUI prefix, offline</string>
+    <string name="oui_input_label">MAC addresses or OUI prefixes</string>
+    <string name="oui_input_placeholder">B8:27:EB:11:22:33 or B8-27-EB</string>
+    <string name="oui_input_hint">Paste one or many, one per line or separated by commas or spaces. Colon, hyphen, Cisco dotted and bare hex all work, in any case.</string>
+    <plurals name="oui_invalid_entries">
+        <item quantity="one">%1$d entry is not a MAC address or OUI prefix</item>
+        <item quantity="other">%1$d entries are not MAC addresses or OUI prefixes</item>
+    </plurals>
+    <string name="oui_action_paste">Paste from clipboard</string>
+    <string name="oui_action_lookup">Look up</string>
+    <string name="oui_idle_title">Look up a vendor</string>
+    <string name="oui_idle_body">Paste a MAC address or OUI prefix to see who made the hardware, whether the address is multicast or broadcast, and whether it is a randomised (locally administered) address. Nothing leaves the device.</string>
+    <string name="oui_loading">Looking up vendors…</string>
+    <string name="oui_failed_no_valid_title">Nothing to look up</string>
+    <string name="oui_failed_no_valid_body">None of the entries is a MAC address or a three-byte OUI prefix. Check the text and try again.</string>
+    <string name="oui_failed_clipboard_title">Clipboard has no text</string>
+    <string name="oui_failed_clipboard_body">Copy a MAC address or OUI prefix, then paste it here.</string>
+    <string name="oui_retry">Try again</string>
+    <plurals name="oui_results_count">
+        <item quantity="one">%1$d entry</item>
+        <item quantity="other">%1$d entries</item>
+    </plurals>
+    <string name="oui_truncated">Only the first %1$d entries were looked up. Paste fewer to see the rest.</string>
+    <string name="oui_lowercase">Lowercase</string>
+    <string name="oui_summary_input">Input</string>
+    <string name="oui_address_label">Address</string>
+    <string name="oui_type_label">Type</string>
+    <string name="oui_type_unicast">Unicast (one device)</string>
+    <string name="oui_type_multicast">Multicast (a group of devices)</string>
+    <string name="oui_type_broadcast">Broadcast (all devices)</string>
+    <string name="oui_vendor_label">Vendor</string>
+    <string name="oui_vendor_unknown">Unknown vendor</string>
+    <string name="oui_vendor_locally_administered">Not meaningful: locally administered</string>
+    <string name="oui_vendor_broadcast">Not applicable: broadcast address</string>
+    <string name="oui_block_label">Block size</string>
+    <string name="oui_block_short">Block</string>
+    <string name="oui_block_value">%1$s, %2$d-bit prefix</string>
+    <string name="oui_local_label">Locally administered</string>
+    <string name="oui_local_explanation">This is a randomised or private address. The locally administered bit is set, so the vendor code does not identify the hardware. Phones and laptops use these to hide their real address.</string>
+    <string name="oui_prefix_note">OUI prefix only. The vendor and block come from the first three octets, and the rest of the address is not known.</string>
+    <string name="oui_yes">Yes</string>
+    <string name="oui_no">No</string>
+    <string name="oui_not_applicable">Not applicable</string>
+    <plurals name="oui_entered_times">
+        <item quantity="one">Entered %1$d time, merged into one card</item>
+        <item quantity="other">Entered %1$d times, merged into one card</item>
+    </plurals>
+    <string name="oui_notation_title">Notations</string>
+    <string name="oui_notation_colon">Colon</string>
+    <string name="oui_notation_hyphen">Hyphen</string>
+    <string name="oui_notation_dotted">Cisco dotted</string>
+    <string name="oui_notation_bare">Bare hex</string>
+    <string name="oui_copy_description">Copy %1$s</string>
+    <string name="oui_rejected">Not a MAC address or OUI prefix</string>
+    <string name="oui_no_entries">No entries to show.</string>
+    <string name="oui_clear_results">Clear results</string>
+    <string name="oui_share_subject">MAC Lookup results</string>
+    <string name="oui_copied">Copied</string>
+    <string name="help_oui_concept_heading">What a MAC address tells you</string>
+    <string name="help_oui_concept_body">The first three octets are the OUI, which the IEEE assigns to a manufacturer. Looking it up names the vendor of the network hardware. The last three octets are chosen by that vendor.</string>
+    <string name="help_oui_vendor_heading">Notations</string>
+    <string name="help_oui_vendor_body">Colon, hyphen, Cisco dotted and bare hex are all accepted, in upper or lower case, with or without spaces around them. A bare three-byte prefix such as B8-27-EB looks up the vendor block on its own.</string>
+    <string name="help_oui_local_heading">Randomised addresses</string>
+    <string name="help_oui_local_body">When the locally administered bit is set, the address was not assigned by a manufacturer. Phones often randomise Wi-Fi addresses this way, so the vendor shown would be wrong. The tool says so instead of guessing.</string>
+    <string name="help_oui_kinds_heading">Multicast and broadcast</string>
+    <string name="help_oui_kinds_body">Multicast addresses reach a group of devices, and FF:FF:FF:FF:FF:FF reaches every device on the segment. Neither belongs to one manufacturer, so no vendor is shown for broadcast. The database is bundled with the app, so no lookup is sent anywhere.</string>
 </resources>

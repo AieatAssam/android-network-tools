@@ -16,7 +16,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.RequestBody
+import okio.BufferedSink
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -24,13 +25,23 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.channels.ProducerScope
+import java.net.SocketTimeoutException
+import java.util.concurrent.atomic.AtomicLong
 
-/** Pooled Cloudflare transport. A shared client lets the latency requests reuse TLS/HTTP connections. */
+/**
+ * Pooled Cloudflare transport. A shared client lets the latency requests reuse TLS/HTTP connections.
+ *
+ * OkHttp's connect/read/write timeouts are per-operation inactivity limits, not a cap on the whole
+ * call (`callTimeout` is left unset). A slow uplink can stall one POST without the phase being over,
+ * so the upload loop treats a stall as a retry and bounds every request by the phase window.
+ */
 class OkHttpTransferEngine(
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(2, TimeUnit.SECONDS)
-        .writeTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(5, TimeUnit.SECONDS)
+        .writeTimeout(UPLOAD_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build(),
     private val monotonicTimeNs: () -> Long = System::nanoTime
 ) : TransferEngine {
@@ -90,7 +101,7 @@ class OkHttpTransferEngine(
         currentCoroutineContext().ensureActive()
         val request = Request.Builder().url(url).get().build()
         val start = monotonicTimeNs()
-        withResponse(request) { response ->
+        withResponse(client, request) { response ->
             response.body?.close()
             currentCoroutineContext().ensureActive()
             HttpRtt(
@@ -106,7 +117,7 @@ class OkHttpTransferEngine(
     override suspend fun serverInfo(url: String): ServerInfo? = withContext(Dispatchers.IO) {
         currentCoroutineContext().ensureActive()
         val request = Request.Builder().url(url).get().build()
-        withResponse(request) { response ->
+        withResponse(client, request) { response ->
             if (!response.isSuccessful) return@withResponse null
             val body = response.body ?: return@withResponse null
             if (body.contentLength() > MAX_SERVER_INFO_BYTES) return@withResponse null
@@ -155,23 +166,19 @@ class OkHttpTransferEngine(
         val safeStreams = streams.coerceAtLeast(1)
         repeat(safeStreams) { streamIndex ->
             launch(Dispatchers.IO) {
-                val buffer = ByteArray(CHUNK_BYTES)
-                while ((monotonicTimeNs() - startedAt) / 1_000_000L < durationMs) {
-                    currentCoroutineContext().ensureActive()
-                    val requestBuilder = Request.Builder().url(url)
-                    val request = if (upload) {
-                        requestBuilder.post(ByteArray(CHUNK_BYTES).toRequestBody(BINARY)).build()
-                    } else {
-                        requestBuilder.get().build()
-                    }
-                    suspend fun executeRequest() {
-                        withResponse(request) { response ->
-                            if (!response.isSuccessful) throw java.io.IOException("HTTP ${response.code}")
-                            val body = response.body ?: return@withResponse
-                            if (upload) {
-                                body.byteStream().use { drainUploadResponse(it) }
-                                send(ChunkEvent(streamIndex, CHUNK_BYTES.toLong(), elapsedSince(startedAt)))
-                            } else {
+                if (upload) {
+                    uploadStream(url, streamIndex, startedAt, durationMs, operationSession)
+                } else {
+                    val buffer = ByteArray(CHUNK_BYTES)
+                    while ((monotonicTimeNs() - startedAt) / 1_000_000L < durationMs) {
+                        currentCoroutineContext().ensureActive()
+                        val requestBuilder = Request.Builder().url(url)
+                        val request = requestBuilder.get().build()
+
+                        suspend fun executeRequest() {
+                            withResponse(client, request) { response ->
+                                if (!response.isSuccessful) throw java.io.IOException("HTTP ${response.code}")
+                                val body = response.body ?: return@withResponse
                                 body.byteStream().use { input ->
                                     while ((monotonicTimeNs() - startedAt) / 1_000_000L < durationMs) {
                                         currentCoroutineContext().ensureActive()
@@ -182,35 +189,112 @@ class OkHttpTransferEngine(
                                 }
                             }
                         }
+                        if (operationSession == null) {
+                            executeRequest()
+                        } else {
+                            operationSession.concurrencyLimiter.withPermit { executeRequest() }
+                        }
                     }
-                    if (operationSession == null) executeRequest()
-                    else operationSession.concurrencyLimiter.withPermit { executeRequest() }
                 }
+            }
+        }
+    }
+
+    /**
+     * One upload worker. Bytes are counted while the body is written, so a POST that stalls or is
+     * cut off at the window still contributes what it sent. A socket stall (SocketTimeoutException)
+     * is not a failure: the worker keeps the bytes and opens a new request until the window ends.
+     * Any other I/O error still fails the phase. The in-flight request is cancelled at the window end.
+     */
+    private suspend fun ProducerScope<ChunkEvent>.uploadStream(
+        url: String,
+        streamIndex: Int,
+        startedAt: Long,
+        durationMs: Long,
+        operationSession: OperationSession?,
+    ) {
+        while (elapsedSince(startedAt) < durationMs) {
+            currentCoroutineContext().ensureActive()
+            val remainingMs = durationMs - elapsedSince(startedAt)
+            val sentBytes = AtomicLong(0L)
+            val requestBuilder = Request.Builder().url(url)
+            val request = requestBuilder.post(CountingUploadBody(sentBytes)).build()
+
+            suspend fun executeUpload() {
+                withResponse(client, request) { response ->
+                    if (!response.isSuccessful) throw java.io.IOException("HTTP ${response.code}")
+                    response.body?.byteStream()?.use { drainUploadResponse(it) }
+                }
+            }
+            val completed =
+                try {
+                    withTimeoutOrNull(remainingMs) {
+                        if (operationSession == null) {
+                            executeUpload()
+                        } else {
+                            operationSession.concurrencyLimiter.withPermit { executeUpload() }
+                        }
+                    } != null
+                } catch (expectedStall: SocketTimeoutException) {
+                    false
+                } catch (failure: java.io.IOException) {
+                    send(ChunkEvent(streamIndex, sentBytes.get(), elapsedSince(startedAt)))
+                    currentCoroutineContext().ensureActive()
+                    if (elapsedSince(startedAt) >= durationMs) return
+                    throw failure
+                }
+            val sent = sentBytes.get()
+            if (sent > 0L) send(ChunkEvent(streamIndex, sent, elapsedSince(startedAt)))
+            if (!completed && elapsedSince(startedAt) >= durationMs) return
+        }
+    }
+
+    /** Request body that reports how many bytes have actually been written to the socket buffer. */
+    private class CountingUploadBody(
+        private val sentBytes: AtomicLong,
+    ) : RequestBody() {
+        override fun contentType() = BINARY
+
+        override fun contentLength() = CHUNK_BYTES.toLong()
+
+        override fun writeTo(sink: BufferedSink) {
+            var written = 0
+            while (written < CHUNK_BYTES) {
+                val piece = minOf(UPLOAD_WRITE_PIECE_BYTES, CHUNK_BYTES - written)
+                sink.write(UPLOAD_PAYLOAD, 0, piece)
+                sink.flush()
+                written += piece
+                sentBytes.addAndGet(piece.toLong())
             }
         }
     }
 
     private fun elapsedSince(startedAt: Long) = ((monotonicTimeNs() - startedAt) / 1_000_000L).coerceAtLeast(0L)
 
-    @OptIn(InternalCoroutinesApi::class)
-    private suspend fun <T> withResponse(
-        request: Request,
-        consume: suspend (okhttp3.Response) -> T
-    ): T = withContext(Dispatchers.IO) {
-        val call = client.newCall(request)
-        val cancellation = coroutineContext[Job]?.invokeOnCompletion(
-            onCancelling = true,
-            invokeImmediately = true
-        ) { cause -> if (cause != null) call.cancel() }
-        try {
-            call.execute().use { response -> consume(response) }
-        } finally {
-            cancellation?.dispose()
-        }
-    }
-
     companion object {
+        @OptIn(InternalCoroutinesApi::class)
+        private suspend fun <T> withResponse(
+            client: OkHttpClient,
+            request: Request,
+            consume: suspend (okhttp3.Response) -> T,
+        ): T =
+            withContext(Dispatchers.IO) {
+                val call = client.newCall(request)
+                val cancellation = coroutineContext[Job]?.invokeOnCompletion(
+                    onCancelling = true,
+                    invokeImmediately = true,
+                ) { cause -> if (cause != null) call.cancel() }
+                try {
+                    call.execute().use { response -> consume(response) }
+                } finally {
+                    cancellation?.dispose()
+                }
+            }
+
         private const val CHUNK_BYTES = 64 * 1024
+        private const val UPLOAD_WRITE_PIECE_BYTES = 8 * 1024
+        private const val UPLOAD_WRITE_TIMEOUT_SECONDS = 10L
+        private val UPLOAD_PAYLOAD = ByteArray(CHUNK_BYTES)
         private const val UPLOAD_RESPONSE_DRAIN_CAP_BYTES = 16 * 1024
         internal const val MAX_SERVER_INFO_BYTES = 16 * 1024
         private val BINARY = "application/octet-stream".toMediaType()

@@ -23,6 +23,7 @@ object ChainAnalyzer {
         trusted: Boolean,
         nowMillis: Long,
         hostnameMatches: Boolean? = null,
+        pinMatch: Boolean? = null,
     ): List<ChainIssue> {
         if (certificates.isEmpty()) return if (trusted) emptyList() else listOf(ChainIssue.UNTRUSTED)
 
@@ -44,11 +45,23 @@ object ChainAnalyzer {
         if (isCryptographicallySelfSigned(leaf)) issues += ChainIssue.SELF_SIGNED
         if (!trusted) issues += ChainIssue.UNTRUSTED
         if (hostnameMatches == false) issues += ChainIssue.HOSTNAME_MISMATCH
+        if (pinMatch == false) issues += ChainIssue.PIN_MISMATCH
 
         if ((0 until certificates.lastIndex).any { index -> !linksTo(certificates[index], certificates[index + 1]) }) {
             issues += ChainIssue.INCOMPLETE_CHAIN
         }
         return issues.toList()
+    }
+
+    /**
+     * The issuing root that the device lacks, named by the last certificate's issuer. When the
+     * server sends the root, its issuer is itself, so the name is the root either way.
+     */
+    fun untrustedRootName(certificates: List<X509Certificate>): String? {
+        val last = certificates.lastOrNull() ?: return null
+        val principal = last.issuerX500Principal.name
+        val commonName = Regex("CN=([^,]+)").find(principal)?.groupValues?.get(1)
+        return commonName?.trim() ?: principal
     }
 
     private fun hasWeakSignature(signatureAlgorithm: String): Boolean {

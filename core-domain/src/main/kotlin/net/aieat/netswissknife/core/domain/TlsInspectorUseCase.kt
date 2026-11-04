@@ -19,6 +19,9 @@ data class TlsInspectorParams(
 object TlsInspectorErrorKeys {
     const val PIN_INVALID_CODE = "TLS_PIN_INVALID"
     const val PIN_INVALID_DESCRIPTION = "tls_pin_invalid"
+
+    /** The port answered with plain-text protocol data rather than a TLS handshake. */
+    const val NOT_TLS_PORT_DESCRIPTION = "tls_not_tls_port"
 }
 
 class TlsInspectorUseCase(private val repository: TlsInspectorRepository) {

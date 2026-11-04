@@ -163,7 +163,10 @@ class TlsInspectorRepositoryImplTest {
         }
 
         assertTrue(result.get() is NetworkResult.Error)
-        assertEquals("TLS inspection timed out", (result.get() as NetworkResult.Error).message)
+        assertEquals(
+            "The server did not answer in time. Check the host and port.",
+            (result.get() as NetworkResult.Error).message,
+        )
         assertEquals(CancellationReason.DEADLINE_EXCEEDED, session.cancellationReason)
         assertEquals(1, blockedSocket.closeCount.get())
     }
@@ -194,7 +197,10 @@ class TlsInspectorRepositoryImplTest {
 
         assertTrue(result.get() is NetworkResult.Error)
         val error = result.get() as NetworkResult.Error
-        assertEquals("TLS inspection timed out", error.message)
+        assertEquals(
+            "The server did not answer in time. Check the host and port.",
+            error.message,
+        )
         assertEquals(CancellationReason.DEADLINE_EXCEEDED, session.cancellationReason)
         assertEquals(1, blockedSocket.closeCount.get())
         assertTrue(
@@ -223,7 +229,10 @@ class TlsInspectorRepositoryImplTest {
         }
 
         assertTrue(result.get() is NetworkResult.Error)
-        assertEquals("TLS inspection timed out", (result.get() as NetworkResult.Error).message)
+        assertEquals(
+            "The server did not answer in time. Check the host and port.",
+            (result.get() as NetworkResult.Error).message,
+        )
         assertEquals(CancellationReason.DEADLINE_EXCEEDED, session.cancellationReason)
         assertEquals(1, blockedSocket.closeCount.get())
     }

@@ -328,8 +328,7 @@ class DnsScreenTest {
             expectedTitle = context.getString(R.string.dns_no_records_title),
             expectedSubtitle = context.getString(
                 R.string.dns_no_records_subtitle,
-                DnsRecordType.A.displayName,
-                "empty.example"
+                DnsRecordType.A.displayName
             )
         )
     }
@@ -339,7 +338,7 @@ class DnsScreenTest {
         assertEmptyResultPresentation(
             rcode = "NXDOMAIN",
             expectedTitle = context.getString(R.string.dns_nxdomain_title),
-            expectedSubtitle = context.getString(R.string.dns_nxdomain_subtitle, "empty.example")
+            expectedSubtitle = context.getString(R.string.dns_nxdomain_subtitle)
         )
     }
 
@@ -348,7 +347,7 @@ class DnsScreenTest {
         assertEmptyResultPresentation(
             rcode = "SERVFAIL",
             expectedTitle = context.getString(R.string.dns_rcode_error_title),
-            expectedSubtitle = context.getString(R.string.dns_rcode_error_subtitle, "SERVFAIL", "empty.example")
+            expectedSubtitle = context.getString(R.string.dns_rcode_error_subtitle, "SERVFAIL")
         )
     }
 
@@ -357,7 +356,7 @@ class DnsScreenTest {
         assertEmptyResultPresentation(
             rcode = "REFUSED",
             expectedTitle = context.getString(R.string.dns_rcode_error_title),
-            expectedSubtitle = context.getString(R.string.dns_rcode_error_subtitle, "REFUSED", "empty.example")
+            expectedSubtitle = context.getString(R.string.dns_rcode_error_subtitle, "REFUSED")
         )
     }
 

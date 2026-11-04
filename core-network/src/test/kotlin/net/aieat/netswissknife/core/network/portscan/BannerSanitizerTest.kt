@@ -87,5 +87,29 @@ class BannerSanitizerTest {
             val banner = "hello\u007Fworld"  // DEL (0x7F)
             assertFalse(BannerSanitizer.sanitize(banner).contains('\u007F'))
         }
+
+        @Test
+        fun `CRLF between HTTP header lines becomes a visible separator`() {
+            val banner = "HTTP/1.1 301 Moved Permanently\r\nContent-Length: 0\r\nLocation: https://x/\r\n\r\n"
+            assertEquals(
+                "HTTP/1.1 301 Moved Permanently | Content-Length: 0 | Location: https://x/",
+                BannerSanitizer.sanitize(banner),
+            )
+        }
+
+        @Test
+        fun `bare line feed also separates lines`() {
+            assertEquals("first | second", BannerSanitizer.sanitize("first\nsecond"))
+        }
+
+        @Test
+        fun `runs of blank lines collapse to one separator`() {
+            assertEquals("a | b", BannerSanitizer.sanitize("a\r\n\r\n\r\nb"))
+        }
+
+        @Test
+        fun `line breaks at the edges do not leave a dangling separator`() {
+            assertEquals("a", BannerSanitizer.sanitize("\r\na\r\n"))
+        }
     }
 }

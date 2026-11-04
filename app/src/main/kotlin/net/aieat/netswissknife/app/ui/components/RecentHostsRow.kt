@@ -6,9 +6,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -16,10 +18,10 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -36,13 +38,21 @@ fun RecentHostsRow(
     modifier: Modifier = Modifier,
     selectionEnabled: Boolean = true,
     actionsEnabled: Boolean = true,
+    currentValue: String? = null,
+    removeDescription: String = stringResource(R.string.action_remove_recent),
+    clearDescription: String = stringResource(R.string.action_clear_recents),
 ) {
+    val shownHosts = recentHostsExcept(recentHosts, currentValue)
     AnimatedVisibility(
-        visible = recentHosts.isNotEmpty(),
+        visible = shownHosts.isNotEmpty(),
         enter = fadeIn(),
         exit = fadeOut(),
         modifier = modifier
     ) {
+        val listState = rememberLazyListState()
+        // Keyed items keep their scroll offset when a new host is prepended, which left the
+        // newest chip clipped at the start edge. Re-anchor to the first chip on every change.
+        LaunchedEffect(shownHosts.firstOrNull()) { listState.scrollToItem(0) }
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -55,10 +65,17 @@ fun RecentHostsRow(
                 modifier = Modifier.padding(end = 4.dp)
             )
             LazyRow(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .scrollEdgeFade(
+                        canScrollBackward = listState.canScrollBackward,
+                        canScrollForward = listState.canScrollForward,
+                    ),
+                state = listState,
+                contentPadding = PaddingValues(start = 4.dp, end = ScrollEdgeFadeWidth),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(recentHosts, key = { it }) { host ->
+                items(shownHosts, key = { it }) { host ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         SuggestionChip(
                             enabled = selectionEnabled,
@@ -75,11 +92,11 @@ fun RecentHostsRow(
                         IconButton(
                             onClick = { onRemoveHost(host) },
                             enabled = actionsEnabled,
-                            modifier = Modifier.minimumInteractiveComponentSize()
+                            modifier = Modifier.size(ToolTouchTargetSize)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = stringResource(R.string.action_remove_recent),
+                                contentDescription = removeDescription,
                                 modifier = Modifier.size(14.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -90,15 +107,25 @@ fun RecentHostsRow(
             IconButton(
                 onClick = onClearAll,
                 enabled = actionsEnabled,
-                modifier = Modifier.minimumInteractiveComponentSize()
+                modifier = Modifier.size(ToolTouchTargetSize)
             ) {
                 Icon(
                     imageVector = Icons.Default.DeleteSweep,
-                    contentDescription = stringResource(R.string.action_clear_recents),
+                    contentDescription = clearDescription,
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
     }
+}
+
+/** Recents without the entry that is already in the field, so the row never repeats the typed value. */
+internal fun recentHostsExcept(
+    recentHosts: List<String>,
+    currentValue: String?,
+): List<String> {
+    val current = currentValue?.trim().orEmpty()
+    if (current.isEmpty()) return recentHosts
+    return recentHosts.filterNot { it.trim().equals(current, ignoreCase = true) }
 }

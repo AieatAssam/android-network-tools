@@ -23,6 +23,7 @@ import net.aieat.netswissknife.core.network.net.NetworkBinder
 import net.aieat.netswissknife.core.network.net.NetworkBindingSocketFactory
 import net.aieat.netswissknife.core.network.net.NoOpNetworkBinder
 
+private const val NANOS_PER_MILLISECOND = 1_000_000L
 private const val RESPONSE_HEADER_FIELD_LIMIT = ResponseHeaderLimitException.MAX_FIELD_OCCURRENCES
 private const val RESPONSE_HEADER_AGGREGATE_BYTE_LIMIT = ResponseHeaderLimitException.MAX_AGGREGATE_METADATA_BYTES
 private const val RESPONSE_HEADER_VALUE_BYTE_LIMIT = ResponseHeaderLimitException.MAX_VALUE_UTF8_BYTES
@@ -157,6 +158,24 @@ internal fun validateResponseHeaderLimits(headers: Headers) {
     }
 }
 
+/**
+ * TCP connect duration in milliseconds, from the monotonic nanosecond timestamps of one call.
+ *
+ * OkHttp's connectStart/connectEnd window can contain the TLS handshake, which is also reported
+ * as secureConnectStart/End. Counting it in both phases double-counts TLS, so TCP connect ends at
+ * the earlier of connectEnd and TLS start. This holds whichever order the events fire in.
+ */
+internal fun tcpConnectMs(
+    connectStartNs: Long?,
+    connectEndNs: Long?,
+    tlsStartNs: Long?,
+): Long? {
+    if (connectStartNs == null || connectEndNs == null) return null
+    val tcpEndNs =
+        if (tlsStartNs != null && tlsStartNs >= connectStartNs) minOf(connectEndNs, tlsStartNs) else connectEndNs
+    return ((tcpEndNs - connectStartNs) / NANOS_PER_MILLISECOND).coerceAtLeast(0L)
+}
+
 /** EventListener-owned per-call monotonic timing snapshots. */
 private class TimingRecorder : EventListener() {
     @Volatile private var callStart: Long? = null
@@ -192,7 +211,7 @@ private class TimingRecorder : EventListener() {
         val bodyFinished = bodyEnd
         return HttpTimings(
             dnsMs = elapsed(dnsStart, dnsEnd),
-            connectMs = elapsed(connectStart, connectEnd),
+            connectMs = tcpConnectMs(connectStart, connectEnd, tlsStart),
             tlsMs = elapsed(tlsStart, tlsEnd),
             ttfbMs = elapsed(started, headers),
             transferMs = elapsed(endedHeaders, bodyFinished),

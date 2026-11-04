@@ -88,6 +88,31 @@ class ChainAnalyzerTest {
     }
 
     @Test
+    fun `untrusted root name is the issuer of the last certificate in the chain`() {
+        val root = TlsTestCertificates.read("self-signed")
+        val leaf = TlsTestCertificates.read("valid-leaf")
+
+        // A self-signed root sent by the server names itself.
+        assertEquals(
+            commonName(root),
+            ChainAnalyzer.untrustedRootName(listOf(leaf, root)),
+        )
+        // When the server omits the root, the leaf's issuer names the root the device lacks.
+        assertEquals(
+            commonName(leaf.issuerX500Principal.name),
+            ChainAnalyzer.untrustedRootName(listOf(leaf)),
+        )
+        assertEquals(null, ChainAnalyzer.untrustedRootName(emptyList()))
+    }
+
+    private fun commonName(distinguishedName: String): String {
+        val match = Regex("CN=([^,]+)").find(distinguishedName)
+        return match?.groupValues?.get(1) ?: distinguishedName
+    }
+
+    private fun commonName(certificate: X509Certificate): String = commonName(certificate.subjectX500Principal.name)
+
+    @Test
     fun `reports hostname mismatch and weak signature`() {
         val mismatch = ChainAnalyzer.analyze(
             listOf(TlsTestCertificates.read("valid-leaf")),

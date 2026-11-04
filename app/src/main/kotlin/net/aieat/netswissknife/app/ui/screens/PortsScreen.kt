@@ -1,6 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens
 
-import android.content.ClipData
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -14,10 +14,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,14 +39,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
@@ -56,9 +49,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,7 +58,6 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -78,7 +67,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -87,10 +75,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.platform.ClipEntry
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
@@ -98,7 +83,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -111,18 +95,25 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolStopButton
+import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.components.messageRes
+import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
+import net.aieat.netswissknife.app.ui.components.scrollIntoViewOnFocus
+import net.aieat.netswissknife.app.ui.format.humanDurationText
+import net.aieat.netswissknife.app.ui.format.resolvedIpToShow
 import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.app.ui.i18n.uiText
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
@@ -131,6 +122,7 @@ import net.aieat.netswissknife.app.ui.screens.portscan.PortScanViewModel
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.domain.PortScanPreset
+import net.aieat.netswissknife.core.domain.PortScanRange
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.portscan.PortScanResult
 import net.aieat.netswissknife.core.network.portscan.PortScanSummary
@@ -151,15 +143,20 @@ object PortsScreenTestTags {
 @Composable
 fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     val lifecycleOwner = LocalLifecycleOwner.current
+    val activity = LocalActivity.current
+    // Rotation also pauses and disposes this screen. The Activity reports it through
+    // isChangingConfigurations, and the scan must keep running across that recreation.
     DisposableEffect(lifecycleOwner) {
         val observer =
             LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_PAUSE) viewModel.onLifecyclePause()
+                if (event == Lifecycle.Event.ON_PAUSE) {
+                    viewModel.onLifecyclePause(configurationChange = activity?.isChangingConfigurations == true)
+                }
             }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            viewModel.onLifecyclePause()
+            viewModel.onLifecyclePause(configurationChange = activity?.isChangingConfigurations == true)
         }
     }
     val requestLocalNetworkPermission = rememberLocalNetworkPermissionRequester(viewModel::startScan)
@@ -214,9 +211,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
         label = "screen-alpha",
     )
 
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val clipboard = LocalClipboard.current
-    val clipScope = rememberCoroutineScope()
+    val dismissKeyboard = rememberDismissKeyboard()
     val context = LocalContext.current
     var showAll by rememberSaveable { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
@@ -281,7 +276,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                 onConcurrencyChange = viewModel::onConcurrencyChange,
                 onAggressiveProbesChange = viewModel::onAggressiveProbesChange,
                 onStartScan = {
-                    keyboardController?.hide()
+                    dismissKeyboard()
                     requestLocalNetworkPermission(host)
                 },
                 onStopScan = viewModel::onStopScan,
@@ -341,16 +336,31 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                     )
                 }
             }
+            if (finished.completion == PortScanUiState.Completion.USER_STOPPED) {
+                item {
+                    val requested = finished.requestedPorts
+                    Text(
+                        text =
+                            if (requested != null) {
+                                stringResource(R.string.ports_scan_stopped_partial, summary.totalPorts, requested)
+                            } else {
+                                stringResource(R.string.ports_scan_stopped_early)
+                            },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
             item {
                 val shareSubject = stringResource(R.string.share_subject_ports, summary.host)
+                val durationText = humanDurationText(summary.scanDurationMs)
                 PortScanSummaryCard(
                     summary = summary,
-                    onCopy = {
-                        clipScope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", buildScanReport(summary)))) }
-                    },
+                    report = buildScanReport(summary, durationText),
                     onShare = {
                         context.shareText(
-                            text = buildScanReport(summary),
+                            text = buildScanReport(summary, durationText),
                             subject = shareSubject,
                         )
                     },
@@ -370,7 +380,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                     )
                 }
                 items(openPorts, key = { it.port }) { portResult ->
-                    PortResultRow(portResult)
+                    PortResultRow(portResult, showStatusBadge = false)
                 }
             }
 
@@ -445,7 +455,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                     )
                 }
                 items(openLive, key = { it.port }) { portResult ->
-                    PortResultRow(portResult)
+                    PortResultRow(portResult, showStatusBadge = false)
                 }
             }
         }
@@ -519,22 +529,13 @@ private fun PortScanInputCard(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Host input
-            OutlinedTextField(
+            val hostProblemRes = if (isHostInvalid) HostValidator.problemOf(host)?.messageRes() else null
+            ToolTextField(
                 value = host,
                 onValueChange = onHostChange,
                 label = { Text(stringResource(R.string.ports_host_label)) },
                 placeholder = { Text(stringResource(R.string.ports_host_placeholder)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (host.isNotEmpty()) {
-                        IconButton(
-                            onClick = { onHostChange("") },
-                            enabled = !isScanning,
-                        ) {
-                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
-                        }
-                    }
-                },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions =
@@ -543,8 +544,8 @@ private fun PortScanInputCard(
                     }),
                 isError = isHostInvalid,
                 supportingText =
-                    if (isHostInvalid) {
-                        { Text(stringResource(R.string.error_invalid_host)) }
+                    if (hostProblemRes != null) {
+                        { Text(stringResource(hostProblemRes)) }
                     } else {
                         null
                     },
@@ -600,12 +601,17 @@ private fun PortScanInputCard(
             val endNum = endPort.toIntOrNull()
             val startInvalid = startPort.isNotEmpty() && (startNum == null || startNum !in 1..65535)
             val endInvalid = endPort.isNotEmpty() && (endNum == null || endNum !in 1..65535)
-            val orderInvalid =
-                startNum != null && endNum != null &&
-                    !startInvalid && !endInvalid && startNum > endNum
+            val rangeProblem =
+                if (startNum != null && endNum != null && !startInvalid && !endInvalid) {
+                    PortScanRange.problemOf(startNum, endNum)
+                } else {
+                    null
+                }
+            val orderInvalid = rangeProblem == PortScanRange.Problem.INVERTED
+            val rangeTooLarge = rangeProblem == PortScanRange.Problem.TOO_LARGE
             val customRangeValid =
                 selectedPreset != PortScanPreset.CUSTOM ||
-                    (startNum != null && endNum != null && !startInvalid && !endInvalid && !orderInvalid)
+                    (startNum != null && endNum != null && !startInvalid && !endInvalid && rangeProblem == null)
 
             AnimatedVisibility(visible = selectedPreset == PortScanPreset.CUSTOM) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -626,14 +632,14 @@ private fun PortScanInputCard(
                                     null
                                 },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).scrollIntoViewOnFocus(),
                         )
                         OutlinedTextField(
                             value = endPort,
                             onValueChange = { onEndPortChange(it.filter(Char::isDigit).take(5)) },
                             label = { Text(stringResource(R.string.ports_end_port_label)) },
                             singleLine = true,
-                            isError = endInvalid || orderInvalid,
+                            isError = endInvalid || orderInvalid || rangeTooLarge,
                             supportingText =
                                 if (endInvalid) {
                                     { Text(stringResource(R.string.ports_range_error)) }
@@ -641,7 +647,7 @@ private fun PortScanInputCard(
                                     null
                                 },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).scrollIntoViewOnFocus(),
                         )
                     }
 
@@ -651,8 +657,14 @@ private fun PortScanInputCard(
                         RangeSlider(
                             value = lowerBound.toFloat()..upperBound.toFloat(),
                             onValueChange = { range ->
-                                onStartPortChange(range.start.toInt().toString())
-                                onEndPortChange(range.endInclusive.toInt().toString())
+                                val (newStart, newEnd) =
+                                    PortScanRange.clampSliderChange(
+                                        previousStart = lowerBound,
+                                        newStart = range.start.toInt(),
+                                        newEnd = range.endInclusive.toInt(),
+                                    )
+                                onStartPortChange(newStart.toString())
+                                onEndPortChange(newEnd.toString())
                             },
                             valueRange = 1f..65535f,
                             modifier = Modifier.fillMaxWidth(),
@@ -663,6 +675,14 @@ private fun PortScanInputCard(
                         orderInvalid -> {
                             Text(
                                 text = stringResource(R.string.ports_range_order_error),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+
+                        rangeTooLarge -> {
+                            Text(
+                                text = stringResource(R.string.ports_range_too_large_error),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.error,
                             )
@@ -939,11 +959,7 @@ private fun PortScanErrorCard(
         title = stringResource(R.string.ports_error_title),
         message = message,
     ) {
-        FilledTonalButton(onClick = onRetry) {
-            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(stringResource(R.string.ports_retry_button))
-        }
+        ToolRetryButton(text = stringResource(R.string.ports_retry_button), onClick = onRetry)
         TextButton(onClick = onClear) {
             Text(stringResource(R.string.ports_clear_button))
         }
@@ -956,7 +972,7 @@ private fun PortScanErrorCard(
 @Composable
 private fun PortScanSummaryCard(
     summary: PortScanSummary,
-    onCopy: () -> Unit,
+    report: String,
     onShare: () -> Unit,
     onClear: () -> Unit,
 ) {
@@ -976,16 +992,8 @@ private fun PortScanSummaryCard(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
-                Row {
-                    IconButton(onClick = onCopy) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.ports_copy_report))
-                    }
-                    IconButton(onClick = onShare) {
-                        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
-                    }
-                    IconButton(onClick = onClear) {
-                        Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.ports_clear_button))
-                    }
+                IconButton(onClick = onClear) {
+                    Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.ports_clear_button))
                 }
             }
 
@@ -997,7 +1005,7 @@ private fun PortScanSummaryCard(
                         style = MaterialTheme.typography.bodyMedium,
                         fontFamily = FontFamily.Monospace,
                     )
-                    summary.resolvedIp?.let { ip ->
+                    resolvedIpToShow(summary.host, summary.resolvedIp)?.let { ip ->
                         Text(
                             text = stringResource(R.string.ports_resolved_ip, ip),
                             style = MaterialTheme.typography.bodyMedium,
@@ -1008,7 +1016,7 @@ private fun PortScanSummaryCard(
                     Text(
                         text =
                             "${stringResource(R.string.ports_duration_label)}: " +
-                                stringResource(R.string.ports_scan_duration, summary.scanDurationMs),
+                                humanDurationText(summary.scanDurationMs),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1037,8 +1045,8 @@ private fun PortScanSummaryCard(
                 StatChip(
                     label = stringResource(R.string.ports_filtered_ports),
                     value = summary.filteredPorts.toString(),
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 StatChip(
                     label = stringResource(R.string.ports_total_scanned),
@@ -1047,6 +1055,7 @@ private fun PortScanSummaryCard(
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
             }
+            ResultActionsRow(copyText = report, onShare = onShare)
         }
     }
 }
@@ -1084,7 +1093,10 @@ private fun StatChip(
 // ── Port Result Row ───────────────────────────────────────────────────────────
 
 @Composable
-private fun PortResultRow(result: PortScanResult) {
+private fun PortResultRow(
+    result: PortScanResult,
+    showStatusBadge: Boolean = true,
+) {
     var targetAlpha by remember { mutableStateOf(0f) }
     LaunchedEffect(Unit) { targetAlpha = 1f }
     val animatedAlpha by animateFloatAsState(
@@ -1093,11 +1105,12 @@ private fun PortResultRow(result: PortScanResult) {
         label = "port_row_alpha",
     )
 
+    // Filtered means no answer, which is neutral; the tertiary tint read as an error on the list (PHA-14).
     val statusColor =
         when (result.status) {
             PortStatus.OPEN -> MaterialTheme.colorScheme.primary
             PortStatus.CLOSED -> MaterialTheme.colorScheme.onSurfaceVariant
-            PortStatus.FILTERED -> MaterialTheme.colorScheme.tertiary
+            PortStatus.FILTERED -> MaterialTheme.colorScheme.onSurfaceVariant
         }
     val statusLabel =
         when (result.status) {
@@ -1105,18 +1118,13 @@ private fun PortResultRow(result: PortScanResult) {
             PortStatus.CLOSED -> R.string.ports_closed_label
             PortStatus.FILTERED -> R.string.ports_filtered_label
         }
-    val statusAlpha =
-        when (result.status) {
-            PortStatus.OPEN -> 1f
-            else -> 0.65f
-        }
 
     OutlinedCard(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .padding(vertical = 2.dp)
-                .alpha(animatedAlpha * statusAlpha),
+                .alpha(animatedAlpha),
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -1157,20 +1165,22 @@ private fun PortResultRow(result: PortScanResult) {
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    // Status badge
-                    Box(
-                        modifier =
-                            Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(statusColor.copy(alpha = 0.15f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Text(
-                            text = stringResource(statusLabel),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = statusColor,
-                            fontWeight = FontWeight.Bold,
-                        )
+                    // Status badge: the Open section's heading already says Open, so rows there skip it.
+                    if (showStatusBadge) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(statusColor.copy(alpha = 0.15f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                        ) {
+                            Text(
+                                text = stringResource(statusLabel),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = statusColor,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
                     }
                 }
 
@@ -1236,13 +1246,17 @@ private fun PortResultRow(result: PortScanResult) {
 
 // ── Report builder ────────────────────────────────────────────────────────────
 
-internal fun buildScanReport(summary: PortScanSummary): String =
+/** [durationText] is the same human duration the screen shows (for example "2.1 s"), not raw milliseconds (V5-04). */
+internal fun buildScanReport(
+    summary: PortScanSummary,
+    durationText: String,
+): String =
     buildString {
         appendLine("=== Port Scan Report ===")
         appendLine("Host: ${summary.host}")
         summary.resolvedIp?.let { appendLine("IP: $it") }
         appendLine("Ports scanned: ${summary.totalPorts}")
-        appendLine("Duration: ${summary.scanDurationMs} ms")
+        appendLine("Duration: $durationText")
         appendLine()
         appendLine("Open:     ${summary.openPorts}")
         appendLine("Closed:   ${summary.closedPorts}")

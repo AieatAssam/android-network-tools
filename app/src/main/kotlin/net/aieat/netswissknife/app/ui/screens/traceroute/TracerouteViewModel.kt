@@ -1,5 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.traceroute
 
+import android.annotation.SuppressLint
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,6 +19,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.data.ToolSessionMemory
+import net.aieat.netswissknife.app.data.purgeInvalidHostRecents
+import net.aieat.netswissknife.app.data.validHostRecents
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
 import net.aieat.netswissknife.app.platform.LiteralDestinationClassifier
 import net.aieat.netswissknife.app.platform.NetworkStatus
@@ -24,6 +29,7 @@ import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.app.platform.OperationAvailability
 import net.aieat.netswissknife.app.platform.denialMessage
+import net.aieat.netswissknife.app.util.enumFromSavedName
 import net.aieat.netswissknife.core.domain.TracerouteFlowResult
 import net.aieat.netswissknife.core.domain.TracerouteParams
 import net.aieat.netswissknife.core.domain.TracerouteUseCase
@@ -31,6 +37,7 @@ import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationRequirement
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.resolverErrorMessage
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
 import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
@@ -57,6 +64,8 @@ sealed interface TracerouteUiState {
     data class Canceled(
         val result: TracerouteResult,
         val viewMode: TracerouteViewMode = TracerouteViewMode.Visual,
+        /** True when the trace stopped because the user left the screen, not because they pressed Stop. */
+        val stoppedWhenLeft: Boolean = false,
     ) : TracerouteUiState
 
     data class Finished(
@@ -70,6 +79,20 @@ sealed interface TracerouteUiState {
     ) : TracerouteUiState
 }
 
+/**
+ * The Traceroute form and its last terminal result (finished, stopped by the user, or failed), kept in
+ * [ToolSessionMemory] when the tool is left. A running trace is never kept as running.
+ */
+internal data class TracerouteSessionSnapshot(
+    val host: String,
+    val maxHops: Int,
+    val timeoutMs: Int,
+    val probesPerHop: Int,
+    val probeType: TracerouteProbeType,
+    val packetSize: Int,
+    val finished: TracerouteUiState?,
+)
+
 @HiltViewModel
 class TracerouteViewModel
     @Inject
@@ -78,40 +101,82 @@ class TracerouteViewModel
         private val recentHostsRepository: RecentHostsRepository,
         private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
         private val linkInfoProvider: LinkInfoProvider = LinkInfoProvider({ true }, { true }),
+        // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
+        @param:SuppressLint("VisibleForTests")
+        private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+        private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
     ) : ViewModel() {
         companion object {
             // Resource cleanup may block while cancellation closes native or socket handles.
             // Keep it off the UI and independent of the ViewModel's clearing scope.
             private val cancellationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+            // SavedStateHandle keys for the form; they survive process death and rotation.
+            private const val HOST_KEY = "traceHost"
+            private const val MAX_HOPS_KEY = "traceMaxHops"
+            private const val TIMEOUT_KEY = "traceTimeoutMs"
+            private const val PROBES_KEY = "traceProbesPerHop"
+            private const val PROBE_TYPE_KEY = "traceProbeType"
+            private const val PACKET_SIZE_KEY = "tracePacketSize"
+
+            /** [ToolSessionMemory] slot for the form and last terminal result when the tool is left. */
+            private const val SESSION_KEY = "traceSession"
         }
 
-        private val _uiState = MutableStateFlow<TracerouteUiState>(TracerouteUiState.Idle)
+        // Restore order: a SavedStateHandle value (rotation) wins over the snapshot kept when the tool
+        // was left, which in turn wins over the defaults. A kept result is shown only for the same host.
+        private val restoredSession: TracerouteSessionSnapshot? =
+            sessionMemory.get<TracerouteSessionSnapshot>(SESSION_KEY)
+        private val initialHost: String =
+            savedStateHandle.get<String>(HOST_KEY) ?: restoredSession?.host.orEmpty()
+
+        private val _uiState =
+            MutableStateFlow<TracerouteUiState>(
+                restoredSession?.takeIf { it.host == initialHost }?.finished ?: TracerouteUiState.Idle,
+            )
         val uiState: StateFlow<TracerouteUiState> = _uiState.asStateFlow()
         val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
-        private val _host = MutableStateFlow("")
+        private val _host = MutableStateFlow(initialHost)
         val host: StateFlow<String> = _host.asStateFlow()
 
-        private val _maxHops = MutableStateFlow(30)
+        private val _maxHops =
+            MutableStateFlow(savedStateHandle.get<Int>(MAX_HOPS_KEY) ?: restoredSession?.maxHops ?: 30)
         val maxHops: StateFlow<Int> = _maxHops.asStateFlow()
 
-        private val _timeoutMs = MutableStateFlow(3_000)
+        private val _timeoutMs =
+            MutableStateFlow(savedStateHandle.get<Int>(TIMEOUT_KEY) ?: restoredSession?.timeoutMs ?: 3_000)
         val timeoutMs: StateFlow<Int> = _timeoutMs.asStateFlow()
 
-        private val _probesPerHop = MutableStateFlow(1)
+        private val _probesPerHop =
+            MutableStateFlow(savedStateHandle.get<Int>(PROBES_KEY) ?: restoredSession?.probesPerHop ?: 1)
         val probesPerHop: StateFlow<Int> = _probesPerHop.asStateFlow()
 
-        private val _probeType = MutableStateFlow(TracerouteProbeType.ICMP)
+        private val _probeType =
+            MutableStateFlow(
+                enumFromSavedName(
+                    savedStateHandle.get<String>(PROBE_TYPE_KEY) ?: restoredSession?.probeType?.name,
+                    TracerouteProbeType.entries,
+                ) ?: TracerouteProbeType.ICMP,
+            )
         val probeType: StateFlow<TracerouteProbeType> = _probeType.asStateFlow()
 
         /** 0 = MTU discovery; positive value = fixed packet size in bytes. */
-        private val _packetSize = MutableStateFlow(56)
+        private val _packetSize =
+            MutableStateFlow(savedStateHandle.get<Int>(PACKET_SIZE_KEY) ?: restoredSession?.packetSize ?: 56)
         val packetSize: StateFlow<Int> = _packetSize.asStateFlow()
 
         val recentHosts: StateFlow<List<String>> =
             recentHostsRepository
                 .getRecents(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS)
+                .validHostRecents()
                 .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+        init {
+            viewModelScope.launch {
+                recentHostsRepository.purgeInvalidHostRecents(AppPreferenceKeys.RECENT_TRACEROUTE_HOSTS)
+            }
+        }
 
         private var traceJob: Job? = null
         private var traceSession: OperationSession? = null
@@ -134,22 +199,31 @@ class TracerouteViewModel
 
         fun onHostChange(value: String) {
             _host.value = value
+            savedStateHandle[HOST_KEY] = value
+            // A failure message describes the previous host; drop it when the host changes.
+            if (_uiState.value is TracerouteUiState.Error) {
+                _uiState.value = TracerouteUiState.Idle
+            }
         }
 
         fun onMaxHopsChange(value: Int) {
             _maxHops.value = value.coerceIn(1, 64)
+            savedStateHandle[MAX_HOPS_KEY] = _maxHops.value
         }
 
         fun onTimeoutChange(value: Int) {
             _timeoutMs.value = value.coerceIn(500, 30_000)
+            savedStateHandle[TIMEOUT_KEY] = _timeoutMs.value
         }
 
         fun onProbesPerHopChange(value: Int) {
             _probesPerHop.value = value.coerceIn(1, 5)
+            savedStateHandle[PROBES_KEY] = _probesPerHop.value
         }
 
         fun onProbeTypeChange(value: TracerouteProbeType) {
             _probeType.value = value
+            savedStateHandle[PROBE_TYPE_KEY] = value.name
         }
 
         /**
@@ -158,10 +232,12 @@ class TracerouteViewModel
          */
         fun onPacketSizeChange(value: Int) {
             _packetSize.value = value.coerceIn(0, 1472)
+            savedStateHandle[PACKET_SIZE_KEY] = _packetSize.value
         }
 
         fun onToggleMtuDiscovery(enabled: Boolean) {
             _packetSize.value = if (enabled) 0 else 56
+            savedStateHandle[PACKET_SIZE_KEY] = _packetSize.value
         }
 
         fun onToggleViewMode() {
@@ -196,8 +272,12 @@ class TracerouteViewModel
             cancelRunningTrace(CancellationReason.USER_STOP)
         }
 
-        /** Cancel an in-flight trace when its screen leaves the foreground. */
-        fun onLifecycleStop() {
+        /**
+         * Cancel an in-flight trace when its screen leaves the foreground. A configuration
+         * change (rotation) also stops the screen but must not end the trace.
+         */
+        fun onLifecycleStop(configurationChange: Boolean = false) {
+            if (configurationChange) return
             cancelRunningTrace(CancellationReason.LIFECYCLE_PAUSE)
         }
 
@@ -304,6 +384,7 @@ class TracerouteViewModel
             val accumulated = mutableListOf<HopResult>()
             var terminalError: String? = null
             var terminalEventReceived = false
+            var unreachableFromThisDevice = false
 
             // Transition to Running immediately so the UI responds before the first hop
             // arrives.  If validation fails the first emission will overwrite this with Error.
@@ -334,6 +415,10 @@ class TracerouteViewModel
                                     }
                                 }
 
+                                is TracerouteFlowResult.UnreachableFromThisDevice -> {
+                                    unreachableFromThisDevice = true
+                                }
+
                                 is TracerouteFlowResult.HopEnriched -> {
                                     val index = accumulated.indexOfFirst { it.hopNumber == result.hopNumber }
                                     if (index < 0) return@collect
@@ -354,7 +439,7 @@ class TracerouteViewModel
                         // Cancellation is resolved from the operation reason after collection cleanup.
                         throw e
                     } catch (e: Exception) {
-                        terminalError = e.message ?: "Traceroute failed"
+                        terminalError = resolverErrorMessage(e, trimmedHost) ?: e.message ?: "Traceroute failed"
                     } finally {
                         val cancellationReason = session.cancellationReason
                         val current = _uiState.value
@@ -398,6 +483,7 @@ class TracerouteViewModel
                                 _uiState.value =
                                     TracerouteUiState.Canceled(
                                         result = buildResult(current.host, current.hops, current.elapsedMs),
+                                        stoppedWhenLeft = cancellationReason == CancellationReason.LIFECYCLE_PAUSE,
                                     )
                             }
 
@@ -420,7 +506,12 @@ class TracerouteViewModel
 
                                         else -> {
                                             TracerouteUiState.Finished(
-                                                buildResult(current.host, current.hops, elapsedMsSince(startedAtNanos)),
+                                                buildResult(
+                                                    current.host,
+                                                    current.hops,
+                                                    elapsedMsSince(startedAtNanos),
+                                                    unreachableFromThisDevice,
+                                                ),
                                             )
                                         }
                                     }
@@ -459,6 +550,26 @@ class TracerouteViewModel
         override fun onCleared() {
             traceGeneration++
             cancelActiveTrace(CancellationReason.LIFECYCLE_PAUSE)
+            // Only a terminal state is kept: a trace that is still running is cancelled, not restored as running.
+            val state = _uiState.value
+            val finished =
+                state.takeIf {
+                    it is TracerouteUiState.Finished ||
+                        it is TracerouteUiState.Canceled ||
+                        it is TracerouteUiState.Error
+                }
+            sessionMemory.put(
+                SESSION_KEY,
+                TracerouteSessionSnapshot(
+                    host = _host.value,
+                    maxHops = _maxHops.value,
+                    timeoutMs = _timeoutMs.value,
+                    probesPerHop = _probesPerHop.value,
+                    probeType = _probeType.value,
+                    packetSize = _packetSize.value,
+                    finished = finished,
+                ),
+            )
         }
 
         // ── Helpers ──────────────────────────────────────────────────────────────
@@ -467,14 +578,18 @@ class TracerouteViewModel
             host: String,
             hops: List<HopResult>,
             totalMs: Long = 0L,
-        ): TracerouteResult =
-            TracerouteResult(
+            unreachableFromThisDevice: Boolean = false,
+        ): TracerouteResult {
+            val ordered = hops.sortedBy { it.hopNumber }
+            return TracerouteResult(
                 host = host,
-                resolvedIp = hops.firstNotNullOfOrNull { it.resolvedDestinationIp },
-                hops = hops,
-                rawOutput = buildRawOutput(host, hops),
+                resolvedIp = ordered.firstNotNullOfOrNull { it.resolvedDestinationIp },
+                hops = ordered,
+                rawOutput = buildRawOutput(host, ordered),
                 totalTimeMs = totalMs,
+                unreachableFromThisDevice = unreachableFromThisDevice,
             )
+        }
 
         private fun buildRawOutput(
             host: String,
@@ -490,11 +605,15 @@ class TracerouteViewModel
                 appendLine("traceroute to $host, ${_maxHops.value} hops max, $probeLabel, $sizeLabel")
                 hops.forEach { hop ->
                     val num = "${hop.hopNumber}".padStart(3)
-                    val ip = hop.ip ?: "*"
+                    // Same representation as the Hop Details row for a timed-out hop.
+                    if (hop.ip == null) {
+                        appendLine("$num  * * *")
+                        return@forEach
+                    }
                     val host2 = if (hop.hostname != null) " (${hop.hostname})" else ""
                     val rtt = if (hop.rtTimeMs != null) " ${hop.rtTimeMs} ms" else " *"
                     val geo = hop.geoLocation?.let { gl -> " [${gl.city.ifBlank { gl.country }}]" } ?: ""
-                    appendLine("$num  $ip$host2$rtt$geo")
+                    appendLine("$num  ${hop.ip}$host2$rtt$geo")
                 }
             }
 

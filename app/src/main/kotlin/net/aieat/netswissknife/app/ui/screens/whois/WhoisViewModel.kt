@@ -1,8 +1,11 @@
 package net.aieat.netswissknife.app.ui.screens.whois
 
+import android.annotation.SuppressLint
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -15,22 +18,24 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
+import net.aieat.netswissknife.app.data.ToolSessionMemory
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
+import net.aieat.netswissknife.app.util.enumFromSavedName
 import net.aieat.netswissknife.core.domain.WhoisLookupUseCase
 import net.aieat.netswissknife.core.domain.WhoisParams
 import net.aieat.netswissknife.core.network.NetworkResult
+import net.aieat.netswissknife.core.network.operation.CancellationReason
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.whois.WhoisHop
+import net.aieat.netswissknife.core.network.whois.WhoisOperation
 import net.aieat.netswissknife.core.network.whois.WhoisProtocol
 import net.aieat.netswissknife.core.network.whois.WhoisQueryTypeDetector
 import net.aieat.netswissknife.core.network.whois.WhoisResult
 import net.aieat.netswissknife.core.network.whois.WhoisServer
 import net.aieat.netswissknife.core.network.whois.WhoisServerRole
-import net.aieat.netswissknife.core.network.operation.CancellationReason
-import net.aieat.netswissknife.core.network.operation.OperationSession
-import net.aieat.netswissknife.core.network.whois.WhoisOperation
-import javax.inject.Inject
+import net.aieat.netswissknife.core.network.whois.answeringProtocol
 
 enum class HopStatus { PENDING, QUERYING, DONE, FAILED, SKIPPED }
 
@@ -51,7 +56,27 @@ data class WhoisUiState(
     val hopStates: List<HopUiState> = emptyList(),
     val result: WhoisResult? = null,
     val error: String? = null,
+    /** True while the query is not a domain, IP or ASN. Shown inline; Look up is disabled. */
+    val queryInvalid: Boolean = false,
     val showRawResponse: Boolean = false
+)
+
+/** SavedStateHandle keys for the WHOIS form; they survive process death and rotation. */
+private const val WHOIS_QUERY_KEY = "whoisQuery"
+private const val WHOIS_PROTOCOL_KEY = "whoisProtocol"
+
+/** [ToolSessionMemory] slot holding the last WHOIS form and finished result. */
+private const val WHOIS_SESSION_KEY = "whoisSession"
+
+/**
+ * The WHOIS form and its last finished result with the relay chain that produced it, kept in
+ * [ToolSessionMemory] when the tool is left. Only a result for the current query is kept.
+ */
+internal data class WhoisSessionSnapshot(
+    val query: String,
+    val protocol: WhoisProtocol,
+    val hopStates: List<HopUiState>,
+    val result: WhoisResult?,
 )
 
 @HiltViewModel
@@ -59,9 +84,32 @@ class WhoisViewModel @Inject constructor(
     private val whoisLookupUseCase: WhoisLookupUseCase,
     private val recentHostsRepository: RecentHostsRepository,
     private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+    // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
+    @param:SuppressLint("VisibleForTests")
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+    private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(WhoisUiState())
+    // Restore order: a SavedStateHandle value (rotation) wins over the snapshot kept when the tool
+    // was left, which in turn wins over the defaults.
+    private val restoredSession: WhoisSessionSnapshot? =
+        sessionMemory.get<WhoisSessionSnapshot>(WHOIS_SESSION_KEY)
+    private val initialQuery: String =
+        savedStateHandle.get<String>(WHOIS_QUERY_KEY) ?: restoredSession?.query.orEmpty()
+
+    private val _uiState =
+        MutableStateFlow(
+            WhoisUiState(
+                query = initialQuery,
+                protocol =
+                    enumFromSavedName(
+                        savedStateHandle.get<String>(WHOIS_PROTOCOL_KEY) ?: restoredSession?.protocol?.name,
+                        WhoisProtocol.entries,
+                    ) ?: WhoisProtocol.AUTO,
+                hopStates = restoredSession?.takeIf { it.result != null }?.hopStates.orEmpty(),
+                result = restoredSession?.result?.takeIf { lookupIdentity(initialQuery) == lookupIdentity(it.query) },
+            ),
+        )
     val uiState: StateFlow<WhoisUiState> = _uiState.asStateFlow()
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
@@ -77,14 +125,17 @@ class WhoisViewModel @Inject constructor(
     private var operationSession: OperationSession? = null
 
     fun onQueryChange(value: String) {
+        savedStateHandle[WHOIS_QUERY_KEY] = value
         _uiState.update { state ->
             val effectiveQueryChanged = lookupIdentity(value) != lookupIdentity(state.query)
+            val invalid = isWhoisQueryInvalid(value)
             if (state.isCanceled && effectiveQueryChanged) {
                 // The canceled card and its partial relay chain belong to the query that
                 // was stopped. Once the user changes the input, Retry must not appear to
                 // retry that old operation while actually submitting a different query.
                 state.copy(
                     query = value,
+                    queryInvalid = invalid,
                     isCanceled = false,
                     isLifecyclePaused = false,
                     hopStates = emptyList(),
@@ -92,7 +143,7 @@ class WhoisViewModel @Inject constructor(
                     error = null,
                 )
             } else {
-                state.copy(query = value)
+                state.copy(query = value, queryInvalid = invalid)
             }
         }
     }
@@ -100,6 +151,7 @@ class WhoisViewModel @Inject constructor(
     fun onProtocolChange(protocol: WhoisProtocol) {
         if (_uiState.value.isLoading || _uiState.value.isCanceling) return
         if (_uiState.value.protocol == protocol) return
+        savedStateHandle[WHOIS_PROTOCOL_KEY] = protocol.name
         _uiState.update {
             it.copy(
                 protocol = protocol,
@@ -114,6 +166,22 @@ class WhoisViewModel @Inject constructor(
 
     private fun lookupIdentity(query: String): String =
         WhoisQueryTypeDetector.normalize(query)?.let { "${it.type}:${it.value}" } ?: query.trim()
+
+    override fun onCleared() {
+        // A lookup still running (or being stopped) is not kept; only a finished result for the current query is.
+        val state = _uiState.value
+        val finished = state.result?.takeIf { !state.isLoading && !state.isCanceling }
+        val kept = finished?.takeIf { lookupIdentity(state.query) == lookupIdentity(it.query) }
+        sessionMemory.put(
+            WHOIS_SESSION_KEY,
+            WhoisSessionSnapshot(
+                query = state.query,
+                protocol = state.protocol,
+                hopStates = if (kept != null) state.hopStates else emptyList(),
+                result = kept,
+            ),
+        )
+    }
 
     fun onToggleRawResponse() {
         _uiState.update { it.copy(showRawResponse = !it.showRawResponse) }
@@ -137,6 +205,11 @@ class WhoisViewModel @Inject constructor(
         if (_uiState.value.isCanceling) return
         val query = _uiState.value.query.trim()
         if (query.isBlank()) return
+        if (isWhoisQueryInvalid(query)) {
+            // Invalid input is a field message, not a failed lookup: nothing is sent and there is nothing to retry.
+            _uiState.update { it.copy(queryInvalid = true) }
+            return
+        }
 
         val activeSession = operationSession
         if (activeSession != null) {
@@ -156,7 +229,8 @@ class WhoisViewModel @Inject constructor(
                 isLifecyclePaused = false,
                 hopStates = emptyList(),
                 result = null,
-                error = null
+                error = null,
+                queryInvalid = false,
             )
         }
 
@@ -211,7 +285,7 @@ class WhoisViewModel @Inject constructor(
                     )
                     is NetworkResult.Error -> state.copy(
                         isLoading = false,
-                        error = result.message
+                        error = result.message,
                     )
                 }
             }
@@ -232,8 +306,12 @@ class WhoisViewModel @Inject constructor(
 
     fun stopLookup() = cancelActiveOperation(CancellationReason.USER_STOP, updateState = true)
 
-    /** Stop an in-flight lookup when this tool leaves the foreground. */
-    fun onLifecyclePause() {
+    /**
+     * Stop an in-flight lookup when this tool leaves the foreground. A [configurationChange]
+     * (rotation) also reaches the screen's stop callbacks, so the lookup keeps running across it.
+     */
+    fun onLifecyclePause(configurationChange: Boolean = false) {
+        if (configurationChange) return
         if (_uiState.value.isCanceling) {
             // If a replacement was requested while cleanup ran, do not start it
             // after the screen has left the foreground. Finish this as a pause.

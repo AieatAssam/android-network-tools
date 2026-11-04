@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import java.net.UnknownHostException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
@@ -137,6 +138,30 @@ class PingRepositoryImplTest {
             val packets = repo.ping("badhost", count = 1, timeoutMs = 1000).toList()
             assertNotNull(packets[0].errorMessage)
             assertEquals("unknown host: badhost", packets[0].errorMessage)
+        }
+
+        private val unresolvableMessage = "No address associated with hostname"
+
+        private val unresolvableResolver = HostResolver { throw UnknownHostException(unresolvableMessage) }
+
+        @Test
+        fun `an unresolvable host is flagged as a resolution failure`() {
+            runTest {
+                // No legacy checker: the deprecated ping() adapter bypasses the resolver under test.
+                val repo = PingRepositoryImpl(resolver = unresolvableResolver)
+                val packets = repo.ping("nosuchhost.invalid", count = 1, timeoutMs = 1000).toList()
+                assertEquals(PingStatus.ERROR, packets.single().status)
+                assertTrue(packets.single().unresolvedHost)
+            }
+        }
+
+        @Test
+        fun `a reachability error is not flagged as a resolution failure`() {
+            runTest {
+                val repo = PingRepositoryImpl(checker = errorChecker("unknown host: badhost"))
+                val packets = repo.ping("badhost", count = 1, timeoutMs = 1000).toList()
+                assertEquals(false, packets.single().unresolvedHost)
+            }
         }
 
         @Test

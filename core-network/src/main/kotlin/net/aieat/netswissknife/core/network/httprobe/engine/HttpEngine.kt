@@ -48,21 +48,30 @@ data class HttpTimingBreakdown(
     val transferMs: Long?,
 ) {
     companion object {
+        /**
+         * DNS, connect and TLS are sequential setup phases that all happen before the first byte.
+         * Each phase is capped by the time left in TTFB so the displayed phases never add up above
+         * it. Server wait is what remains of TTFB, so the stacked bar always reconciles to TTFB.
+         */
         fun from(timings: HttpTimings): HttpTimingBreakdown {
-            val setupMs =
-                listOfNotNull(timings.dnsMs, timings.connectMs, timings.tlsMs)
-                    .fold(0L) { sum, phase ->
-                        val value = phase.coerceAtLeast(0L)
-                        if (Long.MAX_VALUE - sum < value) Long.MAX_VALUE else sum + value
-                    }
-            val serverWaitMs =
-                timings.ttfbMs?.let { ttfb ->
-                    (ttfb.coerceAtLeast(0L) - setupMs).coerceAtLeast(0L)
-                }
+            val ttfb = timings.ttfbMs?.coerceAtLeast(0L)
+            var remaining = ttfb ?: Long.MAX_VALUE
+
+            fun fit(phase: Long?): Long? {
+                if (phase == null) return null
+                val fitted = phase.coerceAtLeast(0L).coerceAtMost(remaining)
+                remaining -= fitted
+                return fitted
+            }
+
+            val dnsMs = fit(timings.dnsMs)
+            val connectMs = fit(timings.connectMs)
+            val tlsMs = fit(timings.tlsMs)
+            val serverWaitMs = ttfb?.let { remaining.coerceAtLeast(0L) }
             return HttpTimingBreakdown(
-                dnsMs = timings.dnsMs,
-                connectMs = timings.connectMs,
-                tlsMs = timings.tlsMs,
+                dnsMs = dnsMs,
+                connectMs = connectMs,
+                tlsMs = tlsMs,
                 serverWaitMs = serverWaitMs,
                 ttfbTotalMs = timings.ttfbMs,
                 transferMs = timings.transferMs,

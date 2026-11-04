@@ -6,7 +6,7 @@
 
 ## Overview
 
-Net Swiss Knife provides 14 network tools: Ping, Traceroute, Port Scanner, LAN Scanner, DNS Lookup, Wi-Fi Scanner, Network Topology, TLS Inspector, WHOIS Lookup, HTTP Probe, Subnet Calculator, mDNS Browser, Speed Test, and Wake-on-LAN. This policy explains what data the app uses, where it is sent, and how it is handled.
+Net Swiss Knife provides 16 network tools: Ping, Traceroute, Port Scanner, LAN Scanner, DNS Lookup, Wi-Fi Scanner, Network Topology, TLS Inspector, WHOIS Lookup, HTTP Probe, Subnet Calculator, mDNS Browser, Speed Test, Wake-on-LAN, Network Info, and MAC Lookup. This policy explains what data the app uses, where it is sent, and how it is handled.
 
 ---
 
@@ -60,6 +60,13 @@ When you run Speed Test, the app contacts Cloudflare's public speed test service
 
 Cloudflare may receive the network and request metadata normally associated with an HTTPS request, such as your IP address and timestamp. Cloudflare's handling of those requests is described in [Cloudflare's privacy policy](https://www.cloudflare.com/privacypolicy/).
 
+### Network Info
+
+- **What is sent:** Nothing is sent when the screen opens or when you refresh the local network. When you tap Check public IP, the app sends an HTTPS request to `api4.ipify.org` (IPv4) and to `api6.ipify.org` (IPv6). Each returns the public address that outside services see for your connection. For each address found, the app then requests a reverse DNS name through the system resolver and an approximate location and ASN from `ipinfo.io`, falling back to `ipwho.is` and `ipapi.co`. Only that public address is sent to the geolocation services.
+- **What stays on the device:** Interface addresses, gateways, DNS servers, MTU, Wi-Fi signal and link details, and any hardware address Android provides are read locally and are not uploaded.
+- **Wi-Fi network name:** Shown only when location permission has already been granted for the Wi-Fi Scanner. Network Info does not request any permission.
+- **Retention:** Public IP results are held in memory and cleared when the network changes or the app closes. Geolocation results use the same in-memory cache as Traceroute.
+
 ### Traceroute geolocation
 
 - **What is sent:** Traceroute IPv4 hop addresses that pass the app's local filter may be sent to `ipinfo.io` to retrieve approximate country, city, ISP, and ASN data for display. This can include special-purpose addresses that the filter does not recognize.
@@ -101,6 +108,7 @@ We do not sell your data. When you use a tool, the target and request details ar
 
 - Synthetic measurement traffic and ordinary HTTPS request metadata are sent to Cloudflare only when you run Speed Test.
 - DNS queries are sent to the resolver selected in DNS Lookup. RDAP/WHOIS queries are sent to IANA, `rdap.org`, registries, and any WHOIS referral servers needed to answer the query.
+- Public IP check requests go to `api4.ipify.org` and `api6.ipify.org` only when you tap Check public IP in Network Info. The geolocation services described in that section receive the resulting public address.
 - Target and request details are sent to the destinations selected or entered for network tools. IPv4 addresses found on a traceroute path that pass the app's local filter may be sent to `ipinfo.io` when you run Traceroute.
 - Crash and stability reports may be collected by the Google Play platform as described above.
 

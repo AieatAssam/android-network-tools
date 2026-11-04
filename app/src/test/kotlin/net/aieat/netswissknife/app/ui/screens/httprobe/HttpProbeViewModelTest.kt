@@ -8,6 +8,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -30,6 +31,7 @@ import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.HttpProbeParams
 import net.aieat.netswissknife.core.domain.HttpProbeUseCase
 import net.aieat.netswissknife.core.domain.validateHttpProbeUrl
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.httprobe.CrossOriginEntityReplay
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
@@ -52,6 +54,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -111,7 +114,7 @@ class HttpProbeViewModelTest {
                 ToolDestination.HostTarget(
                     HostTool.HTTP,
                     requireNotNull(ToolHost.parse("printer.local")),
-                    requireNotNull(ToolPort.parse(8080)),
+                    requireNotNull(ToolPort.parse(8443)),
                 ),
                 ToolSource.MDNS,
             )
@@ -127,7 +130,7 @@ class HttpProbeViewModelTest {
                 savedStateHandle = savedState,
             )
 
-        assertEquals("http://printer.local:8080/", handoffVm.uiState.value.url)
+        assertEquals("https://printer.local:8443/", handoffVm.uiState.value.url)
         assertEquals(ToolSource.MDNS, handoffVm.sourceContext)
         assertEquals(true, savedState.get<Boolean>("httpHandoffConsumed"))
         assertEquals("mdns", savedState.get<String>("httpHandoffSource"))
@@ -143,7 +146,7 @@ class HttpProbeViewModelTest {
                 ToolDestination.HostTarget(
                     HostTool.HTTP,
                     requireNotNull(ToolHost.parse("192.0.2.8")),
-                    requireNotNull(ToolPort.parse(8080)),
+                    requireNotNull(ToolPort.parse(8443)),
                 ),
                 ToolSource.LAN,
             )
@@ -157,7 +160,7 @@ class HttpProbeViewModelTest {
                     ),
             )
 
-        assertEquals("http://192.0.2.8:8080/", handoffVm.uiState.value.url)
+        assertEquals("https://192.0.2.8:8443/", handoffVm.uiState.value.url)
         assertEquals(ToolSource.LAN, handoffVm.sourceContext)
         assertFalse(handoffVm.uiState.value.isLoading)
         assertNull(handoffVm.uiState.value.result)
@@ -165,47 +168,83 @@ class HttpProbeViewModelTest {
     }
 
     @Test
-    fun `IPv6 HTTP targets get a bracketed URL and cleartext guidance`() {
+    fun `IPv6 TLS targets get a bracketed https URL that the probe accepts`() {
         listOf("fe80::1%wlan0", "[fe80::1%wlan0]", "[2001:db8::1]").forEach { host ->
             val target =
                 ToolDestination.HostTarget(
                     HostTool.HTTP,
                     requireNotNull(ToolHost.parse(host)),
-                    requireNotNull(ToolPort.parse(8080)),
+                    requireNotNull(ToolPort.parse(8443)),
                 )
 
             val url = httpUrlForTarget(target)
 
             val expectedHost = if ("%" in host) "fe80::1%25wlan0" else "2001:db8::1"
-            assertEquals("http://[$expectedHost]:8080/", url)
-            assertEquals(
-                "Plain HTTP requests are disabled in this release. Use an HTTPS URL.",
-                validateHttpProbeUrl(url),
-            )
+            assertEquals("https://[$expectedHost]:8443/", url)
+            assertNull(validateHttpProbeUrl(url!!))
         }
     }
 
     @Test
-    fun `edited mDNS URL is saved and takes precedence after recreation`() {
+    fun `handoff prefills https for 443 and 8443 and never produces a cleartext URL`() {
+        val host = requireNotNull(ToolHost.parse("printer.local"))
+
+        fun target(port: Int) = ToolDestination.HostTarget(HostTool.HTTP, host, requireNotNull(ToolPort.parse(port)))
+
+        assertEquals("https://printer.local/", httpUrlForTarget(target(443)))
+        assertEquals("https://printer.local:8443/", httpUrlForTarget(target(8443)))
+        listOf(80, 8080, 5000).forEach { port ->
+            assertNull(httpUrlForTarget(target(port)))
+        }
+    }
+
+    @Test
+    fun `plain HTTP mDNS service is not prefilled and explains why`() {
         val intent =
             ToolIntent(
                 ToolDestination.HostTarget(
                     HostTool.HTTP,
                     requireNotNull(ToolHost.parse("printer.local")),
-                    requireNotNull(ToolPort.parse(8080)),
+                    requireNotNull(ToolPort.parse(80)),
                 ),
                 ToolSource.MDNS,
             )
-        val savedState =
-            SavedStateHandle(
-                mapOf("intent" to ToolIntentCodec.encode(intent), "host" to "printer.local"),
+        val handoffVm =
+            HttpProbeViewModel(
+                useCase,
+                recentHostsRepository,
+                savedStateHandle =
+                    SavedStateHandle(
+                        mapOf("intent" to ToolIntentCodec.encode(intent), "host" to "printer.local"),
+                    ),
             )
-        val first = HttpProbeViewModel(useCase, recentHostsRepository, savedStateHandle = savedState)
-        first.onUrlChange("http://edited.local:9000/custom")
 
-        assertEquals("http://edited.local:9000/custom", savedState.get<String>("editedHttpUrl"))
-        assertEquals(true, savedState.get<Boolean>("httpHandoffConsumed"))
-        assertEquals("mdns", savedState.get<String>("httpHandoffSource"))
+        assertEquals("", handoffVm.uiState.value.url)
+        assertEquals(PlainHttpHandoff(host = "printer.local", port = 80), handoffVm.plainHttpHandoff.value)
+        assertEquals(ToolSource.MDNS, handoffVm.sourceContext)
+        assertFalse(handoffVm.hasInvalidHandoff.value)
+    }
+
+    @Test
+    fun `editing the handed-off URL clears the provenance and the stale banner`() {
+        val intent =
+            ToolIntent(
+                ToolDestination.HostTarget(
+                    HostTool.HTTP,
+                    requireNotNull(ToolHost.parse("printer.local")),
+                    requireNotNull(ToolPort.parse(8443)),
+                ),
+                ToolSource.MDNS,
+            )
+        val savedState = SavedStateHandle(mapOf("intent" to ToolIntentCodec.encode(intent), "host" to "printer.local"))
+        val handoffVm = HttpProbeViewModel(useCase, recentHostsRepository, savedStateHandle = savedState)
+        assertEquals(ToolSource.MDNS, handoffVm.sourceContext)
+
+        handoffVm.onUrlChange("https://printer.local:8443/admin")
+
+        assertNull(handoffVm.sourceContext)
+        assertNull(handoffVm.sourceContextState.value)
+        assertNull(savedState.get<String>("httpHandoffSource"))
         val recreated =
             HttpProbeViewModel(
                 useCase,
@@ -216,13 +255,51 @@ class HttpProbeViewModelTest {
                             "intent" to ToolIntentCodec.encode(intent),
                             "host" to "printer.local",
                             "httpHandoffConsumed" to true,
-                            "httpHandoffSource" to "mdns",
-                            "editedHttpUrl" to "http://edited.local:9000/custom",
+                            "editedHttpUrl" to "https://printer.local:8443/admin",
                         ),
                     ),
             )
-        assertEquals("http://edited.local:9000/custom", recreated.uiState.value.url)
-        assertEquals(ToolSource.MDNS, recreated.sourceContext)
+        assertNull(recreated.sourceContext)
+        assertEquals("https://printer.local:8443/admin", recreated.uiState.value.url)
+    }
+
+    @Test
+    fun `edited mDNS URL is saved and takes precedence after recreation`() {
+        val intent =
+            ToolIntent(
+                ToolDestination.HostTarget(
+                    HostTool.HTTP,
+                    requireNotNull(ToolHost.parse("printer.local")),
+                    requireNotNull(ToolPort.parse(8443)),
+                ),
+                ToolSource.MDNS,
+            )
+        val savedState =
+            SavedStateHandle(
+                mapOf("intent" to ToolIntentCodec.encode(intent), "host" to "printer.local"),
+            )
+        val first = HttpProbeViewModel(useCase, recentHostsRepository, savedStateHandle = savedState)
+        first.onUrlChange("https://edited.local:9000/custom")
+
+        assertEquals("https://edited.local:9000/custom", savedState.get<String>("editedHttpUrl"))
+        assertEquals(true, savedState.get<Boolean>("httpHandoffConsumed"))
+        assertNull(savedState.get<String>("httpHandoffSource"))
+        val recreated =
+            HttpProbeViewModel(
+                useCase,
+                recentHostsRepository,
+                savedStateHandle =
+                    SavedStateHandle(
+                        mapOf(
+                            "intent" to ToolIntentCodec.encode(intent),
+                            "host" to "printer.local",
+                            "httpHandoffConsumed" to true,
+                            "editedHttpUrl" to "https://edited.local:9000/custom",
+                        ),
+                    ),
+            )
+        assertEquals("https://edited.local:9000/custom", recreated.uiState.value.url)
+        assertNull(recreated.sourceContext)
         coVerify(exactly = 0) { useCase(any(), any()) }
     }
 
@@ -233,7 +310,7 @@ class HttpProbeViewModelTest {
                 ToolDestination.HostTarget(
                     HostTool.HTTP,
                     requireNotNull(ToolHost.parse("printer.local")),
-                    requireNotNull(ToolPort.parse(8080)),
+                    requireNotNull(ToolPort.parse(8443)),
                 ),
                 ToolSource.MDNS,
             )
@@ -252,13 +329,13 @@ class HttpProbeViewModelTest {
                             "host" to "printer.local",
                             "httpHandoffConsumed" to true,
                             "httpHandoffSource" to "mdns",
-                            "editedHttpUrl" to "http://printer.local:8080/",
+                            "editedHttpUrl" to "https://printer.local:8443/",
                         ),
                     ),
             )
 
-        assertEquals("http://printer.local:8080/", first.uiState.value.url)
-        assertEquals("http://printer.local:8080/", recreated.uiState.value.url)
+        assertEquals("https://printer.local:8443/", first.uiState.value.url)
+        assertEquals("https://printer.local:8443/", recreated.uiState.value.url)
         assertEquals(ToolSource.MDNS, recreated.sourceContext)
         assertFalse(recreated.uiState.value.isLoading)
         assertNull(recreated.uiState.value.result)
@@ -272,7 +349,7 @@ class HttpProbeViewModelTest {
                 ToolDestination.HostTarget(
                     HostTool.HTTP,
                     requireNotNull(ToolHost.parse("printer.local")),
-                    requireNotNull(ToolPort.parse(8080)),
+                    requireNotNull(ToolPort.parse(8443)),
                 ),
                 ToolSource.MDNS,
             )
@@ -319,7 +396,7 @@ class HttpProbeViewModelTest {
                     ToolDestination.HostTarget(
                         HostTool.HTTP,
                         requireNotNull(ToolHost.parse("printer.local")),
-                        requireNotNull(ToolPort.parse(8080)),
+                        requireNotNull(ToolPort.parse(8443)),
                     ),
                     ToolSource.LAN,
                 )
@@ -350,7 +427,7 @@ class HttpProbeViewModelTest {
 
                 handoffVm.clearPrefill()
 
-                assertEquals("http://printer.local:8080/", handoffVm.uiState.value.url)
+                assertEquals("https://printer.local:8443/", handoffVm.uiState.value.url)
                 assertEquals(ToolSource.LAN, handoffVm.sourceContext)
             } finally {
                 release.complete(Unit)
@@ -364,7 +441,7 @@ class HttpProbeViewModelTest {
                 ToolDestination.HostTarget(
                     HostTool.HTTP,
                     requireNotNull(ToolHost.parse("printer.local")),
-                    requireNotNull(ToolPort.parse(8080)),
+                    requireNotNull(ToolPort.parse(8443)),
                 ),
                 ToolSource.MDNS,
             )
@@ -768,6 +845,158 @@ class HttpProbeViewModelTest {
                 assertEquals("https://replacement.example", cancelViewModel.uiState.value.url)
                 assertFalse(cancelViewModel.uiState.value.isCanceled)
             }
+
+        @Test
+        fun `user cancel ends as canceled when the call reports a timeout after cancellation`() =
+            runTest {
+                val entered = CompletableDeferred<Unit>()
+                val release = CompletableDeferred<Unit>()
+                val repository =
+                    object : HttpProbeRepository {
+                        override suspend fun probe(request: HttpProbeRequest): NetworkResult<HttpProbeResult> {
+                            error("The session-aware path is required")
+                        }
+
+                        override suspend fun probe(
+                            request: HttpProbeRequest,
+                            operationSession: OperationSession,
+                        ): NetworkResult<HttpProbeResult> {
+                            entered.complete(Unit)
+                            // A call that does not stop promptly, then reports a timeout as a result.
+                            withContext(NonCancellable) { release.await() }
+                            return NetworkResult.error(
+                                ErrorCode.NETWORK_TIMEOUT,
+                                developerMessage = "HTTP request timed out",
+                            )
+                        }
+                    }
+                val cancelViewModel = HttpProbeViewModel(HttpProbeUseCase(repository), recentHostsRepository)
+                cancelViewModel.onUrlChange("https://example.com")
+                cancelViewModel.send()
+                withContext(Dispatchers.Default.limitedParallelism(1)) {
+                    withTimeout(5_000) { entered.await() }
+                }
+
+                cancelViewModel.cancel()
+                release.complete(Unit)
+
+                val finalState =
+                    withContext(Dispatchers.Default.limitedParallelism(1)) {
+                        withTimeout(5_000) { cancelViewModel.uiState.first { !it.isLoading } }
+                    }
+                assertTrue(finalState.isCanceled)
+                assertFalse(finalState.isCanceling)
+                assertNull(finalState.error)
+                assertNull(finalState.result)
+            }
+    }
+
+    @Nested
+    @DisplayName("cancel ordering")
+    inner class CancelOrdering {
+        private fun timeoutResult(): NetworkResult<HttpProbeResult> =
+            NetworkResult.error(
+                ErrorCode.NETWORK_TIMEOUT,
+                developerMessage = "HTTP request timed out",
+            )
+
+        private fun cancelOrderingViewModel(): HttpProbeViewModel =
+            HttpProbeViewModel(useCase, recentHostsRepository).also {
+                it.onUrlChange("https://example.com")
+            }
+
+        @Test
+        fun `cancel before the first emission ends canceled when a timeout arrives afterwards`() {
+            val release = CompletableDeferred<NetworkResult<HttpProbeResult>>()
+            coEvery { useCase(any(), any()) } coAnswers { release.await() }
+            val vm = cancelOrderingViewModel()
+
+            vm.send()
+            vm.cancel()
+            release.complete(timeoutResult())
+
+            val state = vm.uiState.value
+            assertTrue(state.isCanceled)
+            assertFalse(state.isLoading)
+            assertFalse(state.isCanceling)
+            assertNull(state.error)
+            assertNull(state.result)
+        }
+
+        @Test
+        fun `cancel immediately after send wins over a call that ignores cancellation and succeeds`() {
+            val release = CompletableDeferred<NetworkResult<HttpProbeResult>>()
+            coEvery { useCase(any(), any()) } coAnswers {
+                withContext(NonCancellable) { release.await() }
+            }
+            val vm = cancelOrderingViewModel()
+
+            vm.send()
+            vm.cancel()
+            release.complete(NetworkResult.Success(stubResult))
+
+            val state = vm.uiState.value
+            assertTrue(state.isCanceled)
+            assertFalse(state.isLoading)
+            assertNull(state.result)
+            assertNull(state.error)
+        }
+
+        @Test
+        fun `timeout reported while cancel is in flight ends canceled, not as a timeout`() {
+            val entered = CompletableDeferred<OperationSession>()
+            val release = CompletableDeferred<NetworkResult<HttpProbeResult>>()
+            coEvery { useCase(any(), any()) } coAnswers {
+                entered.complete(secondArg())
+                withContext(NonCancellable) { release.await() }
+            }
+            val vm = cancelOrderingViewModel()
+
+            vm.send()
+            assertTrue(entered.isCompleted)
+            vm.cancel()
+            // The session reports the cancel; the call then returns a timeout as a result.
+            assertEquals(CancellationReason.USER_STOP, entered.getCompleted().cancellationReason)
+            release.complete(timeoutResult())
+
+            val state = vm.uiState.value
+            assertTrue(state.isCanceled)
+            assertNull(state.error)
+        }
+
+        @Test
+        fun `a non-cancellation exception after cancel ends as canceled, not as a request failure`() {
+            val release = CompletableDeferred<Unit>()
+            coEvery { useCase(any(), any()) } coAnswers {
+                withContext(NonCancellable) { release.await() }
+                throw IOException("Canceled")
+            }
+            val vm = cancelOrderingViewModel()
+
+            vm.send()
+            vm.cancel()
+            release.complete(Unit)
+
+            val state = vm.uiState.value
+            assertTrue(state.isCanceled)
+            assertFalse(state.isLoading)
+            assertNull(state.error)
+        }
+
+        @Test
+        fun `a timeout that completes before cancel stays a timeout and cancel does nothing`() {
+            coEvery { useCase(any(), any()) } returns
+                timeoutResult()
+            val vm = cancelOrderingViewModel()
+
+            vm.send()
+            vm.cancel()
+
+            val state = vm.uiState.value
+            assertFalse(state.isCanceled)
+            assertFalse(state.isLoading)
+            assertTrue(state.error != null)
+        }
     }
 
     @Nested

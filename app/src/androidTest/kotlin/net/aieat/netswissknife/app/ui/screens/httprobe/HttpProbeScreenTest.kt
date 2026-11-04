@@ -332,6 +332,7 @@ class HttpProbeScreenTest {
         )
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContextState } returns MutableStateFlow(ToolSource.MDNS)
+        every { viewModel.plainHttpHandoff } returns MutableStateFlow<PlainHttpHandoff?>(null)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
         every { viewModel.networkStatus } returns MutableStateFlow(
             NetworkStatus(hasInternet = true, hasLocalNetwork = true)
@@ -362,6 +363,7 @@ class HttpProbeScreenTest {
         )
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContextState } returns MutableStateFlow(ToolSource.LAN)
+        every { viewModel.plainHttpHandoff } returns MutableStateFlow<PlainHttpHandoff?>(null)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
         every { viewModel.networkStatus } returns MutableStateFlow(
             NetworkStatus(hasInternet = true, hasLocalNetwork = true)
@@ -384,6 +386,7 @@ class HttpProbeScreenTest {
         every { viewModel.uiState } returns uiState
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContextState } returns sourceContext
+        every { viewModel.plainHttpHandoff } returns MutableStateFlow<PlainHttpHandoff?>(null)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
         every { viewModel.networkStatus } returns MutableStateFlow(
             NetworkStatus(hasInternet = true, hasLocalNetwork = true)
@@ -527,11 +530,11 @@ class HttpProbeScreenTest {
             .onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
             .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
         composeRule
-            .onNodeWithText(context.getString(R.string.httprobe_method_used))
+            .onNodeWithText(context.getString(R.string.httprobe_protocol_label))
             .performScrollTo()
             .assertIsDisplayed()
         composeRule
-            .onAllNodesWithText("https://example.com/[path omitted]")
+            .onAllNodesWithText("https://example.com/")
             .onFirst()
             .performScrollTo()
             .assertIsDisplayed()
@@ -638,6 +641,7 @@ class HttpProbeScreenTest {
         every { viewModel.uiState } returns MutableStateFlow(state)
         every { viewModel.recentHosts } returns MutableStateFlow(recentHostValues)
         every { viewModel.sourceContextState } returns MutableStateFlow(null)
+        every { viewModel.plainHttpHandoff } returns MutableStateFlow<PlainHttpHandoff?>(null)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
         every { viewModel.networkStatus } returns MutableStateFlow(
             NetworkStatus(hasInternet = true, hasLocalNetwork = true)
@@ -663,6 +667,7 @@ class HttpProbeScreenTest {
         every { viewModel.uiState } returns MutableStateFlow(HttpProbeUiState(result = result, selectedTab = 3))
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContextState } returns MutableStateFlow(null)
+        every { viewModel.plainHttpHandoff } returns MutableStateFlow<PlainHttpHandoff?>(null)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
         every { viewModel.networkStatus } returns MutableStateFlow(
             NetworkStatus(hasInternet = true, hasLocalNetwork = true)

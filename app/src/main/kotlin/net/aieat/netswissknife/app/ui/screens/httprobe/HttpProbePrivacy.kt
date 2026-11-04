@@ -2,7 +2,11 @@ package net.aieat.netswissknife.app.ui.screens.httprobe
 
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
 
-/** Keep visible redirect evidence useful without exposing credentials or token-bearing paths. */
+/**
+ * Keep visible redirect evidence useful without exposing credentials or token-bearing paths.
+ * A root address shows "/" because there is no path to hide. Only an existing path or query is
+ * marked as omitted.
+ */
 internal fun safeRedirectDisplayValue(value: String): String = runCatching {
     val uri = java.net.URI(value)
     val authority = uri.rawAuthority ?: return@runCatching "[redirect address omitted]"
@@ -11,12 +15,27 @@ internal fun safeRedirectDisplayValue(value: String): String = runCatching {
         append(host)
         if (uri.port >= 0) append(":${uri.port}")
     }
+    val pathPart =
+        when {
+            !uri.rawPath.isNullOrEmpty() && uri.rawPath != "/" -> "/[path omitted]"
+            uri.rawQuery != null -> "/[query omitted]"
+            else -> "/"
+        }
     when {
-        uri.isAbsolute -> "${uri.scheme}://$safeAuthority/[path omitted]"
-        value.startsWith("//") -> "//$safeAuthority/[path omitted]"
+        uri.isAbsolute -> "${uri.scheme}://$safeAuthority$pathPart"
+        value.startsWith("//") -> "//$safeAuthority$pathPart"
         else -> "[relative redirect address omitted]"
     }
 }.getOrElse { "[redirect address omitted]" }
+
+/** Case-insensitive lookup of the first value of a response header (HTTP/2 names are lowercase). */
+internal fun httpHeaderValue(
+    headers: Map<String, List<String>>,
+    name: String,
+): String? {
+    val entry = headers.entries.firstOrNull { it.key.equals(name, ignoreCase = true) } ?: return null
+    return entry.value.firstOrNull()
+}
 
 private val sensitiveHeaderNames = setOf("cookie", "set-cookie", "authorization", "proxy-authorization")
 

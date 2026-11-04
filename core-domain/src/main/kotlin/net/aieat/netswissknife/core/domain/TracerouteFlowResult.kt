@@ -14,6 +14,10 @@ sealed interface TracerouteFlowResult {
         val hostname: String?,
         val geoLocation: HopGeoLocation?,
     ) : TracerouteFlowResult
+
+    /** Emitted once, after the hops, when every reply came from this device: the host is unreachable from here. */
+    data object UnreachableFromThisDevice : TracerouteFlowResult
+
     data class ValidationError(val info: ErrorInfo) : TracerouteFlowResult {
         val message: String get() = info.developerCopy()
         constructor(message: String) : this(ErrorInfo(ErrorCode.UNKNOWN, developerMessage = message))

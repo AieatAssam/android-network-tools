@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Http
 import androidx.compose.material.icons.filled.Language
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SettingsEthernet
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.WifiFind
@@ -116,7 +118,7 @@ sealed class NavRoutes(
         }
     }
 
-    object SubnetCalculator : NavRoutes("subnet", "Subnet Calc", Icons.Default.Calculate)
+    object SubnetCalculator : NavRoutes("subnet", "Subnet Calculator", Icons.Default.Calculate)
 
     object MdnsDiscovery : NavRoutes("mdns", "mDNS Browser", Icons.Default.CellTower)
 
@@ -134,6 +136,10 @@ sealed class NavRoutes(
                 "&mac=${Uri.encode(destination.mac.value)}"
         }
     }
+
+    object NetworkInfo : NavRoutes("netinfo", "Network Info", Icons.Default.SettingsEthernet)
+
+    object MacLookup : NavRoutes("oui", "MAC Lookup", Icons.Default.Fingerprint)
 
     object Settings : NavRoutes("settings", "Settings", Icons.Default.Settings)
 
@@ -238,6 +244,20 @@ sealed class NavRoutes(
                     R.string.tool_wol_short_label,
                     Icons.Default.PowerSettingsNew,
                     R.string.tool_wol_description,
+                ),
+                ToolInfo(
+                    "netinfo",
+                    R.string.tool_netinfo_label,
+                    R.string.tool_netinfo_short_label,
+                    Icons.Default.SettingsEthernet,
+                    R.string.tool_netinfo_description,
+                ),
+                ToolInfo(
+                    "oui",
+                    R.string.tool_oui_label,
+                    R.string.tool_oui_short_label,
+                    Icons.Default.Fingerprint,
+                    R.string.tool_oui_description,
                 ),
             )
 

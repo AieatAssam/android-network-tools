@@ -43,18 +43,15 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AllInclusive
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.NetworkCheck
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
@@ -64,7 +61,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -91,25 +87,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import android.content.ClipData
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.ClipEntry
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -118,26 +107,32 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.launch
-import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
-import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
-import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
-import net.aieat.netswissknife.app.ui.components.ToolErrorCard
-import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
-import net.aieat.netswissknife.app.ui.components.ToolStopButton
-import net.aieat.netswissknife.app.ui.components.hapticAction
-import net.aieat.netswissknife.app.R
-import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolErrorCard
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
-import net.aieat.netswissknife.app.ui.theme.AppMotion
+import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import net.aieat.netswissknife.app.ui.components.ToolStopButton
+import net.aieat.netswissknife.app.ui.components.DisabledActionHint
+import net.aieat.netswissknife.app.ui.components.ToolTextField
+import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.components.messageRes
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
+import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
+import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
+import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.i18n.asString
+import net.aieat.netswissknife.app.ui.screens.ping.PingCsvSerializer
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
 import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
 import net.aieat.netswissknife.app.ui.screens.ping.pingChartSuccessSegments
-import net.aieat.netswissknife.app.ui.screens.ping.PingCsvSerializer
+import net.aieat.netswissknife.app.ui.theme.AppMotion
+import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.app.util.shareCsvFile
 import net.aieat.netswissknife.core.network.HostValidator
@@ -152,6 +147,8 @@ object PingScreenTestTags {
     const val SOURCE_CONTEXT = "ping_source_context"
     const val CLEAR_PREFILL_ACTION = "ping_clear_prefill_action"
     const val INVALID_HANDOFF = "ping_invalid_handoff"
+    const val INTERRUPTED_BANNER = "ping_interrupted_banner"
+    const val STALE_RESULT = "ping_stale_result"
 
     /** Index of the idle/running/finished/error results panel within [CONTENT_LIST]. */
     const val RESULTS_PANEL_INDEX = 2
@@ -199,10 +196,15 @@ fun PingScreen(
         onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 
-    // Stop continuous ping when the activity is backgrounded or the screen is locked (ON_STOP).
+    // Stop the run when the activity is backgrounded or the screen is locked (ON_STOP).
+    // Rotation also reaches ON_STOP; the Activity reports it via isChangingConfigurations,
+    // and the run must survive that.
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) viewModel.onLifecycleStop()
+            if (event == Lifecycle.Event.ON_STOP) {
+                val changingConfigurations = (context as? Activity)?.isChangingConfigurations == true
+                viewModel.onLifecycleStop(configurationChange = changingConfigurations)
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -219,109 +221,111 @@ fun PingScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().alpha(screenAlpha).testTag(PingScreenTestTags.CONTENT_LIST),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // ── Hero header ─────────────────────────────────────────────────
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // ── Hero header ─────────────────────────────────────────────────
+        item {
+            Box {
+                ToolStateAnnouncer(stringResource(R.string.help_ping_title), announcementPhase)
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    PingHeroHeader(onHelpClick = { showHelp = true })
+                    NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
+                }
+            }
+        }
+
+        if (hasInvalidHandoff) {
             item {
-                Box {
-                    ToolStateAnnouncer(stringResource(R.string.help_ping_title), announcementPhase)
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        PingHeroHeader(onHelpClick = { showHelp = true })
-                        NetworkStatusBanner(networkStatus, scope = NetworkStatusScope.INTERNET)
-                    }
-                }
-            }
-
-            if (hasInvalidHandoff) {
-                item {
-                    Text(
-                        text = stringResource(R.string.ping_invalid_handoff),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.testTag(PingScreenTestTags.INVALID_HANDOFF),
-                    )
-                }
-            }
-
-            if (sourceLabel != null) {
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = stringResource(sourceLabel),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.testTag(PingScreenTestTags.SOURCE_CONTEXT),
-                        )
-                        TextButton(
-                            onClick = viewModel::clearPrefill,
-                            enabled = uiState !is PingUiState.Running,
-                            modifier = Modifier.testTag(PingScreenTestTags.CLEAR_PREFILL_ACTION),
-                        ) {
-                            Text(stringResource(R.string.clear))
-                        }
-                    }
-                }
-            }
-
-            // ── Input card ──────────────────────────────────────────────────
-            item {
-                PingInputCard(
-                    host = host,
-                    count = count,
-                    timeoutMs = timeoutMs,
-                    payloadBytes = payloadBytes,
-                    ttl = ttl,
-                    intervalMs = intervalMs,
-                    isRunning = uiState is PingUiState.Running,
-                    continuousMode = continuousMode,
-                    recentHosts = recentHosts,
-                    onHostChange = viewModel::onHostChange,
-                    onCountChange = viewModel::onCountChange,
-                    onTimeoutChange = viewModel::onTimeoutChange,
-                    onPayloadSizeChange = viewModel::onPayloadSizeChange,
-                    onTtlChange = viewModel::onTtlChange,
-                    onIntervalChange = viewModel::onIntervalChange,
-                    onToggleContinuous = viewModel::onToggleContinuous,
-                    onStart = { requestLocalNetworkPermission(host) },
-                    onStop = viewModel::onStop,
-                    onRemoveRecentHost = viewModel::removeRecentHost,
-                    onClearRecentHosts = viewModel::clearRecentHosts
+                Text(
+                    text = stringResource(R.string.ping_invalid_handoff),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag(PingScreenTestTags.INVALID_HANDOFF),
                 )
             }
+        }
 
-            // ── Results area ─────────────────────────────────────────────────
+        if (sourceLabel != null) {
             item {
-                AnimatedContent(
-                    targetState = uiState,
-                    transitionSpec = {
-                        (fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 8 })
-                            .togetherWith(fadeOut(AppMotion.exit(200)))
-                    },
-                    contentKey = { it::class },
-                    label = "ping_state"
-                ) { state ->
-                    when (state) {
-                        is PingUiState.Idle -> PingIdlePanel()
-                        is PingUiState.Running -> PingRunningPanel(state)
-                        is PingUiState.Finished -> PingFinishedPanel(
-                            state = state,
-                            onToggleRaw = viewModel::onToggleRawView,
-                            onClear = viewModel::onClearResults
-                        )
-                        is PingUiState.Error -> PingErrorPanel(
-                            message = state.text.asString(),
-                            onRetry = { requestLocalNetworkPermission(host) },
-                            onClear = viewModel::onClearResults
-                        )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(sourceLabel),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.testTag(PingScreenTestTags.SOURCE_CONTEXT),
+                    )
+                    TextButton(
+                        onClick = viewModel::clearPrefill,
+                        enabled = uiState !is PingUiState.Running,
+                        modifier = Modifier.testTag(PingScreenTestTags.CLEAR_PREFILL_ACTION),
+                    ) {
+                        Text(stringResource(R.string.clear))
                     }
                 }
             }
         }
+
+        // ── Input card ──────────────────────────────────────────────────
+        item {
+            PingInputCard(
+                host = host,
+                count = count,
+                timeoutMs = timeoutMs,
+                payloadBytes = payloadBytes,
+                ttl = ttl,
+                intervalMs = intervalMs,
+                isRunning = uiState is PingUiState.Running,
+                continuousMode = continuousMode,
+                recentHosts = recentHosts,
+                onHostChange = viewModel::onHostChange,
+                onCountChange = viewModel::onCountChange,
+                onTimeoutChange = viewModel::onTimeoutChange,
+                onPayloadSizeChange = viewModel::onPayloadSizeChange,
+                onTtlChange = viewModel::onTtlChange,
+                onIntervalChange = viewModel::onIntervalChange,
+                onResetAdvanced = viewModel::onResetAdvancedOptions,
+                onToggleContinuous = viewModel::onToggleContinuous,
+                onStart = { requestLocalNetworkPermission(host) },
+                onStop = viewModel::onStop,
+                onRemoveRecentHost = viewModel::removeRecentHost,
+                onClearRecentHosts = viewModel::clearRecentHosts
+            )
+        }
+
+        // ── Results area ─────────────────────────────────────────────────
+        item {
+            AnimatedContent(
+                targetState = uiState,
+                transitionSpec = {
+                    (fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 8 })
+                        .togetherWith(fadeOut(AppMotion.exit(200)))
+                },
+                contentKey = { it::class },
+                label = "ping_state"
+            ) { state ->
+                when (state) {
+                    is PingUiState.Idle -> PingIdlePanel(hasHost = host.isNotBlank())
+                    is PingUiState.Running -> PingRunningPanel(state)
+                    is PingUiState.Finished -> PingFinishedPanel(
+                        state = state,
+                        currentHost = HostValidator.normalize(host) ?: host.trim(),
+                        onToggleRaw = viewModel::onToggleRawView,
+                        onClear = viewModel::onClearResults
+                    )
+                    is PingUiState.Error -> PingErrorPanel(
+                        message = state.text.asString(),
+                        onRetry = { requestLocalNetworkPermission(host) },
+                        onClear = viewModel::onClearResults
+                    )
+                }
+            }
+        }
+    }
 
     if (showHelp) {
         ToolHelpSheet(
@@ -408,24 +412,24 @@ private fun PingInputCard(
     onPayloadSizeChange: (Int) -> Unit,
     onTtlChange: (Int) -> Unit,
     onIntervalChange: (Int) -> Unit,
+    onResetAdvanced: () -> Unit,
     onToggleContinuous: (Boolean) -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
     onRemoveRecentHost: (String) -> Unit,
     onClearRecentHosts: () -> Unit
 ) {
-    val keyboardController = LocalSoftwareKeyboardController.current
+    val dismissKeyboard = rememberDismissKeyboard()
     val normalizedHost = HostValidator.normalize(host)
     val isHostInvalid = host.isNotBlank() && normalizedHost == null
     val canStart = normalizedHost != null
-
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Host input
-            OutlinedTextField(
+            ToolTextField(
                 value = host,
                 onValueChange = onHostChange,
                 label = { Text(stringResource(R.string.ping_host_label)) },
@@ -433,16 +437,9 @@ private fun PingInputCard(
                 leadingIcon = {
                     Icon(Icons.Default.NetworkCheck, contentDescription = null)
                 },
-                trailingIcon = {
-                    if (host.isNotEmpty()) {
-                        IconButton(onClick = { onHostChange("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
-                        }
-                    }
-                },
                 isError = isHostInvalid,
                 supportingText = if (isHostInvalid) {
-                    { Text(stringResource(R.string.error_invalid_host)) }
+                    { Text(stringResource(HostValidator.problemOf(host)?.messageRes() ?: R.string.error_host_invalid)) }
                 } else null,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
@@ -450,7 +447,7 @@ private fun PingInputCard(
                     imeAction = ImeAction.Go
                 ),
                 keyboardActions = KeyboardActions(onGo = {
-                    keyboardController?.hide()
+                    dismissKeyboard()
                     if (!isRunning && canStart) onStart()
                 }),
                 modifier = Modifier.fillMaxWidth().testTag(PingScreenTestTags.HOST_FIELD),
@@ -520,6 +517,7 @@ private fun PingInputCard(
                 onPayloadSizeChange = onPayloadSizeChange,
                 onTtlChange = onTtlChange,
                 onIntervalChange = onIntervalChange,
+                onResetAdvanced = onResetAdvanced,
                 enabled = !isRunning
             )
 
@@ -533,7 +531,7 @@ private fun PingInputCard(
             } else {
                 Button(
                     onClick = hapticAction {
-                        keyboardController?.hide()
+                        dismissKeyboard()
                         onStart()
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -542,6 +540,10 @@ private fun PingInputCard(
                     Icon(Icons.Default.Speed, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(stringResource(R.string.ping_start_button))
+                }
+                if (!canStart) {
+                    // A disabled button needs its reason next to it (PHA-12, V6A-12).
+                    DisabledActionHint(stringResource(R.string.ping_start_disabled_hint))
                 }
             }
         }
@@ -556,6 +558,7 @@ private fun PingAdvancedOptions(
     onPayloadSizeChange: (Int) -> Unit,
     onTtlChange: (Int) -> Unit,
     onIntervalChange: (Int) -> Unit,
+    onResetAdvanced: () -> Unit,
     enabled: Boolean
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -592,9 +595,20 @@ private fun PingAdvancedOptions(
                     )
                     PingSliderRow(
                         label = stringResource(R.string.ping_interval_label, intervalMs),
-                        value = intervalMs.toFloat(), valueRange = 100f..10_000f, steps = 49,
-                        onValueChange = { onIntervalChange(it.toInt()) }, enabled = enabled
+                        // 99 steps of 100 ms: 100 ms to 10 s in round values (V5-06).
+                        value = intervalMs.toFloat(),
+                        valueRange = 100f..10_000f,
+                        steps = 98,
+                        onValueChange = { onIntervalChange(it.toInt()) },
+                        enabled = enabled,
                     )
+                    TextButton(
+                        onClick = onResetAdvanced,
+                        enabled = enabled,
+                        modifier = Modifier.align(Alignment.End),
+                    ) {
+                        Text(stringResource(R.string.ping_reset_advanced))
+                    }
                 }
             }
         }
@@ -658,7 +672,7 @@ private fun PingTimeoutRow(timeoutMs: Int, onTimeoutChange: (Int) -> Unit, enabl
 // ── Idle panel ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun PingIdlePanel() {
+private fun PingIdlePanel(hasHost: Boolean) {
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -673,13 +687,14 @@ private fun PingIdlePanel() {
                 tint = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.size(48.dp)
             )
+            // The copy follows the field: a filled host is not "missing" (PHA-06).
             Text(
-                text = stringResource(R.string.ping_idle_title),
+                text = stringResource(if (hasHost) R.string.ping_idle_ready_title else R.string.ping_idle_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = stringResource(R.string.ping_idle_subtitle),
+                text = stringResource(if (hasHost) R.string.ping_idle_ready_subtitle else R.string.ping_idle_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.outline,
                 textAlign = TextAlign.Center
@@ -729,11 +744,6 @@ private fun PingRunningPanel(state: PingUiState.Running) {
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-                Text(
-                    text = state.host,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
                 if (state.packets.isNotEmpty()) {
                     val liveStats = state.stats ?: PingStats.compute(state.packets)
                     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
@@ -798,11 +808,10 @@ private fun PingRunningPanel(state: PingUiState.Running) {
 @Composable
 private fun PingFinishedPanel(
     state: PingUiState.Finished,
+    currentHost: String,
     onToggleRaw: () -> Unit,
     onClear: () -> Unit
 ) {
-    val clipboard = LocalClipboard.current
-    val coroutineScope = rememberCoroutineScope()
     val result = state.result
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_ping, result.host)
@@ -815,8 +824,35 @@ private fun PingFinishedPanel(
     )
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (state.interrupted) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.testTag(PingScreenTestTags.INTERRUPTED_BANNER),
+            ) {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.ping_interrupted_banner, result.stats.sent),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+        if (result.host != currentHost) {
+            Text(
+                text = stringResource(R.string.ping_stale_result, result.host),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag(PingScreenTestTags.STALE_RESULT),
+            )
+        }
         // Stats card
-        StatsCard(stats = result.stats, host = result.host)
+        StatsCard(stats = result.stats)
 
         // RTT chart
         if (result.packets.any { it.rtTimeMs != null }) {
@@ -836,11 +872,6 @@ private fun PingFinishedPanel(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
-                    IconButton(onClick = {
-                        coroutineScope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", PingCsvSerializer.serialize(result)))) }
-                    }) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.ping_copy_csv))
-                    }
                 }
                 if (result.packets.size < result.stats.sent) {
                     Text(
@@ -870,37 +901,28 @@ private fun PingFinishedPanel(
             onToggle = onToggleRaw
         )
 
-        // Action buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        // Copy sends the CSV; Share sends the session CSV file when there is one, else the same CSV as text.
+        ResultActionsRow(
+            copyText = PingCsvSerializer.serialize(result),
+            onShare = {
+                val logFile = state.sessionLogFile
+                if (logFile != null) {
+                    context.shareCsvFile(logFile, shareSubject, shareSummary)
+                } else {
+                    context.shareText(
+                        text = PingCsvSerializer.serialize(result),
+                        subject = shareSubject
+                    )
+                }
+            },
+        )
+        FilledTonalButton(
+            onClick = onClear,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            FilledTonalButton(
-                onClick = onClear,
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.Clear, contentDescription = null)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(stringResource(R.string.clear))
-            }
-            FilledTonalButton(
-                onClick = {
-                    val logFile = state.sessionLogFile
-                    if (logFile != null) {
-                        context.shareCsvFile(logFile, shareSubject, shareSummary)
-                    } else {
-                        context.shareText(
-                            text = PingCsvSerializer.serialize(result),
-                            subject = shareSubject
-                        )
-                    }
-                },
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.Share, contentDescription = null)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(stringResource(R.string.action_share))
-            }
+            Icon(Icons.Default.Clear, contentDescription = null)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(stringResource(R.string.clear))
         }
     }
 }
@@ -917,11 +939,7 @@ private fun PingErrorPanel(
         title = stringResource(R.string.ping_error_title),
         message = message,
     ) {
-        Button(onClick = onRetry) {
-            Icon(Icons.Default.Refresh, contentDescription = null)
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(stringResource(R.string.ping_retry))
-        }
+        ToolRetryButton(text = stringResource(R.string.ping_retry), onClick = onRetry)
         TextButton(onClick = onClear) { Text(stringResource(R.string.clear)) }
     }
 }
@@ -929,7 +947,7 @@ private fun PingErrorPanel(
 // ── Stats card ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun StatsCard(stats: PingStats, host: String) {
+private fun StatsCard(stats: PingStats) {
     var targetLoss   by remember { mutableStateOf(0f) }
     var targetMin    by remember { mutableStateOf(0f) }
     var targetAvg    by remember { mutableStateOf(0f) }
@@ -956,8 +974,8 @@ private fun StatsCard(stats: PingStats, host: String) {
                 .background(
                     Brush.linearGradient(
                         listOf(
-                            MaterialTheme.colorScheme.tertiaryContainer,
-                            MaterialTheme.colorScheme.primaryContainer
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            MaterialTheme.colorScheme.surface
                         )
                     )
                 )
@@ -967,12 +985,7 @@ private fun StatsCard(stats: PingStats, host: String) {
                 text = stringResource(R.string.ping_stats_header),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
-            )
-            Text(
-                text = host,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(12.dp))
             // Packet counts row
@@ -983,28 +996,27 @@ private fun StatsCard(stats: PingStats, host: String) {
                 StatItem(
                     label = stringResource(R.string.ping_packets_sent),
                     value = "${stats.sent}",
-                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 StatItem(
                     label = stringResource(R.string.ping_packets_received),
                     value = "${stats.received}",
-                    color = if (stats.received == stats.sent)
-                        MaterialTheme.colorScheme.tertiary
-                    else
-                        MaterialTheme.colorScheme.error
+                    // Received is a count, not a verdict: loss carries the warning colour (PHA-14).
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 StatItem(
                     label = stringResource(R.string.ping_packet_loss),
                     value = "${"%.0f".format(animLoss)}%",
+                    // Red is reserved for loss; a clean run reads as neutral, not as a success colour.
                     color = if (stats.lossPercent == 0f)
-                        MaterialTheme.colorScheme.tertiary
+                        MaterialTheme.colorScheme.onSurface
                     else
                         MaterialTheme.colorScheme.error
                 )
             }
             if (stats.received > 0) {
                 Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.2f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
                 Spacer(modifier = Modifier.height(12.dp))
                 // RTT stats row
                 Row(
@@ -1015,25 +1027,25 @@ private fun StatsCard(stats: PingStats, host: String) {
                         label = stringResource(R.string.ping_rtt_min),
                         value = "${animMin.toLong()}",
                         unit = stringResource(R.string.ping_ms_suffix),
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     StatItem(
                         label = stringResource(R.string.ping_rtt_avg),
                         value = "${"%.1f".format(animAvg)}",
                         unit = stringResource(R.string.ping_ms_suffix),
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     StatItem(
                         label = stringResource(R.string.ping_rtt_max),
                         value = "${animMax.toLong()}",
                         unit = stringResource(R.string.ping_ms_suffix),
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     StatItem(
                         label = stringResource(R.string.ping_rtt_jitter),
                         value = "${"%.1f".format(animJitter)}",
                         unit = stringResource(R.string.ping_ms_suffix),
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -1331,8 +1343,7 @@ private fun RawOutputCard(
     showRaw: Boolean,
     onToggle: () -> Unit
 ) {
-    val clipboard = LocalClipboard.current
-    val scope = rememberCoroutineScope()
+    val copyRaw = rememberCopyWithFeedback()
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1349,7 +1360,7 @@ private fun RawOutputCard(
                 Row {
                     if (showRaw) {
                         IconButton(onClick = {
-                            scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", rawOutput))) }
+                            copyRaw(rawOutput)
                         }) {
                             Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.ping_copy_raw))
                         }

@@ -1,7 +1,6 @@
 package net.aieat.netswissknife.core.network.speedtest
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onEach
@@ -422,7 +421,7 @@ class OkHttpTransferEngineTest {
                             url: String,
                             streams: Int,
                             durationMs: Long,
-                        ) = emptyFlow<ChunkEvent>()
+                        ) = flowOf(ChunkEvent(0, 128, 100))
                     }
 
                 val events =
@@ -440,6 +439,60 @@ class OkHttpTransferEngineTest {
                 assertTrue(events.none { it is SpeedTestEvent.Failed }, "phase-end RTT cancellation should be benign")
             } finally {
                 releaseLoadedCall.countDown()
+                server.close()
+            }
+        }
+
+    @Test
+    fun `upload response stall keeps bytes already sent and keeps measuring until the window ends`() =
+        runBlocking {
+            val server = MockWebServer()
+            server.start()
+            try {
+                server.dispatcher =
+                    object : Dispatcher() {
+                        override fun dispatch(request: RecordedRequest): MockResponse =
+                            MockResponse
+                                .Builder()
+                                .code(200)
+                                .headersDelay(2, TimeUnit.SECONDS)
+                                .build()
+                    }
+                val engine =
+                    OkHttpTransferEngine(
+                        OkHttpClient.Builder().readTimeout(300, TimeUnit.MILLISECONDS).build(),
+                    )
+                val chunks = engine.upload(server.url("/__up").toString(), streams = 1, durationMs = 1_000).toList()
+                assertTrue(chunks.sumOf { it.bytes } > 0, "a stalled upload must keep the bytes it already sent")
+            } finally {
+                server.close()
+            }
+        }
+
+    @Test
+    fun `upload window cancels an in-flight request when the phase duration ends`() =
+        runBlocking {
+            val server = MockWebServer()
+            server.start()
+            try {
+                server.dispatcher =
+                    object : Dispatcher() {
+                        override fun dispatch(request: RecordedRequest): MockResponse =
+                            MockResponse
+                                .Builder()
+                                .code(200)
+                                .headersDelay(3, TimeUnit.SECONDS)
+                                .build()
+                    }
+                val engine =
+                    OkHttpTransferEngine(
+                        OkHttpClient.Builder().readTimeout(30, TimeUnit.SECONDS).build(),
+                    )
+                val startedNs = System.nanoTime()
+                engine.upload(server.url("/__up").toString(), streams = 1, durationMs = 500).toList()
+                val elapsedMs = (System.nanoTime() - startedNs) / 1_000_000L
+                assertTrue(elapsedMs < 2_000, "upload must end near its 500 ms window, took ${elapsedMs}ms")
+            } finally {
                 server.close()
             }
         }
@@ -495,7 +548,7 @@ class OkHttpTransferEngineTest {
                             url: String,
                             streams: Int,
                             durationMs: Long,
-                        ) = emptyFlow<ChunkEvent>()
+                        ) = flowOf(ChunkEvent(0, 128, 100))
                     }
                 val repo =
                     SpeedTestRepositoryImpl(

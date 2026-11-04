@@ -831,6 +831,36 @@ class WifiScanViewModelTest {
             }
 
         @Test
+        fun `scan in flight survives a configuration-change pause`() =
+            runWifiTest {
+                val pendingResult = pendingScanResult()
+                coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } coAnswers {
+                    pendingResult.await()
+                }
+                viewModel.startScan()
+                runCurrent()
+                assertTrue(viewModel.uiState.value is WifiScanUiState.Scanning)
+
+                viewModel.onLifecyclePause(configurationChange = true)
+                runCurrent()
+                assertTrue(viewModel.uiState.value is WifiScanUiState.Scanning)
+                assertTrue(!viewModel.autoRefresh.value)
+
+                pendingResult.complete(stubResult(stubAp()))
+                // The operation runner finishes on real executors, so poll with a bound.
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+                while (viewModel.uiState.value !is WifiScanUiState.Success && System.nanoTime() < deadline) {
+                    runCurrent()
+                    Thread.sleep(10)
+                }
+                viewModel.onLifecycleResume()
+                runCurrent()
+
+                assertTrue(viewModel.uiState.value is WifiScanUiState.Success)
+                viewModel.stopAutoRefresh()
+            }
+
+        @Test
         fun `changing refresh interval while paused does not restart refresh`() =
             runWifiTest {
                 coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(stubAp())

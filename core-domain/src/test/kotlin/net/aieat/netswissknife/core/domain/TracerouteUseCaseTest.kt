@@ -128,6 +128,43 @@ class TracerouteUseCaseTest {
         }
     }
 
+    // ── Unreachable from this device ───────────────────────────────────────────
+
+    @Nested
+    @DisplayName("unreachable from this device")
+    inner class UnreachableFromThisDevice {
+        private val device = "10.109.208.146"
+        private val localUseCase = TracerouteUseCase(tracerouteRepo, geoRepo, localAddresses = { setOf(device) })
+
+        private fun stubTrace(vararg hops: HopResult) {
+            every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns flowOf(*hops)
+            coEvery { geoRepo.lookup(any(), any()) } returns null
+        }
+
+        @Test
+        fun `replies that only come from this device emit the unreachable explanation`() =
+            runTest {
+                stubTrace(
+                    HopResult(1, device, null, 3L, HopStatus.SUCCESS),
+                    HopResult(2, device, null, 3L, HopStatus.SUCCESS),
+                )
+
+                val results = localUseCase(TracerouteParams("10.109.208.250")).toList()
+
+                assertEquals(1, results.count { it is TracerouteFlowResult.UnreachableFromThisDevice })
+            }
+
+        @Test
+        fun `a trace that reaches the destination does not emit the explanation`() =
+            runTest {
+                stubTrace(HopResult(1, device, null, 3L, HopStatus.SUCCESS, destinationReached = true))
+
+                val results = localUseCase(TracerouteParams("10.109.208.146")).toList()
+
+                assertEquals(0, results.count { it is TracerouteFlowResult.UnreachableFromThisDevice })
+            }
+    }
+
     // ── Happy path ─────────────────────────────────────────────────────────────
 
     @Nested
