@@ -568,16 +568,16 @@
         <error line="21" column="29" source="standard:class-signature" />
         <error line="21" column="59" source="standard:class-signature" />
         <error line="22" column="5" source="standard:blank-line-before-declaration" />
-        <error line="32" column="18" source="standard:function-signature" />
-        <error line="32" column="35" source="standard:function-signature" />
-        <error line="32" column="69" source="standard:function-signature" />
-        <error line="32" column="90" source="standard:function-signature" />
-        <error line="41" column="85" source="standard:function-signature" />
-        <error line="45" column="20" source="standard:function-signature" />
-        <error line="45" column="37" source="standard:function-signature" />
-        <error line="45" column="81" source="standard:function-signature" />
-        <error line="53" column="14" source="standard:trailing-comma-on-call-site" />
-        <error line="56" column="51" source="standard:function-signature" />
+        <error line="34" column="18" source="standard:function-signature" />
+        <error line="34" column="35" source="standard:function-signature" />
+        <error line="34" column="69" source="standard:function-signature" />
+        <error line="34" column="90" source="standard:function-signature" />
+        <error line="43" column="85" source="standard:function-signature" />
+        <error line="47" column="20" source="standard:function-signature" />
+        <error line="47" column="37" source="standard:function-signature" />
+        <error line="47" column="81" source="standard:function-signature" />
+        <error line="55" column="14" source="standard:trailing-comma-on-call-site" />
+        <error line="58" column="51" source="standard:function-signature" />
     </file>
     <file name="src/main/kotlin/net/aieat/netswissknife/core/network/net/LocalDestinationPolicy.kt">
         <error line="10" column="30" source="standard:class-signature" />

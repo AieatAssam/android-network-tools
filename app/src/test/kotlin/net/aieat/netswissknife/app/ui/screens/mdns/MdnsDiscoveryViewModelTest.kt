@@ -4,31 +4,35 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewModelScope
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import net.aieat.netswissknife.core.domain.MdnsDiscoveryUseCase
-import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
+import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.app.mdns.MdnsIoOperation
+import net.aieat.netswissknife.app.mdns.MdnsNoLocalNetworkException
+import net.aieat.netswissknife.app.mdns.MdnsPacketIoException
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.core.domain.MdnsDiscoveryUseCase
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
-import net.aieat.netswissknife.core.network.mdns.MdnsUpdate
 import net.aieat.netswissknife.core.network.mdns.MdnsTruncationReason
+import net.aieat.netswissknife.core.network.mdns.MdnsUpdate
+import net.aieat.netswissknife.core.network.net.LocalNetworkBindingUnavailableException
+import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationRequirement
 import net.aieat.netswissknife.core.network.operation.OperationSession
@@ -43,21 +47,22 @@ import org.junit.jupiter.api.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("MdnsDiscoveryViewModel")
 class MdnsDiscoveryViewModelTest {
-
     private val testDispatcher = UnconfinedTestDispatcher()
 
     private lateinit var useCase: MdnsDiscoveryUseCase
     private lateinit var viewModel: MdnsDiscoveryViewModel
 
-    private fun stubService(name: String = "printer", type: String = "_ipp._tcp.local.") =
-        DiscoveredService(
-            serviceType = type,
-            instanceName = name,
-            displayName = name,
-            hostname = "$name.local",
-            port = 631,
-            ipAddresses = listOf("192.168.1.50")
-        )
+    private fun stubService(
+        name: String = "printer",
+        type: String = "_ipp._tcp.local.",
+    ) = DiscoveredService(
+        serviceType = type,
+        instanceName = name,
+        displayName = name,
+        hostname = "$name.local",
+        port = 631,
+        ipAddresses = listOf("192.168.1.50"),
+    )
 
     @BeforeEach
     fun setUp() {
@@ -67,17 +72,18 @@ class MdnsDiscoveryViewModelTest {
     }
 
     @AfterEach
-    fun tearDown() = runBlocking {
-        // startScan() also runs a while(true){delay(100)} timer job in viewModelScope;
-        // drain it before resetMain() so it never touches Main afterwards.
-        viewModel.viewModelScope.coroutineContext.job.cancelAndJoin()
-        Dispatchers.resetMain()
-    }
+    fun tearDown() =
+        runBlocking {
+            // startScan() also runs a while(true){delay(100)} timer job in viewModelScope;
+            // drain it before resetMain() so it never touches Main afterwards.
+            viewModel.viewModelScope.coroutineContext.job
+                .cancelAndJoin()
+            Dispatchers.resetMain()
+        }
 
     @Nested
     @DisplayName("initial state")
     inner class InitialState {
-
         @Test
         fun `starts idle with no services`() {
             val state = viewModel.uiState.value
@@ -90,7 +96,6 @@ class MdnsDiscoveryViewModelTest {
     @Nested
     @DisplayName("startScan")
     inner class StartScan {
-
         @Test
         fun `sets isScanning true immediately`() {
             every { useCase(any(), any()) } returns flow { awaitCancellation() }
@@ -101,70 +106,77 @@ class MdnsDiscoveryViewModelTest {
         }
 
         @Test
-        fun `marks permission denial distinctly and keeps generic discovery errors general`() = runTest {
-            every { useCase(any(), any()) } returns flow { throw LocalNetworkPermissionDeniedException(SecurityException("denied")) }
+        fun `marks permission denial distinctly and keeps generic discovery errors general`() =
+            runTest {
+                every { useCase(any(), any()) } returns flow { throw LocalNetworkPermissionDeniedException(SecurityException("denied")) }
 
-            viewModel.startScan()
+                viewModel.startScan()
 
-            assertEquals(NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED, viewModel.uiState.value.networkErrorKind)
+                assertEquals(NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED, viewModel.uiState.value.networkErrorKind)
 
-            viewModel.reset()
-            every { useCase(any(), any()) } returns flow { throw IllegalStateException("timeout") }
-            viewModel.startScan()
-            assertEquals(NetworkErrorKind.GENERAL, viewModel.uiState.value.networkErrorKind)
-        }
-
-        @Test
-        fun `accumulates discovered services grouped by type`() = runTest {
-            val svc = stubService()
-            every { useCase(any(), any()) } returns flowOf(
-                MdnsUpdate.ServiceFound(svc),
-                MdnsUpdate.DiscoveryComplete(totalFound = 1)
-            )
-
-            viewModel.startScan()
-
-            val state = viewModel.uiState.value
-            assertEquals(1, state.services.size)
-            assertEquals(listOf(svc), state.servicesByType[svc.serviceType])
-            assertTrue(state.scanComplete)
-            assertTrue(!state.isScanning)
-            assertEquals(1, state.totalFound)
-        }
+                viewModel.reset()
+                every { useCase(any(), any()) } returns flow { throw IllegalStateException("timeout") }
+                viewModel.startScan()
+                assertEquals(NetworkErrorKind.GENERAL, viewModel.uiState.value.networkErrorKind)
+            }
 
         @Test
-        fun `retains explicit truncation reasons with partial services`() = runTest {
-            val svc = stubService()
-            every { useCase(any(), any()) } returns flowOf(
-                MdnsUpdate.ServiceFound(svc),
-                MdnsUpdate.DiscoveryComplete(
-                    totalFound = 1,
-                    truncationReasons = setOf(MdnsTruncationReason.QUERY_LIMIT),
-                ),
-            )
+        fun `accumulates discovered services grouped by type`() =
+            runTest {
+                val svc = stubService()
+                every { useCase(any(), any()) } returns
+                    flowOf(
+                        MdnsUpdate.ServiceFound(svc),
+                        MdnsUpdate.DiscoveryComplete(totalFound = 1),
+                    )
 
-            viewModel.startScan()
+                viewModel.startScan()
 
-            assertEquals(listOf(svc), viewModel.uiState.value.services)
-            assertEquals(setOf(MdnsTruncationReason.QUERY_LIMIT), viewModel.uiState.value.truncationReasons)
-        }
+                val state = viewModel.uiState.value
+                assertEquals(1, state.services.size)
+                assertEquals(listOf(svc), state.servicesByType[svc.serviceType])
+                assertTrue(state.scanComplete)
+                assertTrue(!state.isScanning)
+                assertEquals(1, state.totalFound)
+            }
 
         @Test
-        fun `re-discovering the same instance replaces it instead of duplicating`() = runTest {
-            val first = stubService()
-            val updated = first.copy(hostname = "printer2.local")
-            every { useCase(any(), any()) } returns flowOf(
-                MdnsUpdate.ServiceFound(first),
-                MdnsUpdate.ServiceFound(updated),
-                MdnsUpdate.DiscoveryComplete(totalFound = 1)
-            )
+        fun `retains explicit truncation reasons with partial services`() =
+            runTest {
+                val svc = stubService()
+                every { useCase(any(), any()) } returns
+                    flowOf(
+                        MdnsUpdate.ServiceFound(svc),
+                        MdnsUpdate.DiscoveryComplete(
+                            totalFound = 1,
+                            truncationReasons = setOf(MdnsTruncationReason.QUERY_LIMIT),
+                        ),
+                    )
 
-            viewModel.startScan()
+                viewModel.startScan()
 
-            val state = viewModel.uiState.value
-            assertEquals(1, state.services.size)
-            assertEquals("printer2.local", state.services.single().hostname)
-        }
+                assertEquals(listOf(svc), viewModel.uiState.value.services)
+                assertEquals(setOf(MdnsTruncationReason.QUERY_LIMIT), viewModel.uiState.value.truncationReasons)
+            }
+
+        @Test
+        fun `re-discovering the same instance replaces it instead of duplicating`() =
+            runTest {
+                val first = stubService()
+                val updated = first.copy(hostname = "printer2.local")
+                every { useCase(any(), any()) } returns
+                    flowOf(
+                        MdnsUpdate.ServiceFound(first),
+                        MdnsUpdate.ServiceFound(updated),
+                        MdnsUpdate.DiscoveryComplete(totalFound = 1),
+                    )
+
+                viewModel.startScan()
+
+                val state = viewModel.uiState.value
+                assertEquals(1, state.services.size)
+                assertEquals("printer2.local", state.services.single().hostname)
+            }
 
         @Test
         fun `is a no-op while already scanning`() {
@@ -177,21 +189,80 @@ class MdnsDiscoveryViewModelTest {
         }
 
         @Test
-        fun `sets error state and stops scanning on failure`() = runTest {
-            every { useCase(any(), any()) } returns flow { throw RuntimeException("mdns failed") }
+        fun `sets error state and stops scanning on failure`() =
+            runTest {
+                every { useCase(any(), any()) } returns flow { throw RuntimeException("mdns failed") }
 
-            viewModel.startScan()
+                viewModel.startScan()
 
-            val state = viewModel.uiState.value
-            assertEquals("mdns failed", state.error)
-            assertTrue(!state.isScanning)
-        }
+                val state = viewModel.uiState.value
+                assertEquals("mdns failed", state.error)
+                assertTrue(!state.isScanning)
+            }
+
+        @Test
+        fun `local network that cannot multicast maps to the plain no-local-network reason`() =
+            runTest {
+                every { useCase(any(), any()) } returns flow { throw MdnsNoLocalNetworkException() }
+
+                viewModel.startScan()
+
+                val state = viewModel.uiState.value
+                assertEquals(MdnsScanFailure.NO_LOCAL_NETWORK, state.errorReason)
+                assertTrue(!state.isScanning)
+            }
+
+        @Test
+        fun `failed bind to the selected network maps to the plain network-failed reason`() =
+            runTest {
+                every { useCase(any(), any()) } returns
+                    flow {
+                        throw LocalNetworkBindingUnavailableException("required UDP network traffic")
+                    }
+
+                viewModel.startScan()
+
+                val state = viewModel.uiState.value
+                assertEquals(MdnsScanFailure.NETWORK_FAILED, state.errorReason)
+                assertTrue(!state.isScanning)
+            }
+
+        @Test
+        fun `socket failure maps to the plain network-failed reason`() =
+            runTest {
+                every { useCase(any(), any()) } returns
+                    flow {
+                        throw MdnsPacketIoException(MdnsIoOperation.SEND_QUERY, java.net.SocketException("ENETUNREACH"))
+                    }
+
+                viewModel.startScan()
+
+                assertEquals(MdnsScanFailure.NETWORK_FAILED, viewModel.uiState.value.errorReason)
+            }
+
+        @Test
+        fun `interrupted completion keeps found services and raises a note instead of an error`() =
+            runTest {
+                every { useCase(any(), any()) } returns
+                    flow {
+                        emit(MdnsUpdate.ServiceFound(stubService()))
+                        emit(MdnsUpdate.DiscoveryComplete(totalFound = 1, networkInterrupted = true))
+                    }
+
+                viewModel.startScan()
+
+                val state = viewModel.uiState.value
+                assertEquals(null, state.error)
+                assertEquals(null, state.errorReason)
+                assertTrue(state.networkInterrupted)
+                assertTrue(state.scanComplete)
+                assertEquals(1, state.services.size)
+            }
     }
 
     @Nested
     @DisplayName("stopScan and reset")
     inner class StopAndReset {
-
         @Test
         fun `stopScan sets isScanning false`() {
             every { useCase(any(), any()) } returns flow { awaitCancellation() }
@@ -206,10 +277,11 @@ class MdnsDiscoveryViewModelTest {
         fun `cancellation keeps partial results and does not become a discovery error`() {
             val partial = stubService()
             val sessionSlot = slot<OperationSession>()
-            every { useCase(any(), capture(sessionSlot)) } returns flow {
-                emit(MdnsUpdate.ServiceFound(partial))
-                awaitCancellation()
-            }
+            every { useCase(any(), capture(sessionSlot)) } returns
+                flow {
+                    emit(MdnsUpdate.ServiceFound(partial))
+                    awaitCancellation()
+                }
             viewModel.startScan()
 
             viewModel.stopScan()
@@ -245,67 +317,73 @@ class MdnsDiscoveryViewModelTest {
         }
 
         @Test
-        fun `scan remains canceling until cleanup finishes then enables retry`() = runTest {
-            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-            every { useCase(any(), any()) } returns flow {
-                try {
-                    awaitCancellation()
-                } finally {
-                    withContext(NonCancellable) { delay(100) }
-                }
+        fun `scan remains canceling until cleanup finishes then enables retry`() =
+            runTest {
+                Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+                every { useCase(any(), any()) } returns
+                    flow {
+                        try {
+                            awaitCancellation()
+                        } finally {
+                            withContext(NonCancellable) { delay(100) }
+                        }
+                    }
+
+                viewModel.startScan()
+                testScheduler.runCurrent()
+                viewModel.stopScan()
+
+                assertTrue(viewModel.uiState.value.isScanning)
+                assertTrue(viewModel.uiState.value.isCanceling)
+                viewModel.startScan()
+                verify(exactly = 1) { useCase(any(), any()) }
+
+                testScheduler.advanceTimeBy(100)
+                testScheduler.runCurrent()
+
+                assertTrue(!viewModel.uiState.value.isScanning)
+                assertTrue(viewModel.uiState.value.scanCanceled)
+                viewModel.startScan()
+                testScheduler.runCurrent()
+                verify(exactly = 2) { useCase(any(), any()) }
+                viewModel.stopScan()
+                testScheduler.runCurrent()
+                viewModel.viewModelScope.coroutineContext.job
+                    .cancelAndJoin()
             }
 
-            viewModel.startScan()
-            testScheduler.runCurrent()
-            viewModel.stopScan()
-
-            assertTrue(viewModel.uiState.value.isScanning)
-            assertTrue(viewModel.uiState.value.isCanceling)
-            viewModel.startScan()
-            verify(exactly = 1) { useCase(any(), any()) }
-
-            testScheduler.advanceTimeBy(100)
-            testScheduler.runCurrent()
-
-            assertTrue(!viewModel.uiState.value.isScanning)
-            assertTrue(viewModel.uiState.value.scanCanceled)
-            viewModel.startScan()
-            testScheduler.runCurrent()
-            verify(exactly = 2) { useCase(any(), any()) }
-            viewModel.stopScan()
-            testScheduler.runCurrent()
-            viewModel.viewModelScope.coroutineContext.job.cancelAndJoin()
-        }
-
         @Test
-        fun `late old run error cannot replace a restarted scan state`() = runTest {
-            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-            every { useCase(any(), any()) } returnsMany listOf(
-                flow {
-                    try {
-                        awaitCancellation()
-                    } finally {
-                        withContext(NonCancellable) { throw IllegalStateException("late old failure") }
-                    }
-                },
-                flow { awaitCancellation() },
-            )
+        fun `late old run error cannot replace a restarted scan state`() =
+            runTest {
+                Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+                every { useCase(any(), any()) } returnsMany
+                    listOf(
+                        flow {
+                            try {
+                                awaitCancellation()
+                            } finally {
+                                withContext(NonCancellable) { throw IllegalStateException("late old failure") }
+                            }
+                        },
+                        flow { awaitCancellation() },
+                    )
 
-            viewModel.startScan()
-            testScheduler.runCurrent()
-            viewModel.reset()
-            viewModel.startScan()
-            testScheduler.runCurrent()
+                viewModel.startScan()
+                testScheduler.runCurrent()
+                viewModel.reset()
+                viewModel.startScan()
+                testScheduler.runCurrent()
 
-            val state = viewModel.uiState.value
-            assertTrue(state.isScanning)
-            assertEquals(null, state.error)
-            assertTrue(state.services.isEmpty())
+                val state = viewModel.uiState.value
+                assertTrue(state.isScanning)
+                assertEquals(null, state.error)
+                assertTrue(state.services.isEmpty())
 
-            viewModel.stopScan()
-            testScheduler.runCurrent()
-            viewModel.viewModelScope.coroutineContext.job.cancelAndJoin()
-        }
+                viewModel.stopScan()
+                testScheduler.runCurrent()
+                viewModel.viewModelScope.coroutineContext.job
+                    .cancelAndJoin()
+            }
 
         @Test
         fun `clearing view model records lifecycle pause`() {
@@ -321,16 +399,18 @@ class MdnsDiscoveryViewModelTest {
         }
 
         @Test
-        fun `reset clears back to default state`() = runTest {
-            every { useCase(any(), any()) } returns flowOf(
-                MdnsUpdate.ServiceFound(stubService()),
-                MdnsUpdate.DiscoveryComplete(totalFound = 1)
-            )
-            viewModel.startScan()
+        fun `reset clears back to default state`() =
+            runTest {
+                every { useCase(any(), any()) } returns
+                    flowOf(
+                        MdnsUpdate.ServiceFound(stubService()),
+                        MdnsUpdate.DiscoveryComplete(totalFound = 1),
+                    )
+                viewModel.startScan()
 
-            viewModel.reset()
+                viewModel.reset()
 
-            assertEquals(MdnsDiscoveryUiState(), viewModel.uiState.value)
-        }
+                assertEquals(MdnsDiscoveryUiState(), viewModel.uiState.value)
+            }
     }
 }

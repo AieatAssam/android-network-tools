@@ -22,6 +22,8 @@ sealed class MdnsUpdate {
     data class DiscoveryComplete(
         val totalFound: Int,
         val truncationReasons: Set<MdnsTruncationReason> = emptySet(),
+        /** True when the local network changed mid-scan; services found before the change are kept. */
+        val networkInterrupted: Boolean = false,
     ) : MdnsUpdate()
 }
 

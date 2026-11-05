@@ -134,6 +134,12 @@ class AndroidNetworkBinder(
             ?.interfaceName
             ?.let { name -> runCatching { NetworkInterface.getByName(name) }.getOrNull() }
 
+    override fun supportsLocalMulticast(): Boolean {
+        val selected = selectedLocalNetwork ?: return false
+        return selected.snapshot.capabilities.transports
+            .any { it == Transport.WIFI || it == Transport.ETHERNET }
+    }
+
     override fun localAddress(): InetAddress? =
         selectedLocalNetwork
             ?.linkProperties
