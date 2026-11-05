@@ -15,10 +15,10 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.navigation.NavType
-import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
@@ -38,13 +38,12 @@ import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.navigation.navigateFromToolHandoff
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-
 
 /**
  * Covers mDNS Browser's help sheet, incremental service discovery, Scan/Stop
@@ -57,11 +56,12 @@ import org.junit.Assert.assertTrue
 @RunWith(AndroidJUnit4::class)
 class MdnsDiscoveryScreenTest {
     @get:Rule
-    val permissionRule: GrantPermissionRule = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
-        GrantPermissionRule.grant(Manifest.permission.NEARBY_WIFI_DEVICES)
-    } else {
-        GrantPermissionRule.grant()
-    }
+    val permissionRule: GrantPermissionRule =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            GrantPermissionRule.grant(Manifest.permission.NEARBY_WIFI_DEVICES)
+        } else {
+            GrantPermissionRule.grant()
+        }
 
     @get:Rule
     val composeRule = createComposeRule()
@@ -92,8 +92,12 @@ class MdnsDiscoveryScreenTest {
         // if the underlying screen has its own infinite (e.g. refresh-spin) animation.
         composeRule.mainClock.autoAdvance = true
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodes(androidx.compose.ui.test.isRoot())
-                .fetchSemanticsNodes().size > 1
+            composeRule
+                .onAllNodes(
+                    androidx.compose.ui.test
+                        .isRoot(),
+                ).fetchSemanticsNodes()
+                .size > 1
         }
         composeRule.mainClock.autoAdvance = false
 
@@ -108,13 +112,14 @@ class MdnsDiscoveryScreenTest {
         val first = fakeService("_http._tcp", "printer")
         val second = fakeService("_http._tcp", "nas")
 
-        val stateFlow = MutableStateFlow(
-            MdnsDiscoveryUiState(
-                isScanning = true,
-                services = listOf(first),
-                servicesByType = mapOf("_http._tcp" to listOf(first))
+        val stateFlow =
+            MutableStateFlow(
+                MdnsDiscoveryUiState(
+                    isScanning = true,
+                    services = listOf(first),
+                    servicesByType = mapOf("_http._tcp" to listOf(first)),
+                ),
             )
-        )
         composeRule.setContent {
             NetSwissKnifeTheme {
                 MdnsDiscoveryScreen(viewModel = fakeViewModel(flow = stateFlow))
@@ -123,10 +128,11 @@ class MdnsDiscoveryScreenTest {
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule.onNodeWithText("printer").assertIsDisplayed()
 
-        stateFlow.value = stateFlow.value.copy(
-            services = listOf(first, second),
-            servicesByType = mapOf("_http._tcp" to listOf(first, second))
-        )
+        stateFlow.value =
+            stateFlow.value.copy(
+                services = listOf(first, second),
+                servicesByType = mapOf("_http._tcp" to listOf(first, second)),
+            )
         composeRule.mainClock.advanceTimeBy(500L)
 
         composeRule.onNodeWithText("printer").assertIsDisplayed()
@@ -165,9 +171,10 @@ class MdnsDiscoveryScreenTest {
 
     @Test
     fun canceledEmptyState_isDistinctFromIdleAndCanBeCleared() {
-        val stateFlow = MutableStateFlow(
-            MdnsDiscoveryUiState(isScanning = true, isCanceling = true),
-        )
+        val stateFlow =
+            MutableStateFlow(
+                MdnsDiscoveryUiState(isScanning = true, isCanceling = true),
+            )
         val viewModel = fakeViewModel(flow = stateFlow)
         composeRule.setContent {
             NetSwissKnifeTheme {
@@ -176,8 +183,10 @@ class MdnsDiscoveryScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
 
-        composeRule.onNodeWithText(context.getString(R.string.mdns_canceling_button))
-            .assertIsDisplayed().assertIsNotEnabled()
+        composeRule
+            .onNodeWithText(context.getString(R.string.mdns_canceling_button))
+            .assertIsDisplayed()
+            .assertIsNotEnabled()
         composeRule.onNodeWithText(context.getString(R.string.mdns_canceled_title)).assertDoesNotExist()
         composeRule.onNodeWithText(context.getString(R.string.mdns_canceled_empty_body)).assertDoesNotExist()
         composeRule.onNodeWithText(context.getString(R.string.mdns_idle_hint)).assertDoesNotExist()
@@ -195,14 +204,15 @@ class MdnsDiscoveryScreenTest {
     @Test
     fun cancelingAndCanceledPartialStatesKeepServicesVisible() {
         val service = fakeService("_http._tcp", "printer")
-        val stateFlow = MutableStateFlow(
-            MdnsDiscoveryUiState(
-                isScanning = true,
-                isCanceling = true,
-                services = listOf(service),
-                servicesByType = mapOf(service.serviceType to listOf(service)),
-            ),
-        )
+        val stateFlow =
+            MutableStateFlow(
+                MdnsDiscoveryUiState(
+                    isScanning = true,
+                    isCanceling = true,
+                    services = listOf(service),
+                    servicesByType = mapOf(service.serviceType to listOf(service)),
+                ),
+            )
         composeRule.setContent {
             NetSwissKnifeTheme {
                 MdnsDiscoveryScreen(viewModel = fakeViewModel(flow = stateFlow))
@@ -210,8 +220,10 @@ class MdnsDiscoveryScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
 
-        composeRule.onNodeWithText(context.getString(R.string.mdns_canceling_button))
-            .assertIsDisplayed().assertIsNotEnabled()
+        composeRule
+            .onNodeWithText(context.getString(R.string.mdns_canceling_button))
+            .assertIsDisplayed()
+            .assertIsNotEnabled()
         composeRule.onNodeWithText("printer").assertIsDisplayed()
 
         stateFlow.value = stateFlow.value.copy(isScanning = false, isCanceling = false, scanCanceled = true)
@@ -223,9 +235,10 @@ class MdnsDiscoveryScreenTest {
 
     @Test
     fun socketSetupFailure_showsErrorAndDismissResets() {
-        val viewModel = fakeViewModel(
-            state = MdnsDiscoveryUiState(error = "setsockopt failed: ENODEV")
-        )
+        val viewModel =
+            fakeViewModel(
+                state = MdnsDiscoveryUiState(error = "setsockopt failed: ENODEV"),
+            )
         composeRule.setContent {
             NetSwissKnifeTheme {
                 MdnsDiscoveryScreen(viewModel = viewModel)
@@ -233,7 +246,8 @@ class MdnsDiscoveryScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
 
-        composeRule.onNodeWithText("setsockopt failed: ENODEV").assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.mdns_error_general)).assertIsDisplayed()
+        composeRule.onNodeWithText("setsockopt failed: ENODEV").assertDoesNotExist()
         composeRule.onNodeWithText(context.getString(R.string.mdns_error_dismiss)).performClick()
 
         verify(exactly = 1) { viewModel.reset() }
@@ -245,12 +259,14 @@ class MdnsDiscoveryScreenTest {
         composeRule.setContent {
             NetSwissKnifeTheme {
                 MdnsDiscoveryScreen(
-                    viewModel = fakeViewModel(
-                        state = MdnsDiscoveryUiState(
-                            services = listOf(service),
-                            servicesByType = mapOf("_http._tcp" to listOf(service))
-                        )
-                    )
+                    viewModel =
+                        fakeViewModel(
+                            state =
+                                MdnsDiscoveryUiState(
+                                    services = listOf(service),
+                                    servicesByType = mapOf("_http._tcp" to listOf(service)),
+                                ),
+                        ),
                 )
             }
         }
@@ -263,12 +279,14 @@ class MdnsDiscoveryScreenTest {
     fun pingHostnameAction_navigatesWithValidatedMdnsIntentWithoutStartingProbe() {
         val service = fakeService("_http._tcp", "printer")
         val navigatedRoutes = mutableListOf<String>()
-        val viewModel = fakeViewModel(
-            state = MdnsDiscoveryUiState(
-                services = listOf(service),
-                servicesByType = mapOf(service.serviceType to listOf(service)),
-            ),
-        )
+        val viewModel =
+            fakeViewModel(
+                state =
+                    MdnsDiscoveryUiState(
+                        services = listOf(service),
+                        servicesByType = mapOf(service.serviceType to listOf(service)),
+                    ),
+            )
         composeRule.setContent {
             NetSwissKnifeTheme {
                 MdnsDiscoveryScreen(viewModel = viewModel, onNavigate = navigatedRoutes::add)
@@ -277,11 +295,14 @@ class MdnsDiscoveryScreenTest {
         composeRule.mainClock.advanceTimeBy(1_000L)
 
         assertTrue(navigatedRoutes.isEmpty())
-        composeRule.onNodeWithContentDescription(
-            context.getString(R.string.mdns_ping_hostname_description, "printer.local"),
-        ).assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.mdns_ping_hostname))
-            .performScrollTo().performClick()
+        composeRule
+            .onNodeWithContentDescription(
+                context.getString(R.string.mdns_ping_hostname_description, "printer.local"),
+            ).assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.mdns_ping_hostname))
+            .performScrollTo()
+            .performClick()
 
         val uri = Uri.parse(navigatedRoutes.single())
         val intent = ToolIntentCodec.decode(requireNotNull(uri.getQueryParameter("intent")))
@@ -295,12 +316,14 @@ class MdnsDiscoveryScreenTest {
     fun httpServiceAction_navigatesWithTypedHostPortSourceAndDoesNotSend() {
         val service = fakeService("_http._tcp", "printer")
         val navigatedRoutes = mutableListOf<String>()
-        val viewModel = fakeViewModel(
-            state = MdnsDiscoveryUiState(
-                services = listOf(service),
-                servicesByType = mapOf(service.serviceType to listOf(service)),
-            ),
-        )
+        val viewModel =
+            fakeViewModel(
+                state =
+                    MdnsDiscoveryUiState(
+                        services = listOf(service),
+                        servicesByType = mapOf(service.serviceType to listOf(service)),
+                    ),
+            )
         composeRule.setContent {
             NetSwissKnifeTheme {
                 MdnsDiscoveryScreen(viewModel = viewModel, onNavigate = navigatedRoutes::add)
@@ -308,9 +331,11 @@ class MdnsDiscoveryScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
 
-        composeRule.onNodeWithContentDescription(
-            context.getString(R.string.mdns_http_probe_description, "printer"),
-        ).performScrollTo().performClick()
+        composeRule
+            .onNodeWithContentDescription(
+                context.getString(R.string.mdns_http_probe_description, "printer"),
+            ).performScrollTo()
+            .performClick()
 
         val route = navigatedRoutes.single()
         assertTrue(route.startsWith("httprobe?"))
@@ -334,12 +359,14 @@ class MdnsDiscoveryScreenTest {
         composeRule.setContent {
             NetSwissKnifeTheme {
                 MdnsDiscoveryScreen(
-                    viewModel = fakeViewModel(
-                        state = MdnsDiscoveryUiState(
-                            services = services,
-                            servicesByType = services.groupBy { it.serviceType },
+                    viewModel =
+                        fakeViewModel(
+                            state =
+                                MdnsDiscoveryUiState(
+                                    services = services,
+                                    servicesByType = services.groupBy { it.serviceType },
+                                ),
                         ),
-                    ),
                 )
             }
         }
@@ -351,13 +378,15 @@ class MdnsDiscoveryScreenTest {
     @Test
     fun httpHandoff_keepsMdnsBelowPrefilledProbeAndBackReturnsWithoutSending() {
         val service = fakeService("_http._tcp", "printer")
-        val mdnsViewModel = fakeViewModel(
-            state = MdnsDiscoveryUiState(
-                services = listOf(service),
-                servicesByType = mapOf(service.serviceType to listOf(service)),
-                totalFound = 1,
-            ),
-        )
+        val mdnsViewModel =
+            fakeViewModel(
+                state =
+                    MdnsDiscoveryUiState(
+                        services = listOf(service),
+                        servicesByType = mapOf(service.serviceType to listOf(service)),
+                        totalFound = 1,
+                    ),
+            )
         every { mdnsViewModel.networkStatus } returns MutableStateFlow(NetworkStatus(hasLocalNetwork = true))
         var sends = 0
 
@@ -372,24 +401,26 @@ class MdnsDiscoveryScreenTest {
                     }
                     composable(
                         route = NavRoutes.HttpProbe.route,
-                        arguments = listOf(
-                            navArgument("intent") {
-                                type = NavType.StringType
-                                nullable = true
-                                defaultValue = null
-                            },
-                            navArgument("host") {
-                                type = NavType.StringType
-                                nullable = true
-                                defaultValue = null
-                            },
-                        ),
+                        arguments =
+                            listOf(
+                                navArgument("intent") {
+                                    type = NavType.StringType
+                                    nullable = true
+                                    defaultValue = null
+                                },
+                                navArgument("host") {
+                                    type = NavType.StringType
+                                    nullable = true
+                                    defaultValue = null
+                                },
+                            ),
                     ) { entry ->
                         val host = entry.arguments?.getString("host")
                         val intent = entry.arguments?.getString("intent")?.let(ToolIntentCodec::decode)
-                        val target = (intent?.destination as? ToolDestination.HostTarget)
-                            ?.takeIf { it.tool == HostTool.HTTP && it.port != null }
-                            ?.takeIf { ToolHost.parse(host.orEmpty())?.canonical == it.host.canonical }
+                        val target =
+                            (intent?.destination as? ToolDestination.HostTarget)
+                                ?.takeIf { it.tool == HostTool.HTTP && it.port != null }
+                                ?.takeIf { ToolHost.parse(host.orEmpty())?.canonical == it.host.canonical }
                         Column {
                             Text("HTTP Probe route host: $host")
                             Text("Decoded target: ${target?.host?.value}:${target?.port?.value}")
@@ -406,9 +437,11 @@ class MdnsDiscoveryScreenTest {
 
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule.onNodeWithText("printer").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription(
-            context.getString(R.string.mdns_http_probe_description, "printer"),
-        ).performScrollTo().performClick()
+        composeRule
+            .onNodeWithContentDescription(
+                context.getString(R.string.mdns_http_probe_description, "printer"),
+            ).performScrollTo()
+            .performClick()
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule.onNodeWithText("HTTP Probe route host: printer.local").assertIsDisplayed()
         composeRule.onNodeWithText("Decoded target: printer.local:8080").assertIsDisplayed()
@@ -424,20 +457,23 @@ class MdnsDiscoveryScreenTest {
 
     @Test
     fun pingResolvedAddressAction_ignoresInvalidServiceHostAndCarriesSelectedIp() {
-        val service = fakeService("_http._tcp", "printer").copy(
-            hostname = "192.168.1.52",
-            ipAddresses = listOf("invalid address", "example.com", "192.168.1.51"),
-        )
+        val service =
+            fakeService("_http._tcp", "printer").copy(
+                hostname = "192.168.1.52",
+                ipAddresses = listOf("invalid address", "example.com", "192.168.1.51"),
+            )
         val navigatedRoutes = mutableListOf<String>()
         composeRule.setContent {
             NetSwissKnifeTheme {
                 MdnsDiscoveryScreen(
-                    viewModel = fakeViewModel(
-                        state = MdnsDiscoveryUiState(
-                            services = listOf(service),
-                            servicesByType = mapOf(service.serviceType to listOf(service)),
+                    viewModel =
+                        fakeViewModel(
+                            state =
+                                MdnsDiscoveryUiState(
+                                    services = listOf(service),
+                                    servicesByType = mapOf(service.serviceType to listOf(service)),
+                                ),
                         ),
-                    ),
                     onNavigate = navigatedRoutes::add,
                 )
             }
@@ -445,11 +481,15 @@ class MdnsDiscoveryScreenTest {
         composeRule.mainClock.advanceTimeBy(1_000L)
 
         assertTrue(navigatedRoutes.isEmpty())
-        composeRule.onNodeWithText(context.getString(R.string.mdns_ping_hostname))
+        composeRule
+            .onNodeWithText(context.getString(R.string.mdns_ping_hostname))
             .assertDoesNotExist()
-        composeRule.onNodeWithText(context.getString(R.string.mdns_ping_address, "192.168.1.51"))
-            .performScrollTo().performClick()
-        composeRule.onNodeWithText(context.getString(R.string.mdns_ping_address, "example.com"))
+        composeRule
+            .onNodeWithText(context.getString(R.string.mdns_ping_address, "192.168.1.51"))
+            .performScrollTo()
+            .performClick()
+        composeRule
+            .onNodeWithText(context.getString(R.string.mdns_ping_address, "example.com"))
             .assertDoesNotExist()
 
         val uri = Uri.parse(navigatedRoutes.single())
@@ -459,25 +499,29 @@ class MdnsDiscoveryScreenTest {
         assertEquals(ToolSource.MDNS, intent?.source)
     }
 
-    private fun fakeService(serviceType: String, name: String) = DiscoveredService(
+    private fun fakeService(
+        serviceType: String,
+        name: String,
+    ) = DiscoveredService(
         serviceType = serviceType,
         instanceName = "$name.$serviceType.local.",
         displayName = name,
         hostname = "$name.local",
         port = 8080,
         ipAddresses = listOf("192.168.1.50"),
-        txtRecords = emptyMap()
+        txtRecords = emptyMap(),
     )
 
     private fun fakeViewModel(
         state: MdnsDiscoveryUiState? = null,
-        flow: MutableStateFlow<MdnsDiscoveryUiState>? = null
+        flow: MutableStateFlow<MdnsDiscoveryUiState>? = null,
     ): MdnsDiscoveryViewModel {
         val viewModel = mockk<MdnsDiscoveryViewModel>(relaxed = true)
         every { viewModel.uiState } returns (flow ?: MutableStateFlow(state ?: MdnsDiscoveryUiState()))
-        every { viewModel.networkStatus } returns MutableStateFlow(
-            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
-        )
+        every { viewModel.networkStatus } returns
+            MutableStateFlow(
+                NetworkStatus(hasInternet = true, hasLocalNetwork = true),
+            )
         return viewModel
     }
 }

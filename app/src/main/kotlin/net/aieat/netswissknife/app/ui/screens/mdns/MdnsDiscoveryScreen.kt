@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.mdns
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -164,6 +165,26 @@ fun MdnsDiscoveryScreen(
                     TruncationBanner(uiState.truncationReasons, scanComplete = uiState.scanComplete)
                 }
 
+                if (uiState.networkInterrupted) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Top,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = stringResource(R.string.mdns_interrupted_notice),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
                 ControlRow(
                     isScanning = uiState.isScanning,
                     isCanceling = uiState.isCanceling,
@@ -212,7 +233,7 @@ fun MdnsDiscoveryScreen(
                         }
 
                         "error" -> {
-                            ErrorCard(uiState.error ?: "Unknown error") { viewModel.reset() }
+                            ErrorCard(stringResource(uiState.errorReason.messageRes())) { viewModel.reset() }
                         }
 
                         else -> {
@@ -431,6 +452,15 @@ private fun TruncationBanner(
         )
     }
 }
+
+@StringRes
+private fun MdnsScanFailure?.messageRes(): Int =
+    when (this) {
+        MdnsScanFailure.PERMISSION_DENIED -> R.string.mdns_error_permission
+        MdnsScanFailure.NO_LOCAL_NETWORK -> R.string.mdns_error_no_local_network
+        MdnsScanFailure.NETWORK_FAILED -> R.string.mdns_error_network_failed
+        MdnsScanFailure.GENERAL, null -> R.string.mdns_error_general
+    }
 
 @Composable
 private fun limitsText(reasons: Set<MdnsTruncationReason>): String {

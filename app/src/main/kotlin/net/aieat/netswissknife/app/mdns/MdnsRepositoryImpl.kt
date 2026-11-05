@@ -34,6 +34,7 @@ import net.aieat.netswissknife.core.network.operation.ResourceScopeCloseExceptio
 import net.aieat.netswissknife.core.network.operation.ResourceScopeClosedException
 import org.xbill.DNS.AAAARecord
 import org.xbill.DNS.ARecord
+import org.xbill.DNS.Message
 import org.xbill.DNS.PTRRecord
 import org.xbill.DNS.SRVRecord
 import org.xbill.DNS.Section
@@ -108,6 +109,11 @@ internal class MdnsPacketIoException(
             (cause.message?.let { ": $it" } ?: ""),
         cause,
     )
+
+/** No Wi-Fi or Ethernet network (or no usable multicast interface on it) can carry mDNS traffic. */
+private const val NO_MULTICAST_NETWORK_MESSAGE = "No Wi-Fi or Ethernet network can carry mDNS discovery traffic"
+
+internal class MdnsNoLocalNetworkException : IOException(NO_MULTICAST_NETWORK_MESSAGE)
 
 private class PlatformMdnsSocket(
     private val socket: MulticastSocket,
@@ -257,12 +263,19 @@ class MdnsRepositoryImpl
                     }
                 // Publish terminal success only after OperationRunner has closed the group,
                 // socket, and multicast lock successfully.
-                send(MdnsUpdate.DiscoveryComplete(outcome.totalFound, outcome.truncationReasons))
+                send(
+                    MdnsUpdate.DiscoveryComplete(
+                        outcome.totalFound,
+                        outcome.truncationReasons,
+                        outcome.networkInterrupted,
+                    ),
+                )
             }.flowOn(Dispatchers.IO)
 
         private data class MdnsDiscoveryOutcome(
             val totalFound: Int,
             val truncationReasons: Set<MdnsTruncationReason>,
+            val networkInterrupted: Boolean = false,
         )
 
         private suspend fun OperationContext.runDiscovery(
@@ -285,6 +298,8 @@ class MdnsRepositoryImpl
             val lockLease = registerResource(MulticastLockLease(multicastLock))
             lockLease.acquire()
             ensureOperationActive()
+            // Checked before any socket exists: cellular and VPN paths cannot carry LAN multicast.
+            requireMulticastNetwork(networkBinder)
 
             val mdnsSocket = socketFactory()
             val socketLease = registerResource(MdnsSocketLease(mdnsSocket))
@@ -292,6 +307,7 @@ class MdnsRepositoryImpl
             mdnsSocket.reuseAddress = true
             mdnsSocket.bindToNetwork(networkBinder)
             val multicastInterface = networkBinder.localInterface()
+            requireUsableMulticastInterface(networkBinder, multicastInterface)
             mdnsSocket.networkInterface = multicastInterface
             ensureOperationActive()
 
@@ -343,96 +359,55 @@ class MdnsRepositoryImpl
             if (elapsedMillis() < scanWindowMs) {
                 sendBoundedQuery(META_QUERY, Type.PTR)
             }
-            while (true) {
-                ensureOperationActive()
-                val nowMs = elapsedMillis()
-                val remainingMs = scanWindowMs - nowMs
-                if (remainingMs <= 0L) break
-
-                mdnsSocket.soTimeout =
-                    minOf(SOCKET_TIMEOUT_MS.toLong(), remainingMs)
-                        .coerceAtLeast(1L)
-                        .toInt()
-
-                if (nowMs - lastRequeryMs >= REQUERY_INTERVAL_MS) {
-                    // Retry service enumeration while no types are known: multicast loss must
-                    // not turn the whole scan window into a false empty result.
-                    val refreshNames =
-                        discovery.serviceTypes
-                            .takeIf { it.isNotEmpty() }
-                            ?.map { "$it.local." }
-                            ?: listOf(META_QUERY)
-                    for (name in refreshNames) {
-                        if (!sendBoundedQuery(name, Type.PTR)) break
-                    }
-                    lastRequeryMs = nowMs
-                    recordOutcome()
-                }
-
-                val packet = receivePacket(mdnsSocket) ?: continue
-                ensureOperationActive()
-                val message = MdnsPacketParser.parsePacket(packet) ?: continue
-
-                val records = mutableListOf<MdnsSessionRecord>()
-                recordsLoop@ for (section in listOf(Section.ANSWER, Section.AUTHORITY, Section.ADDITIONAL)) {
-                    for (record in message.getSection(section)) {
-                        if (records.size >= discoveryLimits.maxRecordsPerPacket) {
-                            discovery.markPacketRecordLimitReached()
-                            break@recordsLoop
-                        }
-                        when (record.type) {
-                            Type.PTR -> {
-                                val ptr = record as PTRRecord
-                                records += MdnsSessionRecord.Ptr(record.name.toString(), ptr.target.toString())
-                            }
-
-                            Type.SRV -> {
-                                val srv = record as SRVRecord
-                                records +=
-                                    MdnsSessionRecord.Srv(
-                                        record.name.toString(),
-                                        srv.target.toString(),
-                                        srv.port,
-                                    )
-                            }
-
-                            Type.TXT -> {
-                                val txt = record as TXTRecord
-
-                                @Suppress("UNCHECKED_CAST")
-                                val strings = txt.strings as List<String>
-                                records += MdnsSessionRecord.Txt(record.name.toString(), strings)
-                            }
-
-                            Type.A -> {
-                                val a = record as ARecord
-                                val ip = a.address.hostAddress ?: continue
-                                records += MdnsSessionRecord.Address(record.name.toString(), ip)
-                            }
-
-                            Type.AAAA -> {
-                                val aaaa = record as AAAARecord
-                                val ip = aaaa.address.hostAddress ?: continue
-                                records += MdnsSessionRecord.Address(record.name.toString(), ip)
-                            }
-                        }
-                    }
-                }
-
-                val result = discovery.process(records)
-                recordOutcome()
-                for (query in result.queries) {
-                    sendBoundedQuery(query.name, query.type.toDnsType())
-                }
-                recordOutcome()
-                for (service in result.services) {
+            var networkInterrupted = false
+            try {
+                while (true) {
                     ensureOperationActive()
-                    onServiceSendAttempt?.invoke(service.instanceName)
-                    collector.send(MdnsUpdate.ServiceFound(service))
-                    sentServiceNames += service.instanceName
+                    val nowMs = elapsedMillis()
+                    val remainingMs = scanWindowMs - nowMs
+                    if (remainingMs <= 0L) break
+
+                    mdnsSocket.soTimeout =
+                        minOf(SOCKET_TIMEOUT_MS.toLong(), remainingMs)
+                            .coerceAtLeast(1L)
+                            .toInt()
+
+                    if (nowMs - lastRequeryMs >= REQUERY_INTERVAL_MS) {
+                        // Retry service enumeration while no types are known: multicast loss must
+                        // not turn the whole scan window into a false empty result.
+                        val refreshNames =
+                            discovery.serviceTypes
+                                .takeIf { it.isNotEmpty() }
+                                ?.map { "$it.local." }
+                                ?: listOf(META_QUERY)
+                        refreshNames.takeWhile { name -> sendBoundedQuery(name, Type.PTR) }
+                        lastRequeryMs = nowMs
+                        recordOutcome()
+                    }
+
+                    val packet = receivePacket(mdnsSocket) ?: continue
+                    ensureOperationActive()
+                    val message = MdnsPacketParser.parsePacket(packet) ?: continue
+
+                    val records = collectRecords(message, discovery, discoveryLimits.maxRecordsPerPacket)
+                    val result = discovery.process(records)
                     recordOutcome()
-                    onServiceSendAccepted?.invoke(service.instanceName)
+                    for (query in result.queries) {
+                        sendBoundedQuery(query.name, query.type.toDnsType())
+                    }
+                    recordOutcome()
+                    for (service in result.services) {
+                        ensureOperationActive()
+                        onServiceSendAttempt?.invoke(service.instanceName)
+                        collector.send(MdnsUpdate.ServiceFound(service))
+                        sentServiceNames += service.instanceName
+                        recordOutcome()
+                        onServiceSendAccepted?.invoke(service.instanceName)
+                    }
                 }
+            } catch (lost: MdnsPacketIoException) {
+                networkInterrupted = keepPartialResults(lost, hasResults = sentServiceNames.isNotEmpty())
+                membershipLease.tolerateLeaveFailure = networkInterrupted
             }
 
             recordOutcome()
@@ -444,7 +419,7 @@ class MdnsRepositoryImpl
                 recordOutcome()
                 onServiceSendAccepted?.invoke(service.instanceName)
             }
-            val outcome = MdnsDiscoveryOutcome(sentServiceNames.size, discovery.truncationReasons)
+            val outcome = MdnsDiscoveryOutcome(sentServiceNames.size, discovery.truncationReasons, networkInterrupted)
             updateOutcome(outcome)
             ensureOperationActive()
             return outcome
@@ -506,6 +481,9 @@ class MdnsRepositoryImpl
             private val networkInterface: NetworkInterface?,
             private val isCancellation: () -> Boolean,
         ) : AutoCloseable {
+            /** Set when the network vanished mid-scan: the dead interface may refuse the leave call. */
+            @Volatile
+            var tolerateLeaveFailure = false
             private val lock = Any()
             private var closed = false
             private var joining = false
@@ -546,7 +524,11 @@ class MdnsRepositoryImpl
                         (joining || cancelled) to shouldLeave
                     }
                 if (leaveGroup) {
-                    socket.leaveGroup(address, networkInterface)
+                    if (tolerateLeaveFailure) {
+                        runCatching { socket.leaveGroup(address, networkInterface) }
+                    } else {
+                        socket.leaveGroup(address, networkInterface)
+                    }
                 }
                 if (closeSocket) {
                     // Do not wait for joinGroup here: socket close is what releases a blocking join.
@@ -611,6 +593,92 @@ class MdnsRepositoryImpl
             message.orEmpty().contains("ENODEV", ignoreCase = true) ||
                 message.orEmpty().contains("no such device", ignoreCase = true)
     }
+
+private fun collectRecords(
+    message: Message,
+    discovery: MdnsDiscoverySession,
+    maxRecordsPerPacket: Int,
+): MutableList<MdnsSessionRecord> {
+    val records = mutableListOf<MdnsSessionRecord>()
+    recordsLoop@ for (section in listOf(Section.ANSWER, Section.AUTHORITY, Section.ADDITIONAL)) {
+        for (record in message.getSection(section)) {
+            if (records.size >= maxRecordsPerPacket) {
+                discovery.markPacketRecordLimitReached()
+                break@recordsLoop
+            }
+            when (record.type) {
+                Type.PTR -> {
+                    val ptr = record as PTRRecord
+                    records += MdnsSessionRecord.Ptr(record.name.toString(), ptr.target.toString())
+                }
+
+                Type.SRV -> {
+                    val srv = record as SRVRecord
+                    records +=
+                        MdnsSessionRecord.Srv(
+                            record.name.toString(),
+                            srv.target.toString(),
+                            srv.port,
+                        )
+                }
+
+                Type.TXT -> {
+                    val txt = record as TXTRecord
+
+                    @Suppress("UNCHECKED_CAST")
+                    val strings = txt.strings as List<String>
+                    records += MdnsSessionRecord.Txt(record.name.toString(), strings)
+                }
+
+                Type.A -> {
+                    val a = record as ARecord
+                    a.address.hostAddress?.let { ip ->
+                        records += MdnsSessionRecord.Address(record.name.toString(), ip)
+                    }
+                }
+
+                Type.AAAA -> {
+                    val aaaa = record as AAAARecord
+                    aaaa.address.hostAddress?.let { ip ->
+                        records += MdnsSessionRecord.Address(record.name.toString(), ip)
+                    }
+                }
+            }
+        }
+    }
+    return records
+}
+
+private fun requireMulticastNetwork(binder: NetworkBinder) {
+    if (!binder.supportsLocalMulticast()) throw MdnsNoLocalNetworkException()
+}
+
+/** Returns true when partial results allow the scan to finish; with none, the failure is the outcome. */
+private fun keepPartialResults(
+    lost: MdnsPacketIoException,
+    hasResults: Boolean,
+): Boolean {
+    if (!hasResults) throw lost
+    return true
+}
+
+/** Refuses to join multicast on an interface that cannot carry LAN traffic (down, loopback, tun-like). */
+private fun requireUsableMulticastInterface(
+    binder: NetworkBinder,
+    candidate: NetworkInterface?,
+) {
+    // Platform-free binders (NoOp) keep the default route and have no interface to validate.
+    if (!binder.isAvailable) return
+    val usable =
+        candidate != null &&
+            runCatching {
+                candidate.isUp &&
+                    candidate.supportsMulticast() &&
+                    !candidate.isLoopback &&
+                    !candidate.isPointToPoint
+            }.getOrDefault(false)
+    if (!usable) throw MdnsNoLocalNetworkException()
+}
 
 /** Finds close failures even when cancellation wraps the runner's deadline error. */
 private fun Throwable.hasCleanupFailures(): Boolean =

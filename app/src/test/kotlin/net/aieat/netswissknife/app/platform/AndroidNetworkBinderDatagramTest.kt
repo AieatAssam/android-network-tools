@@ -79,6 +79,77 @@ class AndroidNetworkBinderDatagramTest {
         }
     }
 
+    @Test
+    fun `wifi selection supports local multicast discovery`() {
+        assertTrue(fixture().binder.supportsLocalMulticast())
+    }
+
+    @Test
+    fun `cellular-only selection does not support local multicast discovery`() {
+        val fixture = fixture(transport = NetworkCapabilities.TRANSPORT_CELLULAR)
+
+        assertFalse(fixture.binder.supportsLocalMulticast())
+    }
+
+    @Test
+    fun `lost local network does not support local multicast discovery`() {
+        val fixture = fixture()
+        fixture.updateNetworks(emptyArray())
+        fixture.callback.onLost(fixture.network)
+
+        assertFalse(fixture.binder.supportsLocalMulticast())
+    }
+
+    @Test
+    fun `tailscale vpn network listed first does not displace the wifi selection`() {
+        val wifi = mockk<Network>()
+        val vpn = mockk<Network>()
+        val connectivityManager = mockk<ConnectivityManager>()
+        val wifiCapabilities = mockk<NetworkCapabilities>()
+        val vpnCapabilities = mockk<NetworkCapabilities>()
+        every { connectivityManager.allNetworks } returns arrayOf(vpn, wifi)
+        every { connectivityManager.getNetworkCapabilities(wifi) } returns wifiCapabilities
+        every { connectivityManager.getNetworkCapabilities(vpn) } returns vpnCapabilities
+        every { connectivityManager.getLinkProperties(wifi) } returns linkProperties("192.168.1.5")
+        every { connectivityManager.getLinkProperties(vpn) } returns linkProperties("100.101.102.103")
+        every { wifiCapabilities.hasTransport(any()) } answers { firstArg<Int>() == NetworkCapabilities.TRANSPORT_WIFI }
+        every { wifiCapabilities.hasCapability(any()) } answers {
+            firstArg<Int>() == NetworkCapabilities.NET_CAPABILITY_NOT_VPN
+        }
+        every { vpnCapabilities.hasTransport(any()) } answers { firstArg<Int>() == NetworkCapabilities.TRANSPORT_VPN }
+        every { vpnCapabilities.hasCapability(any()) } returns false
+        val binder = AndroidNetworkBinder(connectivityManager) {}
+
+        assertTrue(binder.supportsLocalMulticast())
+        DatagramSocket(null as SocketAddress?).use { socket ->
+            every { wifi.bindSocket(socket) } just Runs
+
+            binder.bind(socket)
+
+            verify(exactly = 1) { wifi.bindSocket(socket) }
+            verify(exactly = 0) { vpn.bindSocket(any<DatagramSocket>()) }
+        }
+    }
+
+    @Test
+    fun `vpn network with an address never supplies the multicast selection alone`() {
+        val vpn = mockk<Network>()
+        val connectivityManager = mockk<ConnectivityManager>()
+        val vpnCapabilities = mockk<NetworkCapabilities>()
+        every { connectivityManager.allNetworks } returns arrayOf(vpn)
+        every { connectivityManager.getNetworkCapabilities(vpn) } returns vpnCapabilities
+        every { connectivityManager.getLinkProperties(vpn) } returns linkProperties("100.101.102.103")
+        every { vpnCapabilities.hasTransport(any()) } answers { firstArg<Int>() == NetworkCapabilities.TRANSPORT_VPN }
+        every { vpnCapabilities.hasCapability(any()) } returns false
+        val binder = AndroidNetworkBinder(connectivityManager) {}
+
+        assertFalse(binder.supportsLocalMulticast())
+        DatagramSocket(null as SocketAddress?).use { socket ->
+            assertThrows(LocalNetworkBindingUnavailableException::class.java) { binder.bind(socket) }
+            verify(exactly = 0) { vpn.bindSocket(any<DatagramSocket>()) }
+        }
+    }
+
     private data class Fixture(
         val binder: AndroidNetworkBinder,
         val network: Network,
@@ -86,7 +157,10 @@ class AndroidNetworkBinderDatagramTest {
         val updateNetworks: (Array<Network>) -> Unit,
     )
 
-    private fun fixture(linkPropertiesProvider: () -> LinkProperties = { linkProperties("192.168.1.5") }): Fixture {
+    private fun fixture(
+        linkPropertiesProvider: () -> LinkProperties = { linkProperties("192.168.1.5") },
+        transport: Int = NetworkCapabilities.TRANSPORT_WIFI,
+    ): Fixture {
         val connectivityManager = mockk<ConnectivityManager>()
         val network = mockk<Network>()
         val capabilities = mockk<NetworkCapabilities>()
@@ -95,7 +169,7 @@ class AndroidNetworkBinderDatagramTest {
         every { connectivityManager.getNetworkCapabilities(network) } returns capabilities
         every { connectivityManager.getLinkProperties(network) } answers { linkPropertiesProvider() }
         every { capabilities.hasTransport(any()) } answers {
-            firstArg<Int>() == NetworkCapabilities.TRANSPORT_WIFI
+            firstArg<Int>() == transport
         }
         every { capabilities.hasCapability(any()) } answers {
             firstArg<Int>() == NetworkCapabilities.NET_CAPABILITY_NOT_VPN

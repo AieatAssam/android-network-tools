@@ -135,6 +135,78 @@ class MdnsRepositoryImplIoTest {
         }
 
     @Test
+    fun `no multicast-capable local network fails before any socket is opened`() =
+        runBlocking {
+            val binder = mockk<NetworkBinder>()
+            every { binder.supportsLocalMulticast() } returns false
+            val fixture = fixture(networkBinder = binder)
+            val updates = mutableListOf<MdnsUpdate>()
+
+            val failure =
+                runCatching { fixture.repository.discover(timeoutMs = 500).toList(updates) }
+                    .exceptionOrNull()
+
+            assertTrue(failure is MdnsNoLocalNetworkException)
+            assertTrue(fixture.socket.setupOrder.isEmpty())
+            assertTrue(fixture.socket.bindPorts.isEmpty())
+            assertTrue(fixture.lock.released.get())
+            assertTrue(updates.none { it is MdnsUpdate.DiscoveryComplete })
+        }
+
+    @Test
+    fun `selected local interface that is down fails before joining the multicast group`() =
+        runBlocking {
+            val binder = mockk<NetworkBinder>()
+            val downInterface = usableInterface(up = false)
+            every { binder.supportsLocalMulticast() } returns true
+            every { binder.isAvailable } returns true
+            every { binder.localInterface() } returns downInterface
+            every { binder.bind(any<java.net.DatagramSocket>()) } just Runs
+            val fixture = fixture(networkBinder = binder)
+
+            val failure =
+                runCatching { fixture.repository.discover(timeoutMs = 500).toList() }.exceptionOrNull()
+
+            assertTrue(failure is MdnsNoLocalNetworkException)
+            assertFalse(fixture.socket.setupOrder.contains("join"))
+            assertTrue(fixture.socket.closed.get())
+            assertTrue(fixture.lock.released.get())
+        }
+
+    @Test
+    fun `network loss after services are found completes with those services and an interruption note`() =
+        runBlocking {
+            val receiveCount = AtomicInteger()
+            val serviceType = serviceTypeResponse()
+            val resolvedService = resolvedServiceResponse()
+            val fixture =
+                fixture(
+                    receive = { packet ->
+                        val response =
+                            when (receiveCount.incrementAndGet()) {
+                                1 -> serviceType
+                                2 -> resolvedService
+                                else -> throw IOException("network interface went away")
+                            }
+                        System.arraycopy(response, 0, packet.data, packet.offset, response.size)
+                        packet.length = response.size
+                    },
+                    // The interface that vanished also refuses to drop the membership during cleanup.
+                    leave = { throw IOException("interface is gone") },
+                )
+            val updates = mutableListOf<MdnsUpdate>()
+
+            fixture.repository.discover(timeoutMs = 5_000).toList(updates)
+
+            assertEquals(1, updates.count { it is MdnsUpdate.ServiceFound })
+            val complete = updates.last() as MdnsUpdate.DiscoveryComplete
+            assertEquals(1, complete.totalFound)
+            assertTrue(complete.networkInterrupted)
+            assertTrue(fixture.socket.closed.get())
+            assertTrue(fixture.lock.released.get())
+        }
+
+    @Test
     fun `receive failure reaches the view model error state`() =
         runBlocking {
             val fixture = fixture(receive = { throw IOException("interface disappeared") })
@@ -208,7 +280,9 @@ class MdnsRepositoryImplIoTest {
     fun `selected network is bound before local port and multicast membership`() =
         runBlocking {
             val binder = mockk<NetworkBinder>()
-            val selectedInterface = mockk<java.net.NetworkInterface>()
+            val selectedInterface = usableInterface()
+            every { binder.supportsLocalMulticast() } returns true
+            every { binder.isAvailable } returns true
             every { binder.localInterface() } returns selectedInterface
             every { binder.bind(any<java.net.DatagramSocket>()) } just Runs
             val fixture = fixture(networkBinder = binder)
@@ -641,6 +715,7 @@ class MdnsRepositoryImplIoTest {
                             {},
                             {},
                             { throw SocketTimeoutException("quiet network") },
+                            {},
                             clock,
                             Collections.synchronizedList(mutableListOf()),
                         ).also(sockets::add)
@@ -679,6 +754,7 @@ class MdnsRepositoryImplIoTest {
         send: () -> Unit = {},
         bind: (InetSocketAddress) -> Unit = {},
         receive: (DatagramPacket) -> Unit = { throw SocketTimeoutException("quiet network") },
+        leave: () -> Unit = {},
         networkBinder: NetworkBinder = NoOpNetworkBinder,
         clock: FakeClock = FakeClock(),
     ): Fixture {
@@ -686,7 +762,7 @@ class MdnsRepositoryImplIoTest {
         val wifiManager = mockk<WifiManager>()
         every { context.getSystemService(Context.WIFI_SERVICE) } returns wifiManager
         val cleanupOrder = Collections.synchronizedList(mutableListOf<String>())
-        val socket = ScriptedMdnsSocket(send, bind, receive, clock, cleanupOrder)
+        val socket = ScriptedMdnsSocket(send, bind, receive, leave, clock, cleanupOrder)
         val lock = TrackingLock(cleanupOrder)
         val repository =
             MdnsRepositoryImpl(context, networkBinder).apply {
@@ -709,6 +785,7 @@ class MdnsRepositoryImplIoTest {
         private val sendAction: () -> Unit,
         private val bindAction: (InetSocketAddress) -> Unit,
         private val receiveAction: (DatagramPacket) -> Unit,
+        private val leaveAction: () -> Unit,
         private val clock: FakeClock,
         private val cleanupOrder: MutableList<String>,
     ) : MdnsSocket {
@@ -752,6 +829,7 @@ class MdnsRepositoryImplIoTest {
         override fun leaveGroup(address: InetAddress) {
             leaveCount.incrementAndGet()
             cleanupOrder += "leave"
+            leaveAction()
         }
 
         override fun send(packet: DatagramPacket) {
@@ -778,6 +856,15 @@ class MdnsRepositoryImplIoTest {
             closed.set(true)
             cleanupOrder += "socket-close"
         }
+    }
+
+    private fun usableInterface(up: Boolean = true): java.net.NetworkInterface {
+        val networkInterface = mockk<java.net.NetworkInterface>()
+        every { networkInterface.isUp } returns up
+        every { networkInterface.supportsMulticast() } returns true
+        every { networkInterface.isLoopback } returns false
+        every { networkInterface.isPointToPoint } returns false
+        return networkInterface
     }
 
     private fun questionClass(packet: ByteArray): Int =

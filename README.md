@@ -194,6 +194,8 @@ LAN service discovery via multicast DNS (RFC 6762 / DNS-SD RFC 6763).
 - Live streaming results: services appear as they are discovered, grouped by service type with animated list entries
 - Expandable service items show full TXT record details on tap
 - Fixed 8-second scan window per Scan (there is no duration control); scan can be stopped at any time. Clear removes all results
+- Multicast discovery runs only on the selected Wi-Fi or Ethernet network, never on a VPN or cellular path. If no such network is available, the scan stops with a plain message saying a VPN or mobile data cannot discover local devices
+- If the network changes during a scan after services were found, the scan stops, keeps those services, and shows a note that the network changed; with no services found, it shows a plain message and a retry path
 - Instance names are shown decoded: DNS-SD escapes such as `\032` (space), `\226\128\153` (UTF-8 for ’) and `\(...\)` become readable text; malformed escapes are shown exactly as received
 - Search filters the list by service type, name, hostname, IP address, and TXT key or value; a search with no matches shows an empty-state message with a Clear search action
 - Copy and Share at the foot of the list export only the services currently shown (the active search is noted as a `Filter:` line)
@@ -281,7 +283,7 @@ Identifies the vendor behind a MAC address or an OUI prefix, using the IEEE regi
 
 ## Networking behavior
 
-LAN-directed sockets use the selected Wi-Fi or Ethernet network when the destination is within that network's subnet. This lets local discovery and device queries reach the LAN when a VPN is active; destinations outside the local subnet continue to use Android's normal route. mDNS joins the selected interface and can use an ephemeral query port when port 5353 is unavailable.
+LAN-directed sockets use the selected Wi-Fi or Ethernet network when the destination is within that network's subnet. This lets local discovery and device queries reach the LAN when a VPN is active; destinations outside the local subnet continue to use Android's normal route. mDNS joins the selected interface and can use an ephemeral query port when port 5353 is unavailable. mDNS requires a Wi-Fi or Ethernet selection: cellular or VPN-only connectivity cannot carry local multicast, so the scan reports that instead of failing with a raw socket error.
 
 Tool screens show a status banner when internet access or a local Wi-Fi/Ethernet network is unavailable. LAN tools also explain when a VPN is active. On Android 16 (API 36) and newer, Android's Local Network Protections can require `NEARBY_WIFI_DEVICES` access before local-network operations. If access is denied, the tool shows a Grant action; grant access and retry the operation explicitly.
 

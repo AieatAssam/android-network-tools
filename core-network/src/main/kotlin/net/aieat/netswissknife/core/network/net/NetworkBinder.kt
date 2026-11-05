@@ -42,6 +42,13 @@ interface NetworkBinder {
     fun localInterface(): NetworkInterface?
 
     fun localAddress(): InetAddress?
+
+    /**
+     * True when the selected local network can carry multicast discovery traffic (Wi-Fi or Ethernet).
+     * Cellular and VPN paths cannot reach LAN multicast, so multicast discovery must not run on them.
+     * Implementations without a selection-aware platform return true, keeping the default route.
+     */
+    fun supportsLocalMulticast(): Boolean = true
 }
 
 /** JVM-safe default: preserve the process default route and perform no binding. */
