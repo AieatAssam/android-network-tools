@@ -123,6 +123,7 @@ SSL/TLS certificate analysis for any TCP host, without sending an HTTP request.
 - A certificate that is not in this device's trust store is reported as untrusted by this device, which can differ from other clients on older Android versions
 - A port that answers with plain text rather than TLS (for example port 80) is reported as "does not appear to speak TLS". The check recognises the wording used by Android's OpenSSL/Conscrypt and by JSSE for a plaintext peer
 - When the only chain finding is an issuing root that this device does not have, the finding names it: "This device's trust store does not include the issuing root (<name>)". The verdict stays untrusted
+- A server that answers the device's hello with a `handshake_failure` alert (for example a gateway with a P-521 certificate, which Android's built-in TLS cannot offer) is retried with a TLS 1.2 compatibility probe that only reads the unencrypted certificates. The result is shown as Untrusted with a note that the handshake was not completed, and protocol probes are skipped. If the certificates cannot be read either, the error explains that the server refused the handshake
 - Connection summary includes negotiated TLS version, ALPN, cipher suite, connect time, and handshake time
 - Optional older-TLS-version probes, expected SHA-256 leaf-certificate pin comparison, and PEM chain sharing
 - Copy and Share sit at the foot of the results and send the connection summary, each certificate from leaf to root, and the chain findings as plain text. Share PEM still sends the PEM chain, next to them

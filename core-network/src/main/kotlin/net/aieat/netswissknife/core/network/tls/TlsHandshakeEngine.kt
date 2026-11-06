@@ -28,6 +28,16 @@ internal interface TlsHandshakeEngine {
         protocol: String? = null,
     ): TlsHandshakeConnection
 
+    /**
+     * Opens a raw connection that sends a hand-built TLS 1.2 hello and only reads the server's
+     * certificates. Used when the platform provider's hello is refused outright.
+     */
+    fun openCompatibilityConnection(
+        host: String,
+        port: Int,
+        timeoutMs: Int,
+    ): TlsHandshakeConnection = throw UnsupportedOperationException("Compatibility capture is unavailable")
+
     /** Wraps an already-connected, network-bound transport without resolving [host] again. */
     fun openConnectionOverSocket(
         host: String,
@@ -100,6 +110,12 @@ internal class SocketTlsHandshakeEngine(
         }
     }
 
+    override fun openCompatibilityConnection(
+        host: String,
+        port: Int,
+        timeoutMs: Int,
+    ): TlsHandshakeConnection = CompatibilityConnection(Socket(), host, port, timeoutMs, networkBinder)
+
     override fun openConnectionOverSocket(
         host: String,
         port: Int,
@@ -162,28 +178,7 @@ internal class SocketTlsHandshakeEngine(
         private val networkBinder: NetworkBinder,
     ) : TlsHandshakeConnection {
         override fun connect() {
-            if (!transportConnected) {
-                if (!networkBinder.isAvailable) {
-                    socket.connect(InetSocketAddress(host, port), timeoutMs)
-                    return
-                }
-                val addresses =
-                    java.net.InetAddress.getAllByName(host)
-                val localDestination =
-                    addresses.firstOrNull { address ->
-                        networkBinder.shouldBind(address.hostAddress ?: return@firstOrNull false)
-                    }
-                val destination =
-                    localDestination
-                        ?: addresses.firstOrNull()
-                        ?: throw java.net.UnknownHostException(host)
-                if (localDestination != null &&
-                    !networkBinder.bindTcpSocketIfLocal(socket, destination.hostAddress)
-                ) {
-                    throw LocalNetworkBindingUnavailableException(destination.hostAddress)
-                }
-                socket.connect(InetSocketAddress(destination, port), timeoutMs)
-            }
+            if (!transportConnected) connectBound(socket, host, port, timeoutMs, networkBinder)
         }
 
         override fun handshake() {
@@ -210,6 +205,45 @@ internal class SocketTlsHandshakeEngine(
             } catch (_: Exception) {
                 null
             }
+    }
+
+    /** Raw-socket adapter for [TlsCompatibilityHello]; it never completes a handshake. */
+    private class CompatibilityConnection(
+        private val socket: Socket,
+        private val host: String,
+        private val port: Int,
+        private val timeoutMs: Int,
+        private val networkBinder: NetworkBinder,
+    ) : TlsHandshakeConnection {
+        private var flight: TlsCapturedFlight? = null
+
+        override fun connect() {
+            socket.soTimeout = timeoutMs
+            connectBound(socket, host, port, timeoutMs, networkBinder)
+        }
+
+        override fun handshake() {
+            socket.getOutputStream().apply {
+                write(TlsCompatibilityHello.build(host))
+                flush()
+            }
+            flight = TlsServerFlightReader.read(socket.getInputStream())
+        }
+
+        override fun snapshot(): TlsHandshakeSnapshot {
+            val captured = checkNotNull(flight) { "Certificates were not captured" }
+            val factory = java.security.cert.CertificateFactory.getInstance("X.509")
+            return TlsHandshakeSnapshot(
+                protocol = captured.protocol,
+                cipherSuite = captured.cipherSuite,
+                peerCertificates =
+                    captured.certificates.map {
+                        factory.generateCertificate(it.inputStream()) as X509Certificate
+                    },
+            )
+        }
+
+        override fun close() = socket.close()
     }
 
     /**
@@ -244,4 +278,28 @@ internal class SocketTlsHandshakeEngine(
                 SSLContext.getInstance("TLSv1.2")
             }
     }
+}
+
+/** Connects [socket], binding to the selected local network when the destination is on it. */
+private fun connectBound(
+    socket: Socket,
+    host: String,
+    port: Int,
+    timeoutMs: Int,
+    networkBinder: NetworkBinder,
+) {
+    if (!networkBinder.isAvailable) {
+        socket.connect(InetSocketAddress(host, port), timeoutMs)
+        return
+    }
+    val addresses = java.net.InetAddress.getAllByName(host)
+    val localDestination =
+        addresses.firstOrNull { address ->
+            networkBinder.shouldBind(address.hostAddress ?: return@firstOrNull false)
+        }
+    val destination = localDestination ?: addresses.firstOrNull() ?: throw java.net.UnknownHostException(host)
+    if (localDestination != null && !networkBinder.bindTcpSocketIfLocal(socket, destination.hostAddress)) {
+        throw LocalNetworkBindingUnavailableException(destination.hostAddress)
+    }
+    socket.connect(InetSocketAddress(destination, port), timeoutMs)
 }

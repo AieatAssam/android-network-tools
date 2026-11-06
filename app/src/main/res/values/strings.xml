@@ -821,6 +821,8 @@
     <string name="tls_issue_untrusted">The certificate chain is not trusted by this device\'s certificate store</string>
     <string name="tls_issue_untrusted_root">This device\'s trust store does not include the issuing root (%1$s)</string>
     <string name="tls_issue_pin_mismatch">The certificate does not match the expected SHA-256 pin</string>
+    <string name="tls_verdict_capture_only">This device\'s TLS stack could not negotiate with the server, so other apps here will likely fail too. The certificates were read with a compatibility probe; the handshake was not completed, so this cannot be called trusted.</string>
+    <string name="tls_handshake_rejected">The server refused the TLS handshake and its certificate could not be read. It may need a hostname (SNI) instead of an IP address, or share no protocol or cipher with this device.</string>
     <string name="tls_not_tls_port">This port answered with plain text, not TLS. Check the port, or use HTTP Probe for a plain-HTTP service.</string>
     <string name="tls_issue_hostname_mismatch">The certificate does not match this hostname</string>
     <string name="tls_issue_weak_signature">A weak signature algorithm was found</string>

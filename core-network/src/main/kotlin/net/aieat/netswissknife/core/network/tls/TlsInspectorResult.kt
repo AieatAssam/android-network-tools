@@ -19,6 +19,12 @@ data class TlsInspectorResult(
     val pinMatch: Boolean? = null,
     /** Named issuing root when the only chain finding is an unknown root; null otherwise. */
     val untrustedRootName: String? = null,
+    /**
+     * False when this device's TLS stack could not negotiate with the server and the certificates
+     * were read from the unencrypted part of a probe handshake. Nothing proves the server holds the
+     * private key, so such a result is never reported as a trusted connection.
+     */
+    val handshakeCompleted: Boolean = true,
 ) {
     /**
      * Overall verdict. A chain the device trusts is still a failed connection when the certificate
@@ -27,7 +33,7 @@ data class TlsInspectorResult(
      */
     val isConnectionTrusted: Boolean
         get() {
-            if (!isChainTrusted || hostnameMatches == false || pinMatch == false) return false
+            if (!handshakeCompleted || !isChainTrusted || hostnameMatches == false || pinMatch == false) return false
             return chainIssues.none { it in BLOCKING_ISSUES }
         }
 

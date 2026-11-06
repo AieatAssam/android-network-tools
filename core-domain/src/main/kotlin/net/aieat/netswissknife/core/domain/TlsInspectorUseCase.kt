@@ -22,6 +22,9 @@ object TlsInspectorErrorKeys {
 
     /** The port answered with plain-text protocol data rather than a TLS handshake. */
     const val NOT_TLS_PORT_DESCRIPTION = "tls_not_tls_port"
+
+    /** The server refused the handshake (handshake_failure) and the certificate could not be read either. */
+    const val HANDSHAKE_REJECTED_DESCRIPTION = "tls_handshake_rejected"
 }
 
 class TlsInspectorUseCase(private val repository: TlsInspectorRepository) {

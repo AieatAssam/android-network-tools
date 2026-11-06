@@ -217,6 +217,48 @@ class TlsInspectorRepositoryFakeEngineTest {
     }
 
     @Test
+    fun `server refusing the hello falls back to certificate capture and is never fully trusted`() = runTest {
+        val engine = FakeEngine(
+            defaultProtocolFailure = SSLHandshakeException("error:10000410:SSL routines:OPENSSL_internal:SSLV3_ALERT_HANDSHAKE_FAILURE"),
+        )
+        val repository = repositoryWithEngine(engine, trusted = true)
+
+        val result = repository.inspect("www.example.com", 443, 5_000, TlsInspectorOptions(probeProtocols = true))
+
+        assertTrue(result is NetworkResult.Success)
+        val data = (result as NetworkResult.Success).data
+        assertFalse(data.handshakeCompleted)
+        assertFalse(data.isConnectionTrusted)
+        assertEquals(null, data.alpn)
+        assertEquals(null, data.protocolSupport)
+        assertEquals(1, data.chain.size)
+        assertEquals(1, engine.compatibilityOpenCount.get())
+    }
+
+    @Test
+    fun `non-alert failures never use the capture fallback`() = runTest {
+        val engine = FakeEngine(handshakeFailure = SSLProtocolException("Connection reset"))
+        val repository = repositoryWithEngine(engine)
+
+        val result = repository.inspect("www.example.com", 443, 5_000)
+
+        assertTrue(result is NetworkResult.Error)
+        assertEquals(0, engine.compatibilityOpenCount.get())
+    }
+
+    @Test
+    fun `failed capture reports the original rejection with a readable description`() = runTest {
+        val engine = FakeEngine(
+            handshakeFailure = SSLHandshakeException("Received fatal alert: handshake_failure"),
+        )
+        val repository = repositoryWithEngine(engine)
+
+        val error = repository.inspect("192.0.2.10", 443, 5_000) as NetworkResult.Error
+
+        assertEquals("tls_handshake_rejected", error.descriptionKey)
+    }
+
+    @Test
     fun `plaintext response on a TLS port is reported as a non-TLS port`() {
         runTest {
             listOf("wrong version number", "Unsupported or unrecognized SSL message").forEach { message ->
@@ -281,14 +323,14 @@ class TlsInspectorRepositoryFakeEngineTest {
     }
 
     @Test
-    fun `ordinary handshake failure keeps its generic message`() {
+    fun `handshake_failure that capture cannot work around gets the readable description`() {
         runTest {
             val failure = SSLHandshakeException("Received fatal alert: handshake_failure")
             val repository = repositoryWithEngine(FakeEngine(handshakeFailure = failure))
 
             val error = repository.inspect("www.example.com", 443, 5_000) as NetworkResult.Error
 
-            assertEquals(null, error.descriptionKey)
+            assertEquals("tls_handshake_rejected", error.descriptionKey)
         }
     }
 
@@ -355,10 +397,31 @@ class TlsInspectorRepositoryFakeEngineTest {
         private val onConnect: () -> Unit = {},
         private val onHandshake: () -> Unit = {},
         private val handshakeFailure: Throwable? = null,
+        private val defaultProtocolFailure: Throwable? = null,
     ) : TlsHandshakeEngine {
         val openCount = AtomicInteger()
         val closedCount = AtomicInteger()
         val requestedProtocols = mutableListOf<String?>()
+        val compatibilityOpenCount = AtomicInteger()
+
+        override fun openCompatibilityConnection(
+            host: String,
+            port: Int,
+            timeoutMs: Int,
+        ): TlsHandshakeConnection {
+            compatibilityOpenCount.incrementAndGet()
+            if (handshakeFailure != null) throw SSLHandshakeException("capture also refused")
+            return object : TlsHandshakeConnection {
+                override fun connect() = Unit
+                override fun handshake() = Unit
+                override fun snapshot() = TlsHandshakeSnapshot(
+                    protocol = "TLSv1.2",
+                    cipherSuite = "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+                    peerCertificates = listOf(certificate),
+                )
+                override fun close() = Unit
+            }
+        }
 
         override fun enabledProtocols(): Set<String> = enabled
 
@@ -380,6 +443,7 @@ class TlsInspectorRepositoryFakeEngineTest {
                 override fun handshake() {
                     onHandshake()
                     handshakeFailure?.let { throw it }
+                    if (protocol == null) defaultProtocolFailure?.let { throw it }
                     if (protocol in rejected) throw SSLHandshakeException("Received fatal alert: protocol_version")
                     if (protocol in protocolVersionProtocolFailures) {
                         throw SSLProtocolException("Received fatal alert: protocol_version")

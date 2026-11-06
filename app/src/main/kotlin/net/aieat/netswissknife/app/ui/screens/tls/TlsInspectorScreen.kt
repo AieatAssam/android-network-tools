@@ -558,6 +558,7 @@ private fun TlsErrorContent(message: String, descriptionKey: String?, onRetry: (
     val visibleMessage = when (descriptionKey) {
         TlsInspectorErrorKeys.PIN_INVALID_DESCRIPTION -> stringResource(R.string.tls_pin_invalid)
         TlsInspectorErrorKeys.NOT_TLS_PORT_DESCRIPTION -> stringResource(R.string.tls_not_tls_port)
+        TlsInspectorErrorKeys.HANDSHAKE_REJECTED_DESCRIPTION -> stringResource(R.string.tls_handshake_rejected)
         else -> message
     }
     ToolErrorCard(
@@ -684,10 +685,12 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                     label = stringResource(R.string.tls_cipher_suite),
                     value = withSeparatorBreaks(result.cipherSuite)
                 )
-                LabeledValue(
-                    label = stringResource(R.string.tls_handshake_time),
-                    value = stringResource(R.string.tls_ms_format, result.handshakeTimeMs)
-                )
+                if (result.handshakeCompleted) {
+                    LabeledValue(
+                        label = stringResource(R.string.tls_handshake_time),
+                        value = stringResource(R.string.tls_ms_format, result.handshakeTimeMs)
+                    )
+                }
                 LabeledValue(
                     label = stringResource(R.string.tls_connect_time),
                     value = stringResource(R.string.tls_ms_format, result.connectTimeMs)
@@ -747,7 +750,9 @@ private fun ConnectionCard(result: TlsInspectorResult) {
 @Composable
 private fun verdictDetail(result: TlsInspectorResult): String {
     val trusted = result.isConnectionTrusted
-    return if (trusted && result.pinMatch == true) {
+    return if (!result.handshakeCompleted) {
+        stringResource(R.string.tls_verdict_capture_only)
+    } else if (trusted && result.pinMatch == true) {
         stringResource(R.string.tls_verdict_trusted_pinned)
     } else if (trusted) {
         stringResource(R.string.tls_verdict_trusted)
@@ -1029,8 +1034,20 @@ internal fun buildTlsShareText(result: TlsInspectorResult): String = buildString
     appendLine("Protocol: ${result.tlsVersion}")
     appendLine("Cipher: ${result.cipherSuite}")
     appendLine("Trusted: ${result.isConnectionTrusted}")
+    if (!result.handshakeCompleted) {
+        appendLine(
+            "Note: this device's TLS stack could not negotiate with the server; " +
+                "the certificates were read with a compatibility probe and the handshake was not completed.",
+        )
+    }
     appendLine("Chain trusted: ${result.isChainTrusted}")
-    appendLine("Connect: ${result.connectTimeMs} ms; handshake: ${result.handshakeTimeMs} ms")
+    appendLine(
+        if (result.handshakeCompleted) {
+            "Connect: ${result.connectTimeMs} ms; handshake: ${result.handshakeTimeMs} ms"
+        } else {
+            "Connect: ${result.connectTimeMs} ms"
+        },
+    )
     result.alpn?.let { appendLine("ALPN: $it") }
     result.hostnameMatches?.let { appendLine("Hostname match: $it") }
     result.pinMatch?.let { appendLine("Expected pin match: $it") }
