@@ -56,12 +56,6 @@ data class PendingEntityReplayApproval(
     val statusCode: Int
 )
 
-/** A mDNS or LAN handoff to a plain-HTTP port, which HTTP Probe cannot send. No URL is filled in. */
-data class PlainHttpHandoff(
-    val host: String,
-    val port: Int,
-)
-
 data class BlockedHttpRedirectWarning(
     val sourceUrl: String,
     val destinationUrl: String,
@@ -153,14 +147,6 @@ class HttpProbeViewModel @Inject constructor(
     )
     val sourceContext: ToolSource? get() = _sourceContext.value
     val sourceContextState: StateFlow<ToolSource?> = _sourceContext.asStateFlow()
-    private val _plainHttpHandoff =
-        MutableStateFlow(
-            handoffTarget
-                ?.takeIf { httpUrlForTarget(it) == null && _sourceContext.value != null }
-                ?.let { PlainHttpHandoff(host = it.host.canonical, port = requireNotNull(it.port).value) },
-        )
-    val plainHttpHandoff: StateFlow<PlainHttpHandoff?> = _plainHttpHandoff.asStateFlow()
-
     // A handoff (route or intent) wins over the URL kept when the tool was left; a kept result is shown
     // only for the URL it was produced from.
     private val initialUrl: String =
@@ -236,10 +222,9 @@ class HttpProbeViewModel @Inject constructor(
         if (!updateRequestInput { it.copy(url = url) }) return
         savedStateHandle[EDITED_URL_KEY] = url
         // Once the user edits the URL it is no longer the handed-off destination, so the provenance
-        // label and the plain-HTTP explanation would be stale.
+        // label would be stale.
         _sourceContext.value = null
         savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
-        _plainHttpHandoff.value = null
         if (_hasInvalidHandoff.value && validateHttpProbeUrl(url) == null) {
             savedStateHandle[HANDOFF_RECOVERED_KEY] = true
             _hasInvalidHandoff.value = false
@@ -250,7 +235,6 @@ class HttpProbeViewModel @Inject constructor(
     fun clearPrefill() {
         if (_uiState.value.isLoading) return
         _sourceContext.value = null
-        _plainHttpHandoff.value = null
         savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
         savedStateHandle[HANDOFF_CONSUMED_KEY] = true
         onUrlChange("")
@@ -533,21 +517,23 @@ class HttpProbeViewModel @Inject constructor(
 }
 
 /**
- * The URL prefilled from a mDNS or LAN handoff. HTTP Probe only sends HTTPS, so a service on a
- * plain-HTTP port gets no URL (null) and the screen explains why. 443 and 8443 are the
- * conventional TLS ports, and 443 uses the default port in the URL.
+ * The URL prefilled from a mDNS or LAN handoff. 443 and 8443 are the conventional TLS ports and get
+ * https (443 uses the default port in the URL); every other port, such as plain-HTTP 80 or 8080,
+ * gets http. The screen warns before a plain-HTTP request is sent.
  */
 private const val HTTPS_DEFAULT_PORT = 443
 private const val HTTPS_ALTERNATE_PORT = 8443
+private const val HTTP_DEFAULT_PORT = 80
 
-internal fun httpUrlForTarget(target: ToolDestination.HostTarget): String? {
+internal fun httpUrlForTarget(target: ToolDestination.HostTarget): String {
     val host = target.host.canonical.let { canonical ->
         val address = canonical.removeSurrounding("[", "]")
         if (':' in address) "[${address.replace("%", "%25")}]" else address
     }
-    return when (requireNotNull(target.port).value) {
+    return when (val port = requireNotNull(target.port).value) {
         HTTPS_DEFAULT_PORT -> "https://$host/"
         HTTPS_ALTERNATE_PORT -> "https://$host:$HTTPS_ALTERNATE_PORT/"
-        else -> null
+        HTTP_DEFAULT_PORT -> "http://$host/"
+        else -> "http://$host:$port/"
     }
 }

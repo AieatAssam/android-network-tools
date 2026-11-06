@@ -1,3 +1,8 @@
+@file:Suppress("MagicNumber", "ThrowsCount", "CyclomaticComplexMethod", "ReturnCount")
+
+// TLS wire-format code: record/extension/cipher-suite identifiers are the protocol's own constants,
+// and a malformed server flight is rejected at each of several distinct points.
+
 package net.aieat.netswissknife.core.network.tls
 
 import net.aieat.netswissknife.core.network.HostValidator
@@ -31,14 +36,42 @@ internal object TlsCompatibilityHello {
 
     private val cipherSuites =
         listOf(
-            0xc02c, 0xc02b, 0xc030, 0xc02f, 0xcca9, 0xcca8, 0xc024, 0xc023, 0xc028, 0xc027,
-            0xc00a, 0xc009, 0xc014, 0xc013, 0x009d, 0x009c, 0x003d, 0x003c, 0x0035, 0x002f,
+            0xc02c,
+            0xc02b,
+            0xc030,
+            0xc02f,
+            0xcca9,
+            0xcca8,
+            0xc024,
+            0xc023,
+            0xc028,
+            0xc027,
+            0xc00a,
+            0xc009,
+            0xc014,
+            0xc013,
+            0x009d,
+            0x009c,
+            0x003d,
+            0x003c,
+            0x0035,
+            0x002f,
             0x00ff, // TLS_EMPTY_RENEGOTIATION_INFO_SCSV
         )
     private val signatureAlgorithms =
         listOf(
-            0x0403, 0x0503, 0x0603, 0x0804, 0x0805, 0x0806, 0x0807,
-            0x0401, 0x0501, 0x0601, 0x0203, 0x0201,
+            0x0403,
+            0x0503,
+            0x0603,
+            0x0804,
+            0x0805,
+            0x0806,
+            0x0807,
+            0x0401,
+            0x0501,
+            0x0601,
+            0x0203,
+            0x0201,
         )
 
     fun build(
@@ -60,16 +93,17 @@ internal object TlsCompatibilityHello {
 
         val suites = cipherSuites.flatMap { u16(it).toList() }.toByteArray()
         val body =
-            ByteArrayOutputStream().apply {
-                write(byteArrayOf(3, 3))
-                write(random)
-                write(0) // empty session id
-                write(u16(suites.size))
-                write(suites)
-                write(byteArrayOf(1, 0)) // null compression only
-                write(u16(extensionBytes.size))
-                write(extensionBytes)
-            }.toByteArray()
+            ByteArrayOutputStream()
+                .apply {
+                    write(byteArrayOf(3, 3))
+                    write(random)
+                    write(0) // empty session id
+                    write(u16(suites.size))
+                    write(suites)
+                    write(byteArrayOf(1, 0)) // null compression only
+                    write(u16(extensionBytes.size))
+                    write(extensionBytes)
+                }.toByteArray()
         val handshake = byteArrayOf(1) + u24(body.size) + body
         return byteArrayOf(0x16, 3, 1) + u16(handshake.size) + handshake
     }
@@ -147,10 +181,18 @@ internal object TlsServerFlightReader {
             if (total > MAX_TOTAL_BYTES) throw IOException("TLS server flight too large")
             val payload = readFully(input, length)
             when (type) {
-                RECORD_ALERT ->
-                    throw SSLHandshakeException("Received fatal alert: ${alertName(payload.getOrNull(1)?.toInt()?.and(0xff))}")
-                RECORD_HANDSHAKE -> pending.write(payload)
-                else -> throw IOException("Server continued with an encrypted handshake")
+                RECORD_ALERT -> {
+                    val description = payload.getOrNull(1)?.toInt()?.and(0xff)
+                    throw SSLHandshakeException("Received fatal alert: ${alertName(description)}")
+                }
+
+                RECORD_HANDSHAKE -> {
+                    pending.write(payload)
+                }
+
+                else -> {
+                    throw IOException("Server continued with an encrypted handshake")
+                }
             }
             var buffered = pending.toByteArray()
             var offset = 0
@@ -167,12 +209,14 @@ internal object TlsServerFlightReader {
                         protocol = hello.first
                         cipher = hello.second
                     }
-                    HANDSHAKE_CERTIFICATE ->
+
+                    HANDSHAKE_CERTIFICATE -> {
                         return TlsCapturedFlight(
                             protocol ?: throw IOException("Certificate before ServerHello"),
                             cipher ?: throw IOException("Certificate before ServerHello"),
                             parseCertificates(message),
                         )
+                    }
                 }
             }
             pending.reset()
@@ -215,11 +259,16 @@ internal object TlsServerFlightReader {
         return certificates
     }
 
-    private fun readU24(data: ByteArray, offset: Int) =
-        ((data[offset].toInt() and 0xff) shl 16) or ((data[offset + 1].toInt() and 0xff) shl 8) or
-            (data[offset + 2].toInt() and 0xff)
+    private fun readU24(
+        data: ByteArray,
+        offset: Int,
+    ) = ((data[offset].toInt() and 0xff) shl 16) or ((data[offset + 1].toInt() and 0xff) shl 8) or
+        (data[offset + 2].toInt() and 0xff)
 
-    private fun readFully(input: InputStream, count: Int): ByteArray {
+    private fun readFully(
+        input: InputStream,
+        count: Int,
+    ): ByteArray {
         val buffer = ByteArray(count)
         var read = 0
         while (read < count) {

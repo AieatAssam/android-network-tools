@@ -150,17 +150,15 @@ class HttpProbeUseCaseTest {
     }
 
     @Test
-    @DisplayName("plain HTTP is rejected before repository dispatch")
-    fun `plain HTTP is rejected before repository dispatch`() = runTest {
-        val result = useCase(HttpProbeParams(url = "http://example.com"))
+    @DisplayName("plain HTTP is accepted and dispatched to the repository")
+    fun `plain HTTP is accepted and dispatched to the repository`() = runTest {
+        coEvery { repository.probe(any()) } returns NetworkResult.Success(fakeResult)
 
-        assertTrue(result is NetworkResult.Error)
-        assertEquals(ErrorCode.HTTP_CLEARTEXT_DISABLED, (result as NetworkResult.Error).info?.code)
-        assertEquals(
-            "Plain HTTP requests are disabled in this release. Use an HTTPS URL.",
-            validateHttpProbeUrl("http://example.com"),
-        )
-        coVerify(exactly = 0) { repository.probe(any()) }
+        val result = useCase(HttpProbeParams(url = "http://192.168.1.1:8080/status"))
+
+        assertTrue(result is NetworkResult.Success)
+        assertEquals(null, validateHttpProbeUrl("http://example.com"))
+        coVerify(exactly = 1) { repository.probe(match { it.url == "http://192.168.1.1:8080/status" }) }
     }
 
     @Test

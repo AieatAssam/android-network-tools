@@ -3,8 +3,8 @@ package net.aieat.netswissknife.core.network.tls
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -27,9 +27,14 @@ class TlsCompatibilityProbeTest {
 
     @Test
     fun `SNI is sent for hostnames but not for IP literals`() {
-        assertTrue(TlsCompatibilityHello.extensionTypes(TlsCompatibilityHello.build("router.lan", ByteArray(32))).contains(0))
-        assertFalse(TlsCompatibilityHello.extensionTypes(TlsCompatibilityHello.build("10.109.208.1", ByteArray(32))).contains(0))
-        assertFalse(TlsCompatibilityHello.extensionTypes(TlsCompatibilityHello.build("fe80::1", ByteArray(32))).contains(0))
+        fun hasSni(host: String): Boolean {
+            val hello = TlsCompatibilityHello.build(host, ByteArray(32))
+            return TlsCompatibilityHello.extensionTypes(hello).contains(0)
+        }
+
+        assertTrue(hasSni("router.lan"))
+        assertFalse(hasSni("10.109.208.1"))
+        assertFalse(hasSni("fe80::1"))
     }
 
     @Test
@@ -48,9 +53,10 @@ class TlsCompatibilityProbeTest {
     fun `fatal alert before the certificate is reported as a handshake failure`() {
         val alert = byteArrayOf(0x15, 3, 3, 0, 2, 2, 40)
 
-        val failure = assertThrows(SSLHandshakeException::class.java) {
-            TlsServerFlightReader.read(ByteArrayInputStream(alert))
-        }
+        val failure =
+            assertThrows(SSLHandshakeException::class.java) {
+                TlsServerFlightReader.read(ByteArrayInputStream(alert))
+            }
         assertTrue(failure.message.orEmpty().contains("handshake_failure"))
     }
 
@@ -65,7 +71,9 @@ class TlsCompatibilityProbeTest {
     }
 
     private fun serverFlight(fragmentSize: Int): ByteArray {
-        val serverHello = handshake(2, byteArrayOf(3, 3) + ByteArray(32) + byteArrayOf(0) + byteArrayOf(0xC0.toByte(), 0x2C) + byteArrayOf(0))
+        val cipher = byteArrayOf(0xC0.toByte(), 0x2C)
+        val helloBody = byteArrayOf(3, 3) + ByteArray(32) + byteArrayOf(0) + cipher + byteArrayOf(0)
+        val serverHello = handshake(2, helloBody)
         val der = certificate.encoded
         val certList = u24(der.size) + der
         val certificates = handshake(11, u24(certList.size) + certList)
@@ -79,7 +87,10 @@ class TlsCompatibilityProbeTest {
         return out.toByteArray()
     }
 
-    private fun handshake(type: Int, body: ByteArray) = byteArrayOf(type.toByte()) + u24(body.size) + body
+    private fun handshake(
+        type: Int,
+        body: ByteArray,
+    ) = byteArrayOf(type.toByte()) + u24(body.size) + body
 
     private fun u24(n: Int) = byteArrayOf((n shr 16).toByte(), (n shr 8).toByte(), n.toByte())
 }

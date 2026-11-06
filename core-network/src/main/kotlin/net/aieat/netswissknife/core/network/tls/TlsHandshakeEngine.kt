@@ -10,6 +10,7 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.security.KeyStore
 import java.security.NoSuchAlgorithmException
+import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
@@ -232,14 +233,15 @@ internal class SocketTlsHandshakeEngine(
 
         override fun snapshot(): TlsHandshakeSnapshot {
             val captured = checkNotNull(flight) { "Certificates were not captured" }
-            val factory = java.security.cert.CertificateFactory.getInstance("X.509")
+            val factory = CertificateFactory.getInstance("X.509")
+            val certificates =
+                captured.certificates.map { der ->
+                    factory.generateCertificate(der.inputStream()) as X509Certificate
+                }
             return TlsHandshakeSnapshot(
                 protocol = captured.protocol,
                 cipherSuite = captured.cipherSuite,
-                peerCertificates =
-                    captured.certificates.map {
-                        factory.generateCertificate(it.inputStream()) as X509Certificate
-                    },
+                peerCertificates = certificates,
             )
         }
 

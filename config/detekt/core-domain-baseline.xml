@@ -105,7 +105,6 @@
     <ID>MaxLineLength:PortScanUseCase.kt:PortScanUseCase$emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.PORT_OUT_OF_RANGE, "End port must be between 1 and 65 535", params.endPort, 1, 65_535)))</ID>
     <ID>MaxLineLength:PortScanUseCase.kt:PortScanUseCase$emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.PORT_OUT_OF_RANGE, "Start port must be between 1 and 65 535", params.startPort, 1, 65_535)))</ID>
     <ID>MaxLineLength:PortScanUseCase.kt:PortScanUseCase$emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.PORT_RANGE_INVERTED, "Start port must be ≤ end port", params.startPort, params.endPort)))</ID>
-    <ID>MaxLineLength:PortScanUseCase.kt:PortScanUseCase$emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.PORT_RANGE_TOO_LARGE, "Custom range must not exceed 10 000 ports (got $rangeSize)", 10_000, rangeSize)))</ID>
     <ID>MaxLineLength:PortScanUseCase.kt:PortScanUseCase$emit(PortScanFlowResult.ValidationError(validationError(ErrorCode.TIMEOUT_OUT_OF_RANGE, "Timeout must be between 100 ms and 30 000 ms", 100, 30_000)))</ID>
     <ID>MaxLineLength:PortScanUseCaseTest.kt:PortScanUseCaseTest.PresetScanning$assertTrue(events.indexOfFirst { it is PortScanFlowResult.Started } &lt; events.indexOfFirst { it is PortScanFlowResult.PortScanned })</ID>
     <ID>MaxLineLength:SpeedTestUseCaseTest.kt:SpeedTestUseCaseTest.&lt;no name provided&gt;$override</ID>
@@ -124,8 +123,6 @@
     <ID>MaxLineLength:TracerouteUseCaseTest.kt:TracerouteUseCaseTest.HappyPath$every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns flowOf(*hops.toTypedArray())</ID>
     <ID>MaxLineLength:TracerouteUseCaseTest.kt:TracerouteUseCaseTest.HappyPath$val results = TracerouteUseCase(tracerouteRepo, geoRepo, reverseDns)(TracerouteParams("google.com")).toList()</ID>
     <ID>MaxLineLength:TracerouteUseCaseTest.kt:TracerouteUseCaseTest.Validation$assertEquals("Requested trace exceeds the 20-minute time limit; reduce max hops, probes per hop, or timeout", error.message)</ID>
-    <ID>MaxLineLength:WakeOnLanUseCase.kt:WakeOnLanUseCase$if (!WolMagicPacket.isValidMac(mac)) return NetworkResult.error(ErrorCode.MAC_INVALID, "Invalid MAC address format")</ID>
-    <ID>MaxLineLength:WakeOnLanUseCase.kt:WakeOnLanUseCase$if (broadcast.isBlank()) return NetworkResult.error(ErrorCode.BROADCAST_BLANK, "Broadcast address must not be blank")</ID>
     <ID>MaxLineLength:WhoisLookupUseCase.kt:WhoisLookupUseCase$?:</ID>
     <ID>MaxLineLength:WhoisLookupUseCase.kt:WhoisLookupUseCase$return NetworkResult.error(ErrorCode.TIMEOUT_OUT_OF_RANGE, "Timeout must be between 500 ms and 30 000 ms", args = listOf(500, 30_000))</ID>
     <ID>ReturnCount:DnsLookupUseCase.kt:DnsLookupUseCase$private suspend fun invokeValidated: NetworkResult&lt;DnsResult&gt;</ID>

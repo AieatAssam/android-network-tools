@@ -219,7 +219,7 @@ class TlsInspectorRepositoryFakeEngineTest {
     @Test
     fun `server refusing the hello falls back to certificate capture and is never fully trusted`() = runTest {
         val engine = FakeEngine(
-            defaultProtocolFailure = SSLHandshakeException("error:10000410:SSL routines:OPENSSL_internal:SSLV3_ALERT_HANDSHAKE_FAILURE"),
+            defaultProtocolFailure = SSLHandshakeException("OPENSSL_internal:SSLV3_ALERT_HANDSHAKE_FAILURE"),
         )
         val repository = repositoryWithEngine(engine, trusted = true)
 

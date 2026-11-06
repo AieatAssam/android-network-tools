@@ -1034,20 +1034,9 @@ internal fun buildTlsShareText(result: TlsInspectorResult): String = buildString
     appendLine("Protocol: ${result.tlsVersion}")
     appendLine("Cipher: ${result.cipherSuite}")
     appendLine("Trusted: ${result.isConnectionTrusted}")
-    if (!result.handshakeCompleted) {
-        appendLine(
-            "Note: this device's TLS stack could not negotiate with the server; " +
-                "the certificates were read with a compatibility probe and the handshake was not completed.",
-        )
-    }
+    appendCaptureNote(result)
     appendLine("Chain trusted: ${result.isChainTrusted}")
-    appendLine(
-        if (result.handshakeCompleted) {
-            "Connect: ${result.connectTimeMs} ms; handshake: ${result.handshakeTimeMs} ms"
-        } else {
-            "Connect: ${result.connectTimeMs} ms"
-        },
-    )
+    appendLine(timingLine(result))
     result.alpn?.let { appendLine("ALPN: $it") }
     result.hostnameMatches?.let { appendLine("Hostname match: $it") }
     result.pinMatch?.let { appendLine("Expected pin match: $it") }
@@ -1103,3 +1092,18 @@ private fun net.aieat.netswissknife.core.network.tls.ChainIssue.stringRes(): Int
     net.aieat.netswissknife.core.network.tls.ChainIssue.INCOMPLETE_CHAIN -> R.string.tls_issue_incomplete_chain
     net.aieat.netswissknife.core.network.tls.ChainIssue.PIN_MISMATCH -> R.string.tls_issue_pin_mismatch
 }
+
+private fun StringBuilder.appendCaptureNote(result: TlsInspectorResult) {
+    if (result.handshakeCompleted) return
+    appendLine(
+        "Note: this device's TLS stack could not negotiate with the server; " +
+            "the certificates were read with a compatibility probe and the handshake was not completed.",
+    )
+}
+
+private fun timingLine(result: TlsInspectorResult): String =
+    if (result.handshakeCompleted) {
+        "Connect: ${result.connectTimeMs} ms; handshake: ${result.handshakeTimeMs} ms"
+    } else {
+        "Connect: ${result.connectTimeMs} ms"
+    }

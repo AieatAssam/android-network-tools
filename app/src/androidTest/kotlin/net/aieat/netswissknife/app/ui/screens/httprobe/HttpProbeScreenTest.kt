@@ -332,7 +332,6 @@ class HttpProbeScreenTest {
         )
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContextState } returns MutableStateFlow(ToolSource.MDNS)
-        every { viewModel.plainHttpHandoff } returns MutableStateFlow<PlainHttpHandoff?>(null)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
         every { viewModel.networkStatus } returns MutableStateFlow(
             NetworkStatus(hasInternet = true, hasLocalNetwork = true)
@@ -363,7 +362,6 @@ class HttpProbeScreenTest {
         )
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContextState } returns MutableStateFlow(ToolSource.LAN)
-        every { viewModel.plainHttpHandoff } returns MutableStateFlow<PlainHttpHandoff?>(null)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
         every { viewModel.networkStatus } returns MutableStateFlow(
             NetworkStatus(hasInternet = true, hasLocalNetwork = true)
@@ -386,7 +384,6 @@ class HttpProbeScreenTest {
         every { viewModel.uiState } returns uiState
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContextState } returns sourceContext
-        every { viewModel.plainHttpHandoff } returns MutableStateFlow<PlainHttpHandoff?>(null)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
         every { viewModel.networkStatus } returns MutableStateFlow(
             NetworkStatus(hasInternet = true, hasLocalNetwork = true)
@@ -433,8 +430,24 @@ class HttpProbeScreenTest {
     }
 
     @Test
+    fun plainHttpUrl_showsCleartextWarningAndStaysSendable() {
+        val viewModel = fakeViewModel(HttpProbeUiState(url = "http://192.168.1.1"))
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CLEARTEXT_WARNING).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.httprobe_send_button))
+            .performScrollTo()
+            .assert(androidx.compose.ui.test.isEnabled())
+    }
+
+    @Test
     fun invalidUrl_showsValidationError() {
-        val viewModel = fakeViewModel(HttpProbeUiState(url = "http://example.com"))
+        val viewModel = fakeViewModel(HttpProbeUiState(url = "ftp://example.com"))
         composeRule.setContent {
             NetSwissKnifeTheme {
                 HttpProbeScreen(viewModel = viewModel)
@@ -443,7 +456,7 @@ class HttpProbeScreenTest {
 
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule
-            .onNodeWithText(context.getString(R.string.err_http_cleartext_disabled))
+            .onNodeWithText(context.getString(R.string.err_url_scheme_unsupported))
             .performScrollTo()
             .assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.httprobe_send_button))
@@ -641,7 +654,6 @@ class HttpProbeScreenTest {
         every { viewModel.uiState } returns MutableStateFlow(state)
         every { viewModel.recentHosts } returns MutableStateFlow(recentHostValues)
         every { viewModel.sourceContextState } returns MutableStateFlow(null)
-        every { viewModel.plainHttpHandoff } returns MutableStateFlow<PlainHttpHandoff?>(null)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
         every { viewModel.networkStatus } returns MutableStateFlow(
             NetworkStatus(hasInternet = true, hasLocalNetwork = true)
@@ -667,7 +679,6 @@ class HttpProbeScreenTest {
         every { viewModel.uiState } returns MutableStateFlow(HttpProbeUiState(result = result, selectedTab = 3))
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContextState } returns MutableStateFlow(null)
-        every { viewModel.plainHttpHandoff } returns MutableStateFlow<PlainHttpHandoff?>(null)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
         every { viewModel.networkStatus } returns MutableStateFlow(
             NetworkStatus(hasInternet = true, hasLocalNetwork = true)

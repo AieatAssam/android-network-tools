@@ -7,7 +7,8 @@ import java.util.Locale
 
 /**
  * Returns a validated, credential-free HTTP origin suitable for recent history.
- * Paths, queries, fragments, and user info are deliberately discarded.
+ * Paths, queries, fragments, and user info are deliberately discarded. Only HTTPS origins are kept:
+ * recents are persisted, and plain-HTTP targets are usually private LAN devices.
  */
 internal fun safeHttpRecentOrigin(rawUrl: String): String? {
     if (validateHttpProbeUrl(rawUrl) != null) return null
@@ -15,7 +16,7 @@ internal fun safeHttpRecentOrigin(rawUrl: String): String? {
     return runCatching {
         val input = rawUrl.trim()
         val uri = URI(input)
-        val scheme = uri.scheme?.lowercase(Locale.ROOT) ?: return null
+        val scheme = uri.scheme?.lowercase(Locale.ROOT)?.takeIf { it == "https" } ?: return null
         val rawHost = uri.host ?: uri.toURL().host
         val normalizedHost = HostValidator.normalize(rawHost) ?: return null
         val host = normalizedHost.removeSurrounding("[", "]")

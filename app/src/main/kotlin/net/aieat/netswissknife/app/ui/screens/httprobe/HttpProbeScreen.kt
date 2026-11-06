@@ -146,6 +146,7 @@ object HttpProbeScreenTestTags {
     const val SOURCE_CONTEXT = "httprobe_source_context"
     const val CLEAR_PREFILL_ACTION = "httprobe_clear_prefill_action"
     const val INVALID_HANDOFF = "httprobe_invalid_handoff"
+    const val CLEARTEXT_WARNING = "httprobe_cleartext_warning"
     const val BLOCKED_REDIRECT_WARNING = "httprobe_blocked_redirect_warning"
     const val TIMING_BAR = "httprobe_timing_bar"
     const val COPY_CURL_ACTION = "httprobe_copy_curl_action"
@@ -163,7 +164,6 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
     val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
     val sourceContext by viewModel.sourceContextState.collectAsStateWithLifecycle()
-    val plainHandoff by viewModel.plainHttpHandoff.collectAsStateWithLifecycle()
     val announcementPhase = when {
         uiState.isLoading -> ToolAnnouncementPhase.RUNNING
         uiState.isCanceled -> ToolAnnouncementPhase.CANCELED
@@ -179,9 +179,7 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
             ToolSource.MDNS -> stringResource(R.string.httprobe_source_mdns)
             else -> null
         }
-    val sourceText: String? =
-        plainHandoff?.let { stringResource(R.string.httprobe_plain_http_handoff, it.host, it.port) }
-            ?: sourceLabel
+    val sourceText: String? = sourceLabel
     val clipboard = LocalClipboard.current
     val clipboardScope = rememberCoroutineScope()
 
@@ -223,7 +221,6 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
 
             if (sourceText != null) {
                 item {
-                    val isPlainNotice = plainHandoff != null
                     val typography = MaterialTheme.typography
                     val colors = MaterialTheme.colorScheme
                     Row(
@@ -233,8 +230,8 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                     ) {
                         Text(
                             text = sourceText,
-                            style = if (isPlainNotice) typography.bodyMedium else typography.labelLarge,
-                            color = if (isPlainNotice) colors.onSurfaceVariant else colors.secondary,
+                            style = typography.labelLarge,
+                            color = colors.secondary,
                             modifier = Modifier.weight(1f).testTag(HttpProbeScreenTestTags.SOURCE_CONTEXT),
                         )
                         TextButton(
@@ -245,6 +242,12 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                             Text(stringResource(R.string.clear))
                         }
                     }
+                }
+            }
+
+            if (uiState.url.trim().startsWith("http://", ignoreCase = true)) {
+                item {
+                    CleartextWarning(modifier = Modifier.testTag(HttpProbeScreenTestTags.CLEARTEXT_WARNING))
                 }
             }
 
@@ -1576,5 +1579,31 @@ private fun responseSizeText(result: HttpProbeResult, atLeastFormat: String): St
         !result.responseBodyTruncated -> formatBytes(result.responseBodyBytes)
         declared != null -> formatBytes(declared)
         else -> atLeastFormat.format(formatBytes(result.responseBodyBytes))
+    }
+}
+
+/** Shown while the URL is plain http://, because the request and response are readable on the network. */
+@Composable
+private fun CleartextWarning(modifier: Modifier = Modifier) {
+    OutlinedCard(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Default.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Text(
+                text = stringResource(R.string.httprobe_cleartext_warning),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+        }
     }
 }

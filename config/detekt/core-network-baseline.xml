@@ -284,30 +284,6 @@
     <ID>MagicNumber:SpeedTestModels.kt:SpeedTestConfig$60_000</ID>
     <ID>MagicNumber:SpeedTestModels.kt:SpeedTestConfig$8</ID>
     <ID>MagicNumber:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$1_000_000L</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$0x3L</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$0x8000_0000L</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$0xEL</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$0xFF</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$0xFFFFFFFFL</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$10L</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$127L</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$16</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$168</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$169L</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$172L</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$192L</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$20</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$24</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$254</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$255</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$256L</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$28</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$3</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$30</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$31</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$32</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$4</ID>
-    <ID>MagicNumber:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$8</ID>
     <ID>MagicNumber:SubnetUtils.kt:SubnetUtils$0xFF</ID>
     <ID>MagicNumber:SubnetUtils.kt:SubnetUtils$0xFFFFFFFFL</ID>
     <ID>MagicNumber:SubnetUtils.kt:SubnetUtils$16</ID>
@@ -368,8 +344,6 @@
     <ID>MagicNumber:UdpExchange.kt:NetworkBoundUdpExchange$100L</ID>
     <ID>MagicNumber:UdpExchange.kt:NetworkBoundUdpExchange$1_000_000L</ID>
     <ID>MagicNumber:UdpExchange.kt:NetworkBoundUdpExchange$999_999L</ID>
-    <ID>MagicNumber:WakeOnLanRepositoryImpl.kt:WakeOnLanRepositoryImpl$255</ID>
-    <ID>MagicNumber:WakeOnLanRepositoryImpl.kt:WakeOnLanRepositoryImpl$4</ID>
     <ID>MagicNumber:WellKnownPorts.kt:WellKnownPorts$1023</ID>
     <ID>MagicNumber:WellKnownPorts.kt:WellKnownPorts$1024</ID>
     <ID>MagicNumber:WellKnownPorts.kt:WellKnownPorts$49151</ID>
@@ -423,8 +397,6 @@
     <ID>MagicNumber:WifiBand.kt:WifiBand.Companion$71000</ID>
     <ID>MagicNumber:WifiBand.kt:WifiBand.Companion$7125</ID>
     <ID>MagicNumber:WolMagicPacket.kt:WolMagicPacket$16</ID>
-    <ID>MagicNumber:WolMagicPacket.kt:WolMagicPacket$6</ID>
-    <ID>MatchingDeclarationName:SubnetModels.kt:SubnetInfo</ID>
     <ID>MatchingDeclarationName:TopologyDiscoveryEvents.kt:TopologyDiscoveryEvent</ID>
     <ID>MaxLineLength:CookieAnalyzer.kt:CookieAnalyzer$"httprobe_sec_cookie_samesite_none_requires_secure" -&gt; "SameSite=None cookies require Secure and are rejected by browsers without it."</ID>
     <ID>MaxLineLength:CookieAnalyzer.kt:CookieAnalyzer$"httprobe_sec_cookie_secure_from_http" -&gt; "Browsers reject Secure cookies received over an insecure HTTP response."</ID>
@@ -447,14 +419,9 @@
     <ID>MaxLineLength:GeoIpRepositoryImplTest.kt:GeoIpRepositoryImplTest$IpApiGeoIpProvider().parse("8.8.8.8", ipApiFixture.replace("\"ip\":\"8.8.8.8\"", "\"ip\":\"8.8.8.8\",\"error\":true"))</ID>
     <ID>MaxLineLength:GeoIpRepositoryImplTest.kt:GeoIpRepositoryImplTest$ScriptedGeoIpConnection(url, 200, """{"ip":"${ipFromPath(url)}","success":false,"message":"quota exceeded"}""")</ID>
     <ID>MaxLineLength:GeoIpRepositoryImplTest.kt:GeoIpRepositoryImplTest$val canonicalIpv6 = """{"ip":"2001:4860:4860:0:0:0:0:8888","city":"Mountain View","country":"US","loc":"37.38,-122.08"}"""</ID>
-    <ID>MaxLineLength:HttpProbeEnhancementsTest.kt:HttpProbeEnhancementsTest$"curl -X 'POST' -H 'X-Name: O'\\''Reilly' --data-raw '{\"message\":\"it'\\''s ok\"}' --proto '=https' 'https://example.test/submit'"</ID>
-    <ID>MaxLineLength:HttpProbeEnhancementsTest.kt:HttpProbeEnhancementsTest$assertEquals("curl -X 'GET' --proto '=https' --proto-redir '=https' --max-redirs 10 -L 'http://example.test/a'", http)</ID>
-    <ID>MaxLineLength:HttpProbeEnhancementsTest.kt:HttpProbeEnhancementsTest$assertEquals("curl -X 'GET' --proto '=https' --proto-redir '=https' --max-redirs 10 -L 'https://example.test/a?x=1'", get)</ID>
-    <ID>MaxLineLength:HttpProbeEnhancementsTest.kt:HttpProbeEnhancementsTest$mapOf("Content-Security-Policy" to listOf("default-src 'self'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'"))</ID>
     <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$?:</ID>
     <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$CrossOriginEntityReplay(redirect.destination.toString(), redirect.method, response.statusCode)</ID>
     <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$NetworkResult.error(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = "HTTP request failed", cause = e)</ID>
-    <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$NetworkResult.error(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = "Network request failed", cause = e)</ID>
     <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$if (!approved) return NetworkResult.error(ErrorCode.HTTP_REDIRECT_APPROVAL_REQUIRED, developerMessage = "Cross-origin redirect entity replay was not approved")</ID>
     <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$if (trimmedUrl.isBlank()) return NetworkResult.error(ErrorCode.URL_BLANK, developerMessage = "URL must not be blank")</ID>
     <ID>MaxLineLength:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$return NetworkResult.error(ErrorCode.HTTP_REDIRECT_INVALID, developerMessage = "Malformed redirect URL")</ID>
@@ -464,10 +431,6 @@
     <ID>MaxLineLength:HttpProbeRepositoryTest.kt:HttpProbeRepositoryRedirectTest$assertEquals("http://bob:destination-secret@destination.test/danger?redirect-token=private#destination-fragment", evidence.destinationUrl)</ID>
     <ID>MaxLineLength:HttpProbeRepositoryTest.kt:HttpProbeRepositoryRedirectTest$assertTrue(sourceConnection.disconnected, "source connection must close before waiting for consent")</ID>
     <ID>MaxLineLength:HttpProbeRepositoryTest.kt:HttpProbeRepositoryRedirectTest$val location = "http://bob:destination-secret@destination.test/danger?redirect-token=private#destination-fragment"</ID>
-    <ID>MaxLineLength:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$is TcpPresence.PolicyDenied -&gt; LanScanDiagnostic(ip, LanScanDiagnosticReason.TCP_POLICY_DENIED, tcp.port, tcp.detail)</ID>
-    <ID>MaxLineLength:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$is TcpPresence.TimedOut -&gt; LanScanDiagnostic(ip, LanScanDiagnosticReason.TCP_TIMED_OUT, tcp.port, tcp.detail)</ID>
-    <ID>MaxLineLength:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$is TcpPresence.UnknownFailure -&gt; LanScanDiagnostic(ip, LanScanDiagnosticReason.TCP_UNKNOWN_FAILURE, tcp.port, tcp.detail)</ID>
-    <ID>MaxLineLength:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$is TcpPresence.Unreachable -&gt; LanScanDiagnostic(ip, LanScanDiagnosticReason.TCP_UNREACHABLE, tcp.port, tcp.detail)</ID>
     <ID>MaxLineLength:NetworkCacheTest.kt:NetworkCacheTest$assertEquals("answer", (cache.getOrLoad(key, NetworkCacheMode.UseCached) { "wrong" } as NetworkCacheResult.Found).value)</ID>
     <ID>MaxLineLength:NetworkCacheTest.kt:NetworkCacheTest$assertEquals("one", (cache.getOrLoad(base, NetworkCacheMode.UseCached) { "one" } as NetworkCacheResult.Found).value)</ID>
     <ID>MaxLineLength:NetworkCacheTest.kt:NetworkCacheTest$assertEquals("recovered", (cache.getOrLoad(key, NetworkCacheMode.UseCached) { "recovered" } as NetworkCacheResult.Found).value)</ID>
@@ -498,11 +461,6 @@
     <ID>MaxLineLength:OkHttpTransferEngine.kt:OkHttpTransferEngine.Companion$if (!parts.firstOrNull().equals("cfRequestDuration", ignoreCase = true)) return@firstNotNullOfOrNull null</ID>
     <ID>MaxLineLength:OkHttpTransferEngineTest.kt:OkHttpTransferEngineTest$assertEquals(12.5, OkHttpTransferEngine.parseServerTimingMs("cfRequestDuration;desc=\"cache, \\\"warm\\\" origin\";dur=12.5"))</ID>
     <ID>MaxLineLength:OkHttpTransferEngineTest.kt:OkHttpTransferEngineTest$assertEquals(12.5, OkHttpTransferEngine.parseServerTimingMs("cfRequestDuration;desc=\"cache, origin\";dur=12.5"))</ID>
-    <ID>MaxLineLength:OkHttpTransferEngineTest.kt:OkHttpTransferEngineTest$assertTrue(events.none { it is SpeedTestEvent.Failed }, "speed test failed: ${events.filterIsInstance&lt;SpeedTestEvent.Failed&gt;()}")</ID>
-    <ID>MaxLineLength:OkHttpTransferEngineTest.kt:OkHttpTransferEngineTest.&lt;no name provided&gt;$delegate.download(url, streams, durationMs, operationSession).onEach { observedDownloadStreams += it.streamIndex }</ID>
-    <ID>MaxLineLength:OkHttpTransferEngineTest.kt:OkHttpTransferEngineTest.&lt;no name provided&gt;$delegate.upload(url, streams, durationMs, operationSession).onEach { observedUploadStreams += it.streamIndex }</ID>
-    <ID>MaxLineLength:OkHttpTransferEngineTest.kt:OkHttpTransferEngineTest.&lt;no name provided&gt;$override fun download</ID>
-    <ID>MaxLineLength:OkHttpTransferEngineTest.kt:OkHttpTransferEngineTest.&lt;no name provided&gt;$override fun upload</ID>
     <ID>MaxLineLength:OperationRunnerTest.kt:OperationRunnerTest$"deadline cancellation must retain the underlying resource close failure: ${deadlineFailure.failureGraph().map { it::class.simpleName + ":" + it.message }.toList()}"</ID>
     <ID>MaxLineLength:OperationRunnerTest.kt:OperationRunnerTest$"deadline failures: ${deadlineFailures.flatMap { it.failureGraph().toList() }.map { it::class.simpleName + ":" + it.message }}"</ID>
     <ID>MaxLineLength:OperationRunnerTest.kt:OperationRunnerTest$"the bounded cleanup wait must be reported on the cancellation: ${cancellationFailure.failureGraph().map { it::class.simpleName + ":" + it.message }.toList()}"</ID>
@@ -510,7 +468,6 @@
     <ID>MaxLineLength:PublicSuffixColdStartBenchmarkTest.kt:PublicSuffixColdStartBenchmarkTest$*</ID>
     <ID>MaxLineLength:RdapClient.kt:DnsBootstrap.Companion$if (url.host.isBlank() || url.username.isNotEmpty() || url.password.isNotEmpty() || url.query != null || url.fragment != null) return null</ID>
     <ID>MaxLineLength:RdapClient.kt:DnsBootstrap.Companion$val</ID>
-    <ID>MaxLineLength:RdapClient.kt:OkHttpRdapTransport$val call = client.newCall(Request.Builder().url(url).header("Accept", "application/rdap+json, application/json").get().build())</ID>
     <ID>MaxLineLength:RdapClient.kt:RdapClient$if (bootstrapUrl.isHttps &amp;&amp; !final.isHttps) throw IOException("IANA bootstrap response attempted an HTTPS downgrade")</ID>
     <ID>MaxLineLength:RdapClient.kt:RdapClient$require((url.isHttps || url.scheme == "http") &amp;&amp; url.host.isNotBlank()) { "RDAP URL must use HTTP or HTTPS and have a host" }</ID>
     <ID>MaxLineLength:RdapClient.kt:RdapClient.Companion$if (names.any { it.equals("no-store", ignoreCase = true) || it.equals("no-cache", ignoreCase = true) }) return 0L</ID>
@@ -526,17 +483,14 @@
     <ID>MaxLineLength:SpeedTestEngineRepositoryTest.kt:SpeedTestEngineRepositoryTest$assertEquals(ServerInfo(colo = "LHR", asn = "AS13335", country = "GB"), (events.first() as SpeedTestEvent.ServerInfoReceived).info)</ID>
     <ID>MaxLineLength:SpeedTestEngineRepositoryTest.kt:SpeedTestEngineRepositoryTest$val down = events.filterIsInstance&lt;SpeedTestEvent.LoadedLatencySample&gt;().filter { it.phase == SpeedTestPhase.DOWNLOAD }</ID>
     <ID>MaxLineLength:SpeedTestEngineRepositoryTest.kt:SpeedTestEngineRepositoryTest$val up = events.filterIsInstance&lt;SpeedTestEvent.LoadedLatencySample&gt;().filter { it.phase == SpeedTestPhase.UPLOAD }</ID>
-    <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$if</ID>
     <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$send(SpeedTestEvent.Failed(SpeedTestPhase.DOWNLOAD, ErrorInfo(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = e.message ?: "Download test failed")))</ID>
     <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$send(SpeedTestEvent.Failed(SpeedTestPhase.LATENCY, ErrorInfo(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = e.message ?: "Latency probe failed")))</ID>
     <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$send(SpeedTestEvent.Failed(SpeedTestPhase.UPLOAD, ErrorInfo(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = e.message ?: "Upload test failed")))</ID>
-    <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$send(SpeedTestEvent.Failed(currentPhase, ErrorInfo(ErrorCode.NETWORK_REQUEST_FAILED, developerMessage = failure.message ?: "Speed test failed")))</ID>
     <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$send(SpeedTestEvent.Failed(currentPhase, ErrorInfo(ErrorCode.NETWORK_TIMEOUT, developerMessage = "Speed test timed out")))</ID>
     <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$transfer = engine.download("$baseUrl/__down?bytes=$DOWNLOAD_PAYLOAD_BYTES", config.downloadStreams, config.phaseDurationMs, operationSession)</ID>
     <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$transfer = engine.upload("$baseUrl/__up", config.uploadStreams, config.phaseDurationMs, operationSession)</ID>
     <ID>MaxLineLength:SpeedTestRepositoryImpl.kt:internal</ID>
     <ID>MaxLineLength:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$if (host.isBlank()) return NetworkResult.error(ErrorCode.HOST_BLANK, developerMessage = "Host must not be blank")</ID>
-    <ID>MaxLineLength:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$return@withContext NetworkResult.error(ErrorCode.TLS_INSPECTION_FAILED, developerMessage = "TLS inspection timed out", cancelled)</ID>
     <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$if (lower.contains("access point") || lower.contains("wireless") || lower.contains("wifi") || lower.contains("wi-fi")) caps.add(DeviceCapability.AP)</ID>
     <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$if (lower.contains("switch") || lower.contains("catalyst") || lower.contains("nexus")) caps.add(DeviceCapability.SWITCH)</ID>
     <ID>MaxLineLength:TopologyDiscoveryRepositoryImpl.kt:TopologyDiscoveryRepositoryImpl$queryInterfaces(snmpClient, target, walkBudget, truncationReasons, snmpErrors, sessionRequestLimiter, tableObservations)</ID>
@@ -613,7 +567,6 @@
     <ID>ReturnCount:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$private fun parseNbstat: String?</ID>
     <ID>ReturnCount:NetBiosNameProbe.kt:NetBiosNameProbe.Companion$private fun skipDnsName: Int?</ID>
     <ID>ReturnCount:NetworkCache.kt:NetworkCache$suspend fun getOrLoad: NetworkCacheResult&lt;V&gt;</ID>
-    <ID>ReturnCount:OuiDatabase.kt:OuiDatabase$fun lookup: String?</ID>
     <ID>ReturnCount:PublicSuffix.kt:PublicSuffix$private fun isValidAsciiLabel: Boolean</ID>
     <ID>ReturnCount:PublicSuffix.kt:PublicSuffix$private fun resolve: String</ID>
     <ID>ReturnCount:RdapClient.kt:DnsBootstrap.Companion$private fun validatedBaseUrl: HttpUrl?</ID>
@@ -632,7 +585,6 @@
     <ID>ReturnCount:Snmp4jClientImpl.kt:Snmp4jClientImpl$private suspend fun ensureAuthoritativeEngineId</ID>
     <ID>ReturnCount:Snmp4jClientImpl.kt:Snmp4jClientImpl$private suspend fun targetFor: Pair&lt;Target&lt;*&gt;, UdpAddress&gt;</ID>
     <ID>ReturnCount:SnmpWalkBudget.kt:SnmpWalkBudget$@Synchronized internal fun tryReserve: Reservation</ID>
-    <ID>ReturnCount:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$private fun isPrivate: Boolean</ID>
     <ID>ReturnCount:SubnetUtils.kt:SubnetUtils$fun contains: Boolean</ID>
     <ID>ReturnCount:SubnetUtils.kt:SubnetUtils$fun isValidCidr: Boolean</ID>
     <ID>ReturnCount:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$override suspend fun inspect: NetworkResult&lt;TlsInspectorResult&gt;</ID>
@@ -662,8 +614,6 @@
     <ID>SwallowedException:PortScanRepositoryImpl.kt:PortScanRepositoryImpl.Companion$e: ConnectException</ID>
     <ID>SwallowedException:PortScanRepositoryImpl.kt:PortScanRepositoryImpl.Companion$e: SocketTimeoutException</ID>
     <ID>SwallowedException:RdapClient.kt:RdapClient$readFailure: RdapResponseReadException</ID>
-    <ID>ThrowingExceptionFromFinally:OperationRunner.kt:OperationRunner$throw observedCloseFailure</ID>
-    <ID>ThrowingExceptionFromFinally:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$throw closeFailure</ID>
     <ID>ThrowsCount:BoundSockets.kt:private fun &lt;T : Closeable&gt; NetworkBinder.createBoundSocket: T</ID>
     <ID>ThrowsCount:HttpProbeRepositoryImpl.kt:HttpProbeRepositoryImpl$private suspend fun probeInternal: NetworkResult&lt;HttpProbeResult&gt;</ID>
     <ID>ThrowsCount:LanScanRepositoryImpl.kt:LanScanRepositoryImpl$private suspend fun enrich: LanHost</ID>
@@ -679,7 +629,6 @@
     <ID>ThrowsCount:Snmp4jClientImpl.kt:Snmp4jClientImpl$@OptIn(InternalCoroutinesApi::class) override suspend fun walk: SnmpWalkResult</ID>
     <ID>ThrowsCount:Snmp4jClientImpl.kt:Snmp4jClientImpl$private fun initializeBlocking</ID>
     <ID>ThrowsCount:Snmp4jClientImpl.kt:Snmp4jClientImpl$private suspend fun ensureInitialized</ID>
-    <ID>ThrowsCount:Snmp4jClientImpl.kt:Snmp4jClientImpl$private suspend fun targetFor: Pair&lt;Target&lt;*&gt;, UdpAddress&gt;</ID>
     <ID>ThrowsCount:TlsInspectorRepositoryFakeEngineTest.kt:TlsInspectorRepositoryFakeEngineTest.FakeEngine.&lt;no name provided&gt;$override fun handshake</ID>
     <ID>ThrowsCount:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$private suspend fun performHandshake: TimedHandshake</ID>
     <ID>ThrowsCount:UdpExchange.kt:NetworkBoundUdpExchange$private fun openSocket: DatagramSocket</ID>
@@ -720,7 +669,6 @@
     <ID>TooGenericExceptionCaught:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl$failure: Exception</ID>
     <ID>TooGenericExceptionCaught:SpeedTestRepositoryImpl.kt:SpeedTestRepositoryImpl.ConnectionLease$closeFailure: Throwable</ID>
-    <ID>TooGenericExceptionCaught:SubnetCalculatorRepositoryImpl.kt:SubnetCalculatorRepositoryImpl$e: Exception</ID>
     <ID>TooGenericExceptionCaught:TlsHandshakeEngine.kt:SocketTlsHandshakeEngine$closeFailure: Throwable</ID>
     <ID>TooGenericExceptionCaught:TlsHandshakeEngine.kt:SocketTlsHandshakeEngine$failure: Throwable</ID>
     <ID>TooGenericExceptionCaught:TlsInspectorRepositoryImpl.kt:TlsInspectorRepositoryImpl$closeFailure: Throwable</ID>

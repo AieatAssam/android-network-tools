@@ -33,7 +33,8 @@ data class TlsInspectorResult(
      */
     val isConnectionTrusted: Boolean
         get() {
-            if (!handshakeCompleted || !isChainTrusted || hostnameMatches == false || pinMatch == false) return false
+            if (!handshakeCompleted) return false
+            if (!isChainTrusted || hostnameMatches == false || pinMatch == false) return false
             return chainIssues.none { it in BLOCKING_ISSUES }
         }
 
