@@ -186,20 +186,23 @@ class HttpProbeViewModelTest {
     }
 
     @Test
-    fun `handoff prefills https for 443 and 8443 and never produces a cleartext URL`() {
+    fun `handoff prefills https for 443 and 8443 and http for every other port`() {
         val host = requireNotNull(ToolHost.parse("printer.local"))
 
         fun target(port: Int) = ToolDestination.HostTarget(HostTool.HTTP, host, requireNotNull(ToolPort.parse(port)))
 
         assertEquals("https://printer.local/", httpUrlForTarget(target(443)))
         assertEquals("https://printer.local:8443/", httpUrlForTarget(target(8443)))
+        assertEquals("http://printer.local/", httpUrlForTarget(target(80)))
+        assertEquals("http://printer.local:8080/", httpUrlForTarget(target(8080)))
+        assertEquals("http://printer.local:5000/", httpUrlForTarget(target(5000)))
         listOf(80, 8080, 5000).forEach { port ->
-            assertNull(httpUrlForTarget(target(port)))
+            assertNull(validateHttpProbeUrl(httpUrlForTarget(target(port))))
         }
     }
 
     @Test
-    fun `plain HTTP mDNS service is not prefilled and explains why`() {
+    fun `plain HTTP mDNS service is prefilled with an http URL`() {
         val intent =
             ToolIntent(
                 ToolDestination.HostTarget(
@@ -219,8 +222,7 @@ class HttpProbeViewModelTest {
                     ),
             )
 
-        assertEquals("", handoffVm.uiState.value.url)
-        assertEquals(PlainHttpHandoff(host = "printer.local", port = 80), handoffVm.plainHttpHandoff.value)
+        assertEquals("http://printer.local/", handoffVm.uiState.value.url)
         assertEquals(ToolSource.MDNS, handoffVm.sourceContext)
         assertFalse(handoffVm.hasInvalidHandoff.value)
     }

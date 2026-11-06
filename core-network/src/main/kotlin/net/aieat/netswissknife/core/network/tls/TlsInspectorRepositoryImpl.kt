@@ -104,7 +104,7 @@ class TlsInspectorRepositoryImpl(
             try {
                 OperationRunner.run(operationSession) {
                     val engine = handshakeEngine ?: SocketTlsHandshakeEngine(socketFactory, networkBinder)
-                    val primary = performHandshake(engine, host, port, timeoutMs, operationSession, protocol = null)
+                    val primary = performPrimaryHandshake(engine, host, port, timeoutMs, operationSession)
                     val certificates = primary.snapshot.peerCertificates
                     val trusted = chainTrustOverride?.invoke(certificates) ?: checkTrust(certificates)
                     val now = wallClockMillis()
@@ -123,7 +123,7 @@ class TlsInspectorRepositoryImpl(
                         } else {
                             null
                         }
-                    val protocolProbes = if (options.probeProtocols) {
+                    val protocolProbes = if (options.probeProtocols && primary.handshakeCompleted) {
                         probeProtocols(engine, host, port, timeoutMs, operationSession)
                     } else {
                         null
@@ -147,6 +147,7 @@ class TlsInspectorRepositoryImpl(
                             protocolProbeNotTestable = protocolProbes?.notTestable.orEmpty(),
                             pinMatch = pinMatch,
                             untrustedRootName = rootName,
+                            handshakeCompleted = primary.handshakeCompleted,
                         )
                     )
                 }
@@ -180,6 +181,14 @@ class TlsInspectorRepositoryImpl(
                         descriptionKey = NOT_TLS_PORT_DESCRIPTION,
                     )
                 }
+                if (failure is SSLException && isHandshakeRejection(failure)) {
+                    return@withContext NetworkResult.error(
+                        ErrorCode.TLS_HANDSHAKE_FAILED,
+                        developerMessage = "Server rejected the TLS handshake",
+                        cause = failure,
+                        descriptionKey = HANDSHAKE_REJECTED_DESCRIPTION,
+                    )
+                }
                 val message = resolverErrorMessage(failure, host) ?: failure.message ?: "TLS inspection failed"
                 NetworkResult.error(
                     ErrorCode.TLS_INSPECTION_FAILED,
@@ -190,6 +199,33 @@ class TlsInspectorRepositoryImpl(
         }
     }
 
+    /**
+     * A server that answers the platform hello with a handshake_failure alert may only be refusing
+     * what this device's TLS stack cannot offer (for example a P-521 curve on Android). The alert
+     * arrives before any certificate, so retry with a compatibility hello that only reads the
+     * certificates. The original failure is rethrown if that does not work either.
+     */
+    private suspend fun performPrimaryHandshake(
+        engine: TlsHandshakeEngine,
+        host: String,
+        port: Int,
+        timeoutMs: Int,
+        operationSession: OperationSession,
+    ): TimedHandshake =
+        try {
+            performHandshake(engine, host, port, timeoutMs, operationSession, protocol = null)
+        } catch (original: SSLException) {
+            if (!isHandshakeRejection(original)) throw original
+            try {
+                performHandshake(engine, host, port, timeoutMs, operationSession, protocol = null, compatibility = true)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                ensureCurrentOperationActive()
+                throw original
+            }
+        }
+
     private suspend fun performHandshake(
         engine: TlsHandshakeEngine,
         host: String,
@@ -197,9 +233,14 @@ class TlsInspectorRepositoryImpl(
         timeoutMs: Int,
         operationSession: OperationSession,
         protocol: String?,
+        compatibility: Boolean = false,
     ): TimedHandshake {
         val connection = try {
-            engine.openConnection(host, port, timeoutMs, protocol)
+            if (compatibility) {
+                engine.openCompatibilityConnection(host, port, timeoutMs)
+            } else {
+                engine.openConnection(host, port, timeoutMs, protocol)
+            }
         } catch (failure: IllegalArgumentException) {
             // A protocol-specific IllegalArgumentException here occurs while configuring the
             // local socket, before any endpoint interaction. It means this provider cannot test
@@ -234,7 +275,7 @@ class TlsInspectorRepositoryImpl(
                 val handshakeTimeMs = clock.elapsedMillisSince(handshakeStart)
                 val snapshot = connection.snapshot()
                 ensureCurrentOperationActive()
-                TimedHandshake(snapshot, connectTimeMs, handshakeTimeMs)
+                TimedHandshake(snapshot, connectTimeMs, handshakeTimeMs, handshakeCompleted = !compatibility)
             } catch (thrown: Throwable) {
                 failure = thrown
                 throw thrown
@@ -302,6 +343,15 @@ class TlsInspectorRepositoryImpl(
         return false
     }
 
+    private fun isHandshakeRejection(failure: Throwable): Boolean {
+        var current: Throwable? = failure
+        while (current != null) {
+            if (HANDSHAKE_FAILURE_ALERT.containsMatchIn(current.message.orEmpty())) return true
+            current = current.cause
+        }
+        return false
+    }
+
     private fun isProtocolVersionRejection(failure: SSLException): Boolean {
         var current: Throwable? = failure
         while (current != null) {
@@ -335,6 +385,7 @@ class TlsInspectorRepositoryImpl(
         val snapshot: TlsHandshakeSnapshot,
         val connectTimeMs: Long,
         val handshakeTimeMs: Long,
+        val handshakeCompleted: Boolean = true,
     )
 
     private class ProtocolNotTestableException(
@@ -351,6 +402,8 @@ class TlsInspectorRepositoryImpl(
     private companion object {
         val PIN_PATTERN = Regex("[0-9A-Fa-f]{64}")
         val PROTOCOL_VERSION_ALERT = Regex("fatal alert:\\s*protocol_version\\b", RegexOption.IGNORE_CASE)
+        val HANDSHAKE_FAILURE_ALERT =
+            Regex("handshake_failure|HANDSHAKE_FAILURE_ON_CLIENT_HELLO", RegexOption.IGNORE_CASE)
         val PLAINTEXT_RESPONSE_ALERT = Regex(PLAINTEXT_RESPONSE_PATTERN, RegexOption.IGNORE_CASE)
 
         // Spellings differ by provider: OpenSSL/Conscrypt print WRONG_VERSION_NUMBER with underscores,
@@ -360,6 +413,7 @@ class TlsInspectorRepositoryImpl(
             "wrong version number|wrong_version_number|unsupported or unrecognized ssl message|" +
                 "unrecognized ssl message|plaintext connection|unable to parse tls packet header|unknown protocol"
         const val NOT_TLS_PORT_DESCRIPTION = "tls_not_tls_port"
+        const val HANDSHAKE_REJECTED_DESCRIPTION = "tls_handshake_rejected"
         val CANDIDATE_PROTOCOLS = listOf("TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3")
     }
 }

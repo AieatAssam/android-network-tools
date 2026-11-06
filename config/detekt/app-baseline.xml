@@ -92,6 +92,7 @@
     <ID>FunctionNaming:HomeScreen.kt:@Composable private fun ToolGrid</ID>
     <ID>FunctionNaming:HttpProbeScreen.kt:@Composable fun HttpProbeScreen</ID>
     <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun BodyTabContent</ID>
+    <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun CleartextWarning</ID>
     <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun CrossOriginEntityReplayApprovalCard</ID>
     <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun HeaderRow</ID>
     <ID>FunctionNaming:HttpProbeScreen.kt:@Composable private fun HeaderSection</ID>
@@ -231,7 +232,6 @@
     <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun ConnectionCard</ID>
     <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun ExpiryBadge</ID>
     <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun LabeledValue</ID>
-    <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun TlsCanceledContent</ID>
     <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun TlsErrorContent</ID>
     <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun TlsHeaderCard</ID>
     <ID>FunctionNaming:TlsInspectorScreen.kt:@Composable private fun TlsIdlePlaceholder</ID>
@@ -414,7 +414,6 @@
     <ID>LongMethod:WifiScanScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable fun WifiScanScreen</ID>
     <ID>LongMethod:WifiScanScreen.kt:@OptIn(ExperimentalMaterial3Api::class) @Composable private fun WifiApDetailSheet</ID>
     <ID>LongMethod:WifiScanViewModel.kt:WifiScanViewModel$fun startScan</ID>
-    <ID>LoopWithTooManyJumpStatements:MdnsRepositoryImpl.kt:MdnsRepositoryImpl$for</ID>
     <ID>LoopWithTooManyJumpStatements:MdnsRepositoryImpl.kt:MdnsRepositoryImpl$while</ID>
     <ID>LoopWithTooManyJumpStatements:TopologyDiscoveryScreen.kt:for</ID>
     <ID>MagicNumber:AppNavigation.kt:4</ID>
@@ -507,7 +506,6 @@
     <ID>MagicNumber:PingScreen.kt:8</ID>
     <ID>MagicNumber:PingViewModel.kt:PingViewModel$10</ID>
     <ID>MagicNumber:PingViewModel.kt:PingViewModel$100</ID>
-    <ID>MagicNumber:PingViewModel.kt:PingViewModel$10_000</ID>
     <ID>MagicNumber:PingViewModel.kt:PingViewModel$1_472</ID>
     <ID>MagicNumber:PingViewModel.kt:PingViewModel$255</ID>
     <ID>MagicNumber:PingViewModel.kt:PingViewModel$2_000</ID>

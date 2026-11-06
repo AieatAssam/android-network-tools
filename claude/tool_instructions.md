@@ -405,7 +405,7 @@ Both must succeed before committing.
 | Network Topology | `topology` | SNMP discovery of devices, interfaces, VLANs, and neighbors |
 | TLS Inspector | `tls` | TLS certificate, trust, hostname, protocol, and pin inspection |
 | WHOIS Lookup | `whois` | Domain, IP, and ASN registration lookup with RDAP/WHOIS modes |
-| HTTP Probe | `httprobe` | HTTP/HTTPS request tester with security header analysis |
+| HTTP Probe | `httprobe` | HTTP and HTTPS request tester with security header analysis |
 | Subnet Calculator | `subnet` | IPv4 subnet calculations with binary and notation views |
 | mDNS Browser | `mdns` | Local DNS-SD service discovery with host, port, address, and TXT details |
 | Speed Test | `speedtest` | Cloudflare-backed latency, download, and upload measurement |

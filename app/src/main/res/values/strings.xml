@@ -14,7 +14,6 @@
     <string name="err_url_invalid">The URL is invalid.</string>
     <string name="err_url_malformed">The URL could not be parsed.</string>
     <string name="err_url_scheme_unsupported">This URL scheme is not supported.</string>
-    <string name="err_http_cleartext_disabled">Plain HTTP requests are disabled in this release. Use an HTTPS URL.</string>
     <string name="err_https_downgrade_blocked">The HTTPS redirect to an insecure connection was blocked.</string>
     <string name="err_timeout_out_of_range">The timeout must be between %1$d and %2$d milliseconds.</string>
     <string name="err_response_size_out_of_range">The response size limit must be between %1$d and %2$d bytes.</string>
@@ -126,7 +125,7 @@
     <string name="tool_whois_description">Domain and IP registration lookup</string>
     <string name="tool_httprobe_label">HTTP Probe</string>
     <string name="tool_httprobe_short_label">HTTP</string>
-    <string name="tool_httprobe_description">HTTPS request tester with security header analysis</string>
+    <string name="tool_httprobe_description">HTTP and HTTPS request tester with security header analysis</string>
     <string name="tool_subnet_label">Subnet Calculator</string>
     <string name="tool_subnet_short_label">Subnet</string>
     <string name="tool_subnet_description">IPv4 subnet calculator with binary breakdown and notation conversion</string>
@@ -821,6 +820,8 @@
     <string name="tls_issue_untrusted">The certificate chain is not trusted by this device\'s certificate store</string>
     <string name="tls_issue_untrusted_root">This device\'s trust store does not include the issuing root (%1$s)</string>
     <string name="tls_issue_pin_mismatch">The certificate does not match the expected SHA-256 pin</string>
+    <string name="tls_verdict_capture_only">This device\'s TLS stack could not negotiate with the server, so other apps here will likely fail too. The certificates were read with a compatibility probe; the handshake was not completed, so this cannot be called trusted.</string>
+    <string name="tls_handshake_rejected">The server refused the TLS handshake and its certificate could not be read. It may need a hostname (SNI) instead of an IP address, or share no protocol or cipher with this device.</string>
     <string name="tls_not_tls_port">This port answered with plain text, not TLS. Check the port, or use HTTP Probe for a plain-HTTP service.</string>
     <string name="tls_issue_hostname_mismatch">The certificate does not match this hostname</string>
     <string name="tls_issue_weak_signature">A weak signature algorithm was found</string>
@@ -916,7 +917,7 @@
 
     <!-- HTTP Probe Screen -->
     <string name="httprobe_screen_title">HTTP Probe</string>
-    <string name="httprobe_screen_subtitle">Test HTTPS requests with full header and security analysis.</string>
+    <string name="httprobe_screen_subtitle">Test HTTP and HTTPS requests with full header and security analysis.</string>
 
     <!-- HTTP Probe Input -->
     <string name="httprobe_url_label">URL</string>
@@ -1245,7 +1246,7 @@
     <string name="mdns_http_probe_description">Open %1$s in HTTP Probe</string>
     <string name="httprobe_source_mdns">Prefilled from mDNS Browser</string>
     <string name="httprobe_source_lan">Prefilled from LAN Scanner</string>
-    <string name="httprobe_plain_http_handoff">%1$s uses plain HTTP on port %2$d. HTTP Probe sends HTTPS only, so no URL was filled in. Enter an https:// URL if this service supports TLS.</string>
+    <string name="httprobe_cleartext_warning">Plain HTTP is not encrypted. The request and the response can be read or changed by anyone on the network path. Use it for local devices you trust.</string>
     <string name="httprobe_invalid_handoff">The supplied destination could not be verified. Enter a valid HTTP URL to continue.</string>
     <string name="mdns_ping_address">Ping %1$s</string>
 
@@ -1491,7 +1492,7 @@
     <string name="help_httprobe_concept_heading">What happens when you "visit" a URL?</string>
     <string name="help_httprobe_concept_body">When you request a URL, your device opens a connection to a server and sends a small text message describing what you want - the method, headers, maybe a body. The server replies with a status code, its own headers, and the content. This tool lets you send that request directly and inspect the entire exchange, including security-related response headers browsers check automatically but rarely show you.</string>
     <string name="help_httprobe_what_heading">What it does</string>
-    <string name="help_httprobe_what_body">Sends an HTTPS request to a URL and displays status, headers, body, redirect chain, timing breakdown, and security checks. Plain HTTP is disabled in this release. Copy the request as cURL or pretty-print a JSON response.</string>
+    <string name="help_httprobe_what_body">Sends an HTTP or HTTPS request to a URL and displays status, headers, body, redirect chain, timing breakdown, and security checks. Plain HTTP is allowed but not encrypted, so a warning is shown. Copy the request as cURL or pretty-print a JSON response.</string>
     <string name="help_httprobe_params_heading">Key parameters</string>
     <string name="help_httprobe_results_heading">Reading the results</string>
     <string name="help_httprobe_security_heading">Security header checks</string>

@@ -123,6 +123,7 @@ SSL/TLS certificate analysis for any TCP host, without sending an HTTP request.
 - A certificate that is not in this device's trust store is reported as untrusted by this device, which can differ from other clients on older Android versions
 - A port that answers with plain text rather than TLS (for example port 80) is reported as "does not appear to speak TLS". The check recognises the wording used by Android's OpenSSL/Conscrypt and by JSSE for a plaintext peer
 - When the only chain finding is an issuing root that this device does not have, the finding names it: "This device's trust store does not include the issuing root (<name>)". The verdict stays untrusted
+- A server that answers the device's hello with a `handshake_failure` alert (for example a gateway with a P-521 certificate, which Android's built-in TLS cannot offer) is retried with a TLS 1.2 compatibility probe that only reads the unencrypted certificates. The result is shown as Untrusted with a note that the handshake was not completed, and protocol probes are skipped. If the certificates cannot be read either, the error explains that the server refused the handshake
 - Connection summary includes negotiated TLS version, ALPN, cipher suite, connect time, and handshake time
 - Optional older-TLS-version probes, expected SHA-256 leaf-certificate pin comparison, and PEM chain sharing
 - Copy and Share sit at the foot of the results and send the connection summary, each certificate from leaf to root, and the chain findings as plain text. Share PEM still sends the PEM chain, next to them
@@ -164,7 +165,7 @@ Domain, IP, and ASN registration lookup using RDAP with WHOIS fallback.
 - The query and protocol survive rotation and process death. Leaving the tool with Back keeps the query, protocol and the finished result for the query it was run for (in memory only); a lookup still running when you leave is not restored as running. Request headers are not involved
 
 ### HTTP Probe
-HTTPS request tester with security header analysis. Plain HTTP requests are disabled in this release.
+HTTP and HTTPS request tester with security header analysis. Plain HTTP requests are allowed; the screen shows a warning that they are not encrypted.
 - The result tabs (Overview, Headers, Body, Security) scroll sideways with a fade on the cut-off edge; on a narrow screen with a large font the last tab may still need a swipe
 - Recent URLs hide the entry that is already in the URL field, so the row never repeats the typed value; the row is hidden when nothing else is left
 - Supports GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS methods
@@ -180,7 +181,7 @@ HTTPS request tester with security header analysis. Plain HTTP requests are disa
 - Copy the configured request as a shell-quoted cURL command, including method, custom headers, body, and redirect behavior. Redirect following is omitted when custom headers, a body, or a non-GET/HEAD method could diverge from the app's redirect handling; otherwise exported commands only follow HTTPS redirects to prevent downgrades. The UI explains when following is suppressed. A "cURL command copied to clipboard" confirmation is shown.
 - Failures are named by cause: a DNS failure ("The DNS lookup failed."), a timeout ("The network request timed out."), a refused connection ("The server refused the connection."), or a generic network failure.
 - Cancel while a request is sending ends it as "Request canceled", even when the call reports a timeout or an answer as Cancel is pressed; the button shows "Stopping" until the request has released its connection
-- Opening from mDNS Browser or LAN Scanner: HTTP Probe sends HTTPS only, so the handoff prefills `https://host/` for port 443 and `https://host:8443/` for port 8443. For any other port, such as the common plain-HTTP port 80, no URL is filled in and an explanation is shown. Plain HTTP is not sent to LAN addresses either. Cleartext support would need a separate, explicit warning-based design, so it was deferred.
+- Opening from mDNS Browser or LAN Scanner: the handoff prefills `https://host/` for port 443, `https://host:8443/` for port 8443, and `http://host[:port]/` for any other port (for example 80 or 8080). Nothing is sent until you press Send, and a warning is shown while the URL is plain HTTP. HTTPS redirects are never followed to plain HTTP.
 - The prefilled-from banner is removed as soon as the URL is edited.
 - Leaving the tool with Back keeps the URL, method, redirect flag and the last finished result for the app session (in memory only, never on disk). Request headers and the request body are never kept, so a result shown again has no request headers or body: its cURL copy omits them. A request still running when you leave is cancelled and not restored as running
 - Copy and Share sit at the foot of the response card, with Copy as cURL, and send a plain-text summary: status, final URL, redirects, response headers, size, and security checks. Cookie, Set-Cookie, Authorization and Proxy-Authorization values are omitted, and request headers and the request body are never included
