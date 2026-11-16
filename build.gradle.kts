@@ -15,11 +15,11 @@ buildscript {
         // AGP currently brings these build-time libraries transitively at
         // vulnerable versions. Keep the patched resolution on the Gradle
         // classpath without adding any of them to the Android runtime graph.
-        classpath("org.bouncycastle:bcpkix-jdk18on:1.86")
-        classpath("org.bouncycastle:bcprov-jdk18on:1.86")
+        classpath("org.bouncycastle:bcpkix-jdk18on:1.87")
+        classpath("org.bouncycastle:bcprov-jdk18on:1.87")
         classpath("org.bitbucket.b_c:jose4j:0.9.7")
         classpath("org.jdom:jdom2:2.0.6.1")
-        classpath("org.apache.commons:commons-lang3:3.21.0")
+        classpath("org.apache.commons:commons-lang3:3.22.0")
         classpath("org.apache.httpcomponents:httpclient:4.5.14")
     }
     configurations.classpath {
@@ -46,16 +46,16 @@ plugins {
 // these libraries to any app or test runtime configuration.
 val buildToolSecurityPins = mapOf(
     "androidLintTool" to listOf(
-        "org.bouncycastle:bcpkix-jdk18on:1.86",
-        "org.bouncycastle:bcprov-jdk18on:1.86",
-        "org.bouncycastle:bcutil-jdk18on:1.86",
-        "org.apache.commons:commons-lang3:3.21.0",
+        "org.bouncycastle:bcpkix-jdk18on:1.87",
+        "org.bouncycastle:bcprov-jdk18on:1.87",
+        "org.bouncycastle:bcutil-jdk18on:1.87",
+        "org.apache.commons:commons-lang3:3.22.0",
         "org.apache.httpcomponents:httpclient:4.5.14",
     ),
     // ktlint 1.8.0 bundles Logback 1.3.16; the published fixes are on 1.5.x.
     "ktlint" to listOf(
-        "ch.qos.logback:logback-classic:1.5.38",
-        "ch.qos.logback:logback-core:1.5.38",
+        "ch.qos.logback:logback-classic:1.6.6",
+        "ch.qos.logback:logback-core:1.6.6",
     ),
 )
 
