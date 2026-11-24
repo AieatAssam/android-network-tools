@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -24,13 +25,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Hub
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.PrivacyTip
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,7 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -64,6 +60,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.AppModalBottomSheet
+import net.aieat.netswissknife.app.ui.navigation.AppNavigationViewModel.Companion.MAX_PINNED
+import net.aieat.netswissknife.app.ui.navigation.MORE_TOOL_SECTIONS
+import net.aieat.netswissknife.app.ui.navigation.NavRoutes
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 
 private const val PAGE_COUNT = 4
@@ -204,24 +203,30 @@ private fun PageIndicator(pagerState: PagerState) {
 @Composable
 private fun WelcomePage() {
     Spacer(Modifier.height(8.dp))
+    // Gradient ring around a solid disc, so the white icon never sits on the gradient's light end.
     Box(
         modifier =
             Modifier
                 .size(72.dp)
                 .clip(CircleShape)
                 .background(
-                    Brush.radialGradient(
+                    Brush.linearGradient(
                         listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary),
                     ),
-                ),
+                ).padding(4.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            imageVector = Icons.Default.Hub,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier.size(40.dp),
-        )
+        Box(
+            modifier = Modifier.fillMaxSize().clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Default.Hub,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(36.dp),
+            )
+        }
     }
     Spacer(Modifier.height(16.dp))
     Text(
@@ -242,22 +247,9 @@ private fun WelcomePage() {
 
 // ── Page 2: Use cases ────────────────────────────────────────────────────────────
 
-private data class UseCase(
-    val icon: ImageVector,
-    val question: String,
-    val answer: String,
-)
-
 @Composable
 private fun UseCasesPage() {
-    val useCases =
-        listOf(
-            UseCase(Icons.Default.NetworkCheck, stringResource(R.string.onboarding_usecase_diagnostics_q), stringResource(R.string.onboarding_usecase_diagnostics_a)),
-            UseCase(Icons.Default.Wifi, stringResource(R.string.onboarding_usecase_wifi_q), stringResource(R.string.onboarding_usecase_wifi_a)),
-            UseCase(Icons.Default.Lock, stringResource(R.string.onboarding_usecase_security_q), stringResource(R.string.onboarding_usecase_security_a)),
-            UseCase(Icons.Default.Speed, stringResource(R.string.onboarding_usecase_speed_q), stringResource(R.string.onboarding_usecase_speed_a)),
-            UseCase(Icons.Default.Language, stringResource(R.string.onboarding_usecase_dns_q), stringResource(R.string.onboarding_usecase_dns_a)),
-        )
+    val toolsByRoute = NavRoutes.allTools.associateBy { it.route }
 
     Text(
         text = stringResource(R.string.onboarding_page2_title),
@@ -267,45 +259,32 @@ private fun UseCasesPage() {
     )
     Spacer(Modifier.height(16.dp))
     Column(modifier = Modifier.fillMaxWidth()) {
-        useCases.forEach { useCase ->
-            UseCaseRow(useCase)
+        MORE_TOOL_SECTIONS.forEach { section ->
+            val toolNames = section.routes.mapNotNull { toolsByRoute[it] }.map { stringResource(it.labelRes) }
+            SectionCard(title = stringResource(section.labelRes), tools = toolNames)
             Spacer(Modifier.height(10.dp))
         }
     }
 }
 
 @Composable
-private fun UseCaseRow(useCase: UseCase) {
+private fun SectionCard(
+    title: String,
+    tools: List<String>,
+) {
     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = useCase.icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-            Spacer(Modifier.width(14.dp))
-            Column {
-                Text(
-                    text = useCase.question,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = useCase.answer,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = tools.joinToString(separator = ", "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -339,7 +318,7 @@ private fun OrganizationPage() {
     )
     Spacer(Modifier.height(8.dp))
     Text(
-        text = stringResource(R.string.onboarding_page3_body),
+        text = pluralStringResource(R.plurals.onboarding_page3_body, MAX_PINNED, MAX_PINNED),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,

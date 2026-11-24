@@ -31,8 +31,14 @@ class ScreenHeightModeTest {
     }
 
     @Test
-    fun `wide windows keep the adaptive 160dp column count`() {
+    fun `wide windows use a 150dp tile minimum`() {
         assertEquals(3, homeGridColumns(availableWidthDp = 608))
+    }
+
+    @Test
+    fun `520dp tablet content area gets three columns`() {
+        // 520dp tablet width minus 16dp gutters on each side gives 488dp.
+        assertEquals(3, homeGridColumns(availableWidthDp = 488))
     }
 
     @Test

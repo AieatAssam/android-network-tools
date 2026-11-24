@@ -277,7 +277,7 @@ Identifies the vendor behind a MAC address or an OUI prefix, using the IEEE regi
 
 - **Keyboard**: the focused field scrolls into view above the on-screen keyboard, with its supporting and error text. The keyboard does not cover the field or the Recent row on any tool.
 - **Short landscape screens** (under 480dp high, such as a phone in landscape): the Home and tool hero headers collapse to a compact header, so the first tools or the tool's input start above the fold. Taller windows keep the full hero. Tablets keep the 640dp content cap.
-- **Home**: tools are laid out in rows of equal-height tiles (two columns on a phone).
+- **Home**: tools are grouped under Diagnostics, Wi-Fi & LAN, Security and Utilities, each section laid out in rows of equal-height tiles (two columns on a phone, three on a wide tablet).
 - **Retry**: every error card uses the same filled Retry button with a refresh icon.
 - **Result tables**: cipher suite names and HTTP security header names wrap at `_` and `-`, not mid-word. Exported text is unchanged.
 - **Ping**: when a host is typed but not yet run, the idle card says "Ready to ping" instead of asking for a host.
