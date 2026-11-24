@@ -20,6 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
@@ -77,6 +79,7 @@ private class OuiLookupActions(
     val onClear: () -> Unit,
     val onCopy: (String) -> Unit,
     val onShare: () -> Unit,
+    val onEditInput: () -> Unit,
 )
 
 @Composable
@@ -109,6 +112,7 @@ fun OuiLookupScreen(viewModel: OuiLookupViewModel = hiltViewModel()) {
     val paste: () -> Unit = {
         scope.launch { viewModel.onClipboardText(clipboard.readText()) }
     }
+    val inputFocus = remember { FocusRequester() }
     val actions =
         OuiLookupActions(
             onInputChange = viewModel::onInputChange,
@@ -120,6 +124,7 @@ fun OuiLookupScreen(viewModel: OuiLookupViewModel = hiltViewModel()) {
             onClear = viewModel::onClear,
             onCopy = copy,
             onShare = { context.shareText(summary, shareSubject) },
+            onEditInput = { inputFocus.requestFocus() },
         )
 
     OuiLookupBody(
@@ -131,6 +136,7 @@ fun OuiLookupScreen(viewModel: OuiLookupViewModel = hiltViewModel()) {
         onHelp = { showHelp = true },
         summary = summary,
         actions = actions,
+        inputFocus = inputFocus,
     )
 
     if (showHelp) {
@@ -150,6 +156,7 @@ private fun OuiLookupBody(
     onHelp: () -> Unit,
     summary: String,
     actions: OuiLookupActions,
+    inputFocus: FocusRequester,
 ) {
     val dismissRecent = rememberDismissKeyboard()
     AnimatedVisibility(
@@ -175,6 +182,7 @@ private fun OuiLookupBody(
                 invalidCount = uiState.invalidEntryCount,
                 lookupEnabled = uiState.input.isNotBlank() && uiState.phase != OuiLookupPhase.Loading,
                 actions = actions,
+                focusRequester = inputFocus,
             )
             RecentHostsRow(
                 recentHosts = recents,
@@ -207,6 +215,7 @@ private fun OuiInputCard(
     invalidCount: Int,
     lookupEnabled: Boolean,
     actions: OuiLookupActions,
+    focusRequester: FocusRequester,
 ) {
     // Look up and Paste are actions on the field's text, so the keyboard closes before they run;
     // the results then appear where the keyboard was rather than under it.
@@ -216,7 +225,7 @@ private fun OuiInputCard(
             modifier = Modifier.padding(CARD_PADDING_DP.dp),
             verticalArrangement = Arrangement.spacedBy(INPUT_GAP_DP.dp),
         ) {
-            OuiInputField(input, invalidCount, lookupEnabled, actions)
+            OuiInputField(input, invalidCount, lookupEnabled, actions, focusRequester)
             // Full-width and stacked: side by side, the labels wrapped mid-word at 360 dp with font 1.3.
             OutlinedButton(
                 onClick =
@@ -254,12 +263,13 @@ private fun OuiInputField(
     invalidCount: Int,
     lookupEnabled: Boolean,
     actions: OuiLookupActions,
+    focusRequester: FocusRequester,
 ) {
     val dismiss = rememberDismissKeyboard()
     ToolTextField(
         value = input,
         onValueChange = actions.onInputChange,
-        modifier = Modifier.fillMaxWidth().testTag(OuiLookupTestTags.INPUT),
+        modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).testTag(OuiLookupTestTags.INPUT),
         label = { Text(stringResource(R.string.oui_input_label)) },
         placeholder = { Text(stringResource(R.string.oui_input_placeholder)) },
         leadingIcon = { Icon(Icons.Default.Fingerprint, contentDescription = null) },
@@ -320,6 +330,7 @@ private fun OuiPhaseContent(
                 onCopy = actions.onCopy,
                 onShare = actions.onShare,
                 onClear = actions.onClear,
+                onEditInput = actions.onEditInput,
             )
         }
     }

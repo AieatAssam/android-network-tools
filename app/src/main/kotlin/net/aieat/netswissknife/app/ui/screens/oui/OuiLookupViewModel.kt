@@ -67,8 +67,21 @@ class OuiLookupViewModel
 
         private var lookupJob: Job? = null
 
+        /**
+         * Typing changes what the field holds. A change to the lookup text drops any shown or pending
+         * result, so the screen never presents the answer to an earlier input as the answer to this one.
+         * Case and surrounding spaces alone do not count as a change.
+         */
         fun onInputChange(value: String) {
-            _uiState.update { it.copy(input = value, invalidEntryCount = countInvalid(value)) }
+            val changed = normalise(value) != normalise(_uiState.value.input)
+            if (changed) lookupJob?.cancel()
+            _uiState.update { state ->
+                state.copy(
+                    input = value,
+                    invalidEntryCount = countInvalid(value),
+                    phase = if (changed) OuiLookupPhase.Idle else state.phase,
+                )
+            }
         }
 
         /** Looks up whatever is in the field. A blank field does nothing. */
@@ -124,6 +137,8 @@ class OuiLookupViewModel
                     }
                 }
         }
+
+        private fun normalise(text: String): String = text.trim().uppercase()
 
         private fun countInvalid(text: String): Int {
             val pieces = MacInputParser.splitEntries(text)

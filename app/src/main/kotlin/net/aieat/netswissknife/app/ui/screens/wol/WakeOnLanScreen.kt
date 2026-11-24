@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -44,6 +46,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -206,12 +209,14 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
                         editingMac = editingMac,
                         conflict = saveConflict,
                         notice = saveNotice,
-                        canSave = macProblem == null && macAddress.isNotBlank() && !isSending,
+                        canSave = macProblem == null && broadcastProblem == null && !portInvalid &&
+                            macAddress.isNotBlank() && !isSending,
                         isSending = isSending,
                         onNameChange = viewModel.savedDeviceEditor::onDeviceNameChange,
                         onSave = viewModel.savedDeviceEditor::saveDevice,
                         onCancelEdit = viewModel.savedDeviceEditor::cancelEdit,
                         onUse = viewModel.savedDeviceEditor::useDevice,
+                        onWake = viewModel::wakeDevice,
                         onEdit = viewModel.savedDeviceEditor::startEditDevice,
                         onDelete = { pendingDelete = it },
                     )
@@ -221,7 +226,7 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
             WolStateCard(
                 uiState = uiState,
                 onCancel = viewModel::stopSending,
-                onSendAgain = viewModel::reset,
+                onSendAgain = viewModel::send,
                 onRetry = viewModel::send,
             )
         }
@@ -478,7 +483,13 @@ private fun WolStateCard(
     onSendAgain: () -> Unit,
     onRetry: () -> Unit,
 ) {
+    // The card sits below the saved devices list, so a send result would be off screen; bring it into view.
+    val inView = remember { BringIntoViewRequester() }
+    LaunchedEffect(uiState) {
+        if (uiState !is WolUiState.Idle) inView.bringIntoView()
+    }
     AnimatedContent(
+        modifier = Modifier.bringIntoViewRequester(inView),
         targetState = uiState,
         transitionSpec = {
             (fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 6 }) togetherWith
@@ -525,6 +536,7 @@ private fun WolSavedDevicesSection(
     onSave: () -> Unit,
     onCancelEdit: () -> Unit,
     onUse: (WolSavedDevice) -> Unit,
+    onWake: (WolSavedDevice) -> Unit,
     onEdit: (WolSavedDevice) -> Unit,
     onDelete: (WolSavedDevice) -> Unit,
 ) {
@@ -557,6 +569,7 @@ private fun WolSavedDevicesSection(
                     device = device,
                     isSending = isSending,
                     onUse = { onUse(device) },
+                    onWake = { onWake(device) },
                     onEdit = { onEdit(device) },
                     onDelete = { onDelete(device) },
                 )
@@ -632,12 +645,16 @@ private fun WolSavedDeviceRow(
     device: WolSavedDevice,
     isSending: Boolean,
     onUse: () -> Unit,
+    onWake: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val label = WolSavedDevices.displayName(device)
     val editDescription = stringResource(R.string.wol_edit_device_description, label)
     val deleteDescription = stringResource(R.string.wol_delete_device_description, label)
+    val wakeDescription = stringResource(R.string.wol_wake_device_description, label)
+    val usesDefaultTarget =
+        device.broadcastAddress == WakeOnLanViewModel.DEFAULT_BROADCAST && device.port == WakeOnLanViewModel.DEFAULT_PORT
     // The MAC gets the full row width (never wrapped mid-address); the actions sit on their own line.
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -654,6 +671,13 @@ private fun WolSavedDeviceRow(
                 maxLines = 1,
             )
         }
+        if (!usesDefaultTarget) {
+            Text(
+                text = stringResource(R.string.wol_saved_target, device.broadcastAddress, device.port),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -665,6 +689,15 @@ private fun WolSavedDeviceRow(
                 modifier = Modifier.heightIn(min = MinTouchTarget),
             ) {
                 Text(stringResource(R.string.wol_use_device))
+            }
+            FilledTonalButton(
+                onClick = hapticAction(onWake),
+                enabled = !isSending,
+                modifier = Modifier
+                    .heightIn(min = MinTouchTarget)
+                    .semantics { contentDescription = wakeDescription },
+            ) {
+                Text(stringResource(R.string.wol_wake_device))
             }
             IconButton(
                 onClick = onEdit,

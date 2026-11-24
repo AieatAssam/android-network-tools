@@ -4,12 +4,18 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import net.aieat.netswissknife.core.domain.WakeOnLanParams
 import net.aieat.netswissknife.core.network.wol.WolMagicPacket
 
-/** A saved Wake-on-LAN target. [mac] is always canonical (`AA:BB:CC:DD:EE:FF`). */
+/**
+ * A saved Wake-on-LAN target. [mac] is always canonical (`AA:BB:CC:DD:EE:FF`). [broadcastAddress] and
+ * [port] are the send settings the device was saved with, so one tap wakes it the same way every time.
+ */
 data class WolSavedDevice(
     val mac: String,
     val name: String,
+    val broadcastAddress: String = WakeOnLanViewModel.DEFAULT_BROADCAST,
+    val port: Int = WakeOnLanViewModel.DEFAULT_PORT,
 )
 
 /** Result of saving an edited device. */
@@ -58,24 +64,27 @@ object WolSavedDevices {
 
     /**
      * Adds [mac], or when it is already saved keeps that entry's name unless [name] is a new,
-     * non-blank name, which renames it. [mac] must be canonical.
+     * non-blank name, which renames it. The send settings always take the values given, so saving
+     * a device records the broadcast address and port it was saved with. [mac] must be canonical.
      */
     fun upsert(
         devices: List<WolSavedDevice>,
         mac: String,
         name: String,
+        broadcastAddress: String = WakeOnLanViewModel.DEFAULT_BROADCAST,
+        port: Int = WakeOnLanViewModel.DEFAULT_PORT,
     ): List<WolSavedDevice> {
         val typed = sanitizeName(name)
         return if (devices.any { it.mac == mac }) {
             devices.map { existing ->
                 when {
                     existing.mac != mac -> existing
-                    typed.isEmpty() -> existing
-                    else -> WolSavedDevice(mac, typed)
+                    typed.isEmpty() -> WolSavedDevice(mac, existing.name, broadcastAddress, port)
+                    else -> WolSavedDevice(mac, typed, broadcastAddress, port)
                 }
             }
         } else {
-            devices + WolSavedDevice(mac, typed)
+            devices + WolSavedDevice(mac, typed, broadcastAddress, port)
         }
     }
 
@@ -108,13 +117,15 @@ object WolSavedDevices {
         originalMac: String,
         mac: String,
         name: String,
+        broadcastAddress: String = WakeOnLanViewModel.DEFAULT_BROADCAST,
+        port: Int = WakeOnLanViewModel.DEFAULT_PORT,
     ): WolSaveOutcome {
         val isSaved = devices.any { it.mac == originalMac }
         val conflicts = mac != originalMac && devices.any { it.mac == mac }
-        val replacement = WolSavedDevice(mac, sanitizeName(name))
+        val replacement = WolSavedDevice(mac, sanitizeName(name), broadcastAddress, port)
         return when {
             !isSaved -> {
-                WolSaveOutcome.Saved(upsert(devices, mac, name))
+                WolSaveOutcome.Saved(upsert(devices, mac, name, broadcastAddress, port))
             }
 
             conflicts -> {
@@ -137,9 +148,19 @@ object WolSavedDevices {
 
     fun encode(devices: List<WolSavedDevice>): String = devices.joinToString(LINE_SEPARATOR, transform = ::encodeLine)
 
-    private fun encodeLine(device: WolSavedDevice): String = "${device.mac}$FIELD_SEPARATOR${sanitizeName(device.name)}"
+    private fun encodeLine(device: WolSavedDevice): String =
+        listOf(
+            device.mac,
+            sanitizeName(device.name),
+            device.broadcastAddress,
+            device.port.toString(),
+        ).joinToString(FIELD_SEPARATOR.toString())
 
-    /** Parses the stored form. Malformed or multicast lines are skipped; the first duplicate MAC wins. */
+    /**
+     * Parses the stored form. Malformed or multicast lines are skipped; the first duplicate MAC wins.
+     * Lines written before the send settings were stored have two fields and get the defaults, as does
+     * any stored broadcast address or port that no longer validates.
+     */
     fun decode(raw: String?): List<WolSavedDevice> {
         if (raw.isNullOrEmpty()) return emptyList()
         return raw
@@ -149,8 +170,19 @@ object WolSavedDevices {
     }
 
     private fun parseLine(line: String): WolSavedDevice? {
-        val canonical = WolMagicPacket.canonicalMacOrNull(line.substringBefore(FIELD_SEPARATOR)) ?: return null
-        return WolSavedDevice(canonical, sanitizeName(line.substringAfter(FIELD_SEPARATOR, "")))
+        val fields = line.split(FIELD_SEPARATOR)
+        val canonical = WolMagicPacket.canonicalMacOrNull(fields[0]) ?: return null
+        val name = sanitizeName(fields.getOrElse(1) { "" })
+        val broadcast =
+            fields.getOrNull(2)
+                ?.takeIf { WolMagicPacket.broadcastProblem(it) == null }
+                ?: WakeOnLanViewModel.DEFAULT_BROADCAST
+        val port =
+            fields.getOrNull(3)
+                ?.toIntOrNull()
+                ?.takeIf { it in WakeOnLanParams.MIN_PORT..WakeOnLanParams.MAX_PORT }
+                ?: WakeOnLanViewModel.DEFAULT_PORT
+        return WolSavedDevice(canonical, name, broadcast, port)
     }
 
     private fun sanitizeName(name: String): String =

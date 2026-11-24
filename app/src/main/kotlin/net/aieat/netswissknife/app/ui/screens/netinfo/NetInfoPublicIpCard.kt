@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -58,7 +59,7 @@ private fun PublicIpIdle(onCheck: () -> Unit) {
         onClick = check,
         modifier = Modifier.fillMaxWidth().testTag(NetInfoPublicIpTestTags.CHECK),
     ) {
-        Icon(imageVector = Icons.Default.Refresh, contentDescription = null)
+        Icon(imageVector = Icons.Default.Language, contentDescription = null)
         Text(text = stringResource(R.string.netinfo_public_check))
     }
 }

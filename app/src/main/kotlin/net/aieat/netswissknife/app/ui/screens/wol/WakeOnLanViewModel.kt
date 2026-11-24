@@ -155,7 +155,9 @@ class WakeOnLanViewModel @Inject constructor(
             store = savedDeviceStore,
             scope = viewModelScope,
             currentMac = { _macAddress.value },
-            fillMac = { mac -> onMacAddressChange(mac) },
+            currentBroadcast = { _broadcastAddress.value },
+            currentPort = { formPort() },
+            fillDevice = { device -> fillTarget(device) },
             initialDeviceName = restoredSession?.deviceName.orEmpty(),
         )
     val savedDevices: StateFlow<List<WolSavedDevice>> = savedDeviceEditor.savedDevices
@@ -183,14 +185,15 @@ class WakeOnLanViewModel @Inject constructor(
     val isMacInvalid: Boolean
         get() = macProblem.value.let { it != null && it != WolMacProblem.BLANK }
 
+    /** Checks the form's current values directly, so a send never relies on a flow that has not caught up. */
     val canSend: Boolean
-        get() =
-            macProblem.value == null &&
-                broadcastProblem.value == null &&
-                !portInvalid.value &&
-                _uiState.value !is WolUiState.Sending
+        get() = isTargetValid(_macAddress.value, _broadcastAddress.value, _port.value) &&
+            _uiState.value !is WolUiState.Sending
 
     fun onMacAddressChange(value: String) {
+        if (WolMagicPacket.canonicalMacOrNull(value) != WolMagicPacket.canonicalMacOrNull(_macAddress.value)) {
+            discardFinishedResult()
+        }
         _macAddress.value = value
         savedStateHandle[EDITED_MAC_KEY] = value
         savedDeviceEditor.clearSaveConflict()
@@ -203,6 +206,7 @@ class WakeOnLanViewModel @Inject constructor(
     /** Clears only the incoming MAC prefill; broadcast and port choices remain untouched. */
     fun clearPrefill() {
         if (_uiState.value is WolUiState.Sending) return
+        if (_macAddress.value.isNotEmpty()) discardFinishedResult()
         _macAddress.value = ""
         savedStateHandle[EDITED_MAC_KEY] = ""
         _sourceContext.value = null
@@ -211,12 +215,14 @@ class WakeOnLanViewModel @Inject constructor(
     }
 
     fun onBroadcastAddressChange(value: String) {
+        if (value != _broadcastAddress.value) discardFinishedResult()
         _broadcastAddress.value = value
         savedStateHandle[BROADCAST_KEY] = value
     }
 
     fun onPortChange(value: String) {
         if (value.isEmpty() || (value.length <= 5 && value.all(Char::isDigit))) {
+            if (value != _port.value) discardFinishedResult()
             _port.value = value
             savedStateHandle[PORT_KEY] = value
         }
@@ -224,10 +230,37 @@ class WakeOnLanViewModel @Inject constructor(
 
     fun send() {
         if (!canSend) return
+        sendTo(_macAddress.value, _broadcastAddress.value, _port.value)
+    }
+
+    /** One tap on a saved device: fills the form with its target and sends to it. */
+    fun wakeDevice(device: WolSavedDevice) {
+        if (_uiState.value is WolUiState.Sending) return
+        fillTarget(device)
+        if (!canSend) return
+        sendTo(_macAddress.value, _broadcastAddress.value, _port.value)
+    }
+
+    /** A finished send describes the target it went to; once the form changes, that result no longer applies. */
+    private fun discardFinishedResult() {
+        if (_uiState.value is WolUiState.Success || _uiState.value is WolUiState.Error) {
+            _uiState.value = WolUiState.Idle
+        }
+    }
+
+    private fun fillTarget(device: WolSavedDevice) {
+        onMacAddressChange(device.mac)
+        onBroadcastAddressChange(device.broadcastAddress)
+        onPortChange(device.port.toString())
+    }
+
+    private fun formPort(): Int? = _port.value.toIntOrNull()?.takeIf { it in PORT_RANGE }
+
+    private fun sendTo(mac: String, broadcast: String, port: String) {
         val params = WakeOnLanParams(
-            macAddress = _macAddress.value,
-            broadcastAddress = _broadcastAddress.value,
-            port = _port.value.toIntOrNull() ?: DEFAULT_PORT,
+            macAddress = mac,
+            broadcastAddress = broadcast,
+            port = port.toIntOrNull() ?: DEFAULT_PORT,
         )
         operationSession?.cancel(CancellationReason.USER_STOP)
         val session = WakeOnLanOperation.newSession()
@@ -264,13 +297,6 @@ class WakeOnLanViewModel @Inject constructor(
         _uiState.value = WolUiState.Idle
     }
 
-    fun reset() {
-        sendGeneration++
-        operationSession?.cancel(CancellationReason.USER_STOP)
-        operationSession = null
-        _uiState.value = WolUiState.Idle
-    }
-
     override fun onCleared() {
         sendGeneration++
         operationSession?.cancel(CancellationReason.LIFECYCLE_PAUSE)
@@ -296,6 +322,11 @@ class WakeOnLanViewModel @Inject constructor(
         private val PORT_RANGE = WakeOnLanParams.MIN_PORT..WakeOnLanParams.MAX_PORT
 
         private fun isPortOutOfRange(value: String): Boolean = value.toIntOrNull() !in PORT_RANGE
+
+        private fun isTargetValid(mac: String, broadcast: String, port: String): Boolean =
+            WolMagicPacket.macProblem(mac) == null &&
+                WolMagicPacket.broadcastProblem(broadcast) == null &&
+                !isPortOutOfRange(port)
 
         private const val EDITED_MAC_KEY = "editedWolMac"
         private const val HANDOFF_CONSUMED_KEY = "wolHandoffConsumed"

@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -38,7 +39,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +48,7 @@ import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TooltipAnchorPosition
@@ -344,8 +345,7 @@ private fun SubnetExampleChips(onExampleSelected: (String) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         examples.forEach { example ->
-            FilterChip(
-                selected = false,
+            SuggestionChip(
                 onClick = { onExampleSelected(example) },
                 label = { Text(example, style = MaterialTheme.typography.labelSmall) }
             )
@@ -540,7 +540,7 @@ private fun SubnetOverviewCard(info: SubnetInfo) {
                             formatSubnetCount(info.usableHosts)
                         ),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
@@ -680,56 +680,83 @@ private fun BinaryBitsRow(label: String, binaryDotted: String, prefixLength: Int
 @Suppress("FunctionNaming", "ktlint:standard:function-naming") // Compose naming convention.
 @Composable
 private fun BinaryBitCells(bits: String, prefixLength: Int) {
+    val octets = bits.chunked(8)
+    // Four octets in one row need about 75 dp per octet, which is too tight on phones. Below the
+    // breakpoint the octets wrap to two rows of two, so each bit cell keeps a usable width.
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val octetsPerRow = if (maxWidth < BINARY_SINGLE_ROW_MIN_WIDTH) 2 else 4
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            octets.chunked(octetsPerRow).forEachIndexed { rowIdx, rowOctets ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    rowOctets.forEachIndexed { col, octet ->
+                        val octetIdx = rowIdx * octetsPerRow + col
+                        BinaryOctetCells(
+                            octet = octet,
+                            octetStart = octetIdx * 8,
+                            prefixLength = prefixLength,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (octetIdx < 3 && col < rowOctets.lastIndex) {
+                            Text(
+                                text = ".",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.align(Alignment.CenterVertically)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BinaryOctetCells(
+    octet: String,
+    octetStart: Int,
+    prefixLength: Int,
+    modifier: Modifier = Modifier
+) {
     val networkColor = MaterialTheme.colorScheme.primary
     val hostColor = MaterialTheme.colorScheme.tertiary
     val networkBg = MaterialTheme.colorScheme.primaryContainer
     val hostBg = MaterialTheme.colorScheme.tertiaryContainer
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(3.dp)
-    ) {
-        bits.chunked(8).forEachIndexed { octetIdx, octet ->
-            val octetStart = octetIdx * 8
-            Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                octet.forEachIndexed { bitIdx, bit ->
-                    val absoluteBit = octetStart + bitIdx
-                    val isNetwork = absoluteBit < prefixLength
-                    val bg = if (isNetwork) networkBg else hostBg
-                    val fg = if (isNetwork) networkColor else hostColor
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(24.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(bg)
-                            .border(
-                                width = if (absoluteBit == prefixLength - 1 || absoluteBit == prefixLength) 1.dp else 0.dp,
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                                shape = RoundedCornerShape(2.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = bit.toString(),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = if (isNetwork) FontWeight.Bold else FontWeight.Normal
-                            ),
-                            color = fg
-                        )
-                    }
-                }
-            }
-            if (octetIdx < 3) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+        octet.forEachIndexed { bitIdx, bit ->
+            val absoluteBit = octetStart + bitIdx
+            val isNetwork = absoluteBit < prefixLength
+            val bg = if (isNetwork) networkBg else hostBg
+            val fg = if (isNetwork) networkColor else hostColor
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(24.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(bg)
+                    .border(
+                        width = if (absoluteBit == prefixLength - 1 || absoluteBit == prefixLength) 1.dp else 0.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(2.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
-                    text = ".",
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.align(Alignment.CenterVertically)
+                    text = bit.toString(),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = if (isNetwork) FontWeight.Bold else FontWeight.Normal
+                    ),
+                    color = fg
                 )
             }
         }
     }
 }
+
+private val BINARY_SINGLE_ROW_MIN_WIDTH = 600.dp
 
 // ── Notations card ────────────────────────────────────────────────────────────
 

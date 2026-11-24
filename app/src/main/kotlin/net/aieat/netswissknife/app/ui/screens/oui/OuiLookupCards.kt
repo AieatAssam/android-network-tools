@@ -3,7 +3,9 @@ package net.aieat.netswissknife.app.ui.screens.oui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -12,6 +14,7 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -30,6 +33,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import net.aieat.netswissknife.app.R
@@ -61,6 +65,7 @@ internal fun OuiResultsContent(
     onCopy: (String) -> Unit,
     onShare: () -> Unit,
     onClear: () -> Unit,
+    onEditInput: () -> Unit,
 ) {
     // Results land below the input card. Bring the header into view so they are not hidden under
     // the keyboard or below the fold after Look up.
@@ -126,6 +131,15 @@ private fun OuiResultsHeader(
                 )
             }
             LowercaseSwitch(lowercase, onLowercaseChange)
+            // Moves focus back to the input field, which sits above the results, to change the lookup.
+            TextButton(
+                onClick = hapticAction(onEditInput),
+                modifier = Modifier.heightIn(min = ToolTouchTargetSize).testTag(OuiLookupTestTags.EDIT_INPUT),
+            ) {
+                Icon(Icons.Default.Edit, contentDescription = null)
+                Spacer(Modifier.width(ROW_GAP_DP.dp))
+                Text(stringResource(R.string.oui_edit_input))
+            }
         }
     }
 }
@@ -183,14 +197,21 @@ internal fun OuiAddressCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            // The colon form is the address itself, so it is the card title with its own copy action.
+            OuiNotationRow(
+                label = stringResource(notationRes(MacNotation.COLON)),
+                value = info.format(MacNotation.COLON, uppercase = !lowercase),
+                onCopy = onCopy,
+                valueStyle = MaterialTheme.typography.titleMedium,
+            )
             OuiAddressFields(info)
             HorizontalDivider()
             Text(
                 text = stringResource(R.string.oui_notation_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            listOf(MacNotation.COLON, MacNotation.HYPHEN, MacNotation.DOTTED, MacNotation.BARE).forEach { notation ->
+            listOf(MacNotation.HYPHEN, MacNotation.DOTTED, MacNotation.BARE).forEach { notation ->
                 OuiNotationRow(
                     label = stringResource(notationRes(notation)),
                     value = info.format(notation, uppercase = !lowercase),
@@ -279,6 +300,7 @@ private fun OuiNotationRow(
     label: String,
     value: String,
     onCopy: (String) -> Unit,
+    valueStyle: TextStyle = MaterialTheme.typography.bodyLarge,
 ) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
@@ -289,7 +311,7 @@ private fun OuiNotationRow(
             )
             Text(
                 text = value,
-                style = MaterialTheme.typography.bodyLarge,
+                style = valueStyle,
                 fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurface,
             )

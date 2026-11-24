@@ -358,14 +358,64 @@ class WakeOnLanViewModelTest {
     }
 
     @Test
-    fun `reset returns to Idle`() = runTest {
+    fun `changing the MAC after a send discards the finished result`() = runTest {
+        coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubReport)
+        viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+        viewModel.send()
+        assertEquals(WolUiState.Success(stubReport), viewModel.uiState.value)
+
+        viewModel.onMacAddressChange("11:22:33:44:55:66")
+
+        assertEquals(WolUiState.Idle, viewModel.uiState.value)
+    }
+
+    @Test
+    fun `retyping the same MAC keeps the finished result`() = runTest {
         coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubReport)
         viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
         viewModel.send()
 
-        viewModel.reset()
+        viewModel.onMacAddressChange("aa-bb-cc-dd-ee-ff")
 
-        assertEquals(WolUiState.Idle, viewModel.uiState.value)
+        assertEquals(WolUiState.Success(stubReport), viewModel.uiState.value)
+    }
+
+    @Test
+    fun `send again sends the same target a second time`() = runTest {
+        coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubReport)
+        viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+        viewModel.send()
+
+        viewModel.send()
+
+        coVerify(exactly = 2) { useCase(match { it.macAddress == "AA:BB:CC:DD:EE:FF" }, any()) }
+    }
+
+    @Test
+    fun `wake on a saved device sends to its saved broadcast and port`() = runTest {
+        coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubReport)
+        val device = WolSavedDevice("AA:BB:CC:DD:EE:FF", "Desk", "192.168.1.255", 7)
+
+        viewModel.wakeDevice(device)
+
+        coVerify {
+            useCase(
+                match { it.macAddress == "AA:BB:CC:DD:EE:FF" && it.broadcastAddress == "192.168.1.255" && it.port == 7 },
+                any(),
+            )
+        }
+    }
+
+    @Test
+    fun `send is refused while the broadcast address is invalid even if the derived flow lags`() = runTest {
+        coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubReport)
+        viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+        viewModel.onBroadcastAddressChange("not-an-address")
+
+        viewModel.send()
+
+        assertFalse(viewModel.canSend)
+        coVerify(exactly = 0) { useCase(any(), any()) }
     }
 
     @Test

@@ -1030,7 +1030,7 @@
     <string name="subnet_calculate_button">Calculate</string>
     <string name="subnet_idle_title">Enter an IPv4 address or network</string>
     <string name="subnet_idle_body">Supports CIDR (192.168.1.0/24), dot-decimal mask (192.168.1.0/255.255.255.0) or a bare IP (/32 assumed).</string>
-    <string name="subnet_error_title">Invalid Input</string>
+    <string name="subnet_error_title">Invalid input</string>
     <plurals name="subnet_overview_hosts">
         <item quantity="one">%1$s usable host</item>
         <item quantity="other">%1$s usable hosts</item>
@@ -1041,7 +1041,7 @@
     <string name="subnet_last_host">Last host</string>
     <string name="subnet_total_hosts">Total addresses</string>
     <string name="subnet_usable_hosts">Usable hosts</string>
-    <string name="subnet_binary_breakdown">Binary Breakdown</string>
+    <string name="subnet_binary_breakdown">Binary breakdown</string>
     <plurals name="subnet_network_bits">
         <item quantity="one">Network: %1$d bit</item>
         <item quantity="other">Network: %1$d bits</item>
@@ -1053,12 +1053,12 @@
     <string name="subnet_binary_ip">IP address</string>
     <string name="subnet_binary_mask">Subnet mask</string>
     <string name="subnet_binary_network">Network address</string>
-    <string name="subnet_notations_title">Notation Equivalents</string>
+    <string name="subnet_notations_title">Notation equivalents</string>
     <string name="subnet_notation_cidr">CIDR</string>
     <string name="subnet_notation_mask">Dot-decimal mask</string>
     <string name="subnet_notation_wildcard">Wildcard mask</string>
     <string name="subnet_notation_hex">Hex mask</string>
-    <string name="subnet_properties_title">Address Properties</string>
+    <string name="subnet_properties_title">Address properties</string>
     <string name="subnet_ip_class">IP class</string>
     <string name="subnet_class_label">Class %1$s</string>
     <string name="subnet_scope">Scope</string>
@@ -1075,7 +1075,7 @@
     <string name="subnet_scope_mixed">Mixed (spans several ranges)</string>
     <!-- Mode toggle -->
     <string name="subnet_mode_cidr">CIDR / Mask</string>
-    <string name="subnet_mode_range">IP Range</string>
+    <string name="subnet_mode_range">IP range</string>
     <!-- Range mode inputs -->
     <string name="subnet_range_idle_title">Enter an IP range</string>
     <string name="subnet_range_idle_body">Enter the smallest and largest IP addresses you need. The calculator finds the tightest subnet that covers both.</string>
@@ -1083,9 +1083,9 @@
     <string name="subnet_min_ip_placeholder">e.g. 10.0.70.1</string>
     <string name="subnet_max_ip_label">Maximum IP</string>
     <string name="subnet_max_ip_placeholder">e.g. 10.0.71.254</string>
-    <string name="subnet_range_calculate_button">Find Subnet</string>
+    <string name="subnet_range_calculate_button">Find subnet</string>
     <!-- Alignment warning -->
-    <string name="subnet_alignment_warning_title">IP Not on Network Boundary</string>
+    <string name="subnet_alignment_warning_title">IP not on network boundary</string>
     <string name="subnet_alignment_warning_body">%1$s is not a valid network address for /%2$d. The actual network starts at %3$s. Cloud providers like Azure require the exact network address in subnet definitions.</string>
     <!-- Tooltips -->
     <string name="subnet_explain_field">Explain %1$s</string>
@@ -1677,6 +1677,9 @@
     <string name="wol_update_device">Update device</string>
     <string name="wol_cancel_edit">Cancel edit</string>
     <string name="wol_use_device">Use</string>
+    <string name="wol_wake_device">Wake</string>
+    <string name="wol_wake_device_description">Wake saved device %1$s</string>
+    <string name="wol_saved_target">Sends to %1$s, port %2$d</string>
     <string name="wol_edit_device_description">Edit saved device %1$s</string>
     <string name="wol_delete_device_description">Delete saved device %1$s</string>
     <string name="wol_device_conflict">That MAC address is already saved as another device.</string>
@@ -1810,7 +1813,7 @@
     <string name="netinfo_location">Approximate location</string>
     <string name="netinfo_asn">ASN</string>
     <string name="netinfo_not_checked">Not checked</string>
-    <string name="netinfo_refresh">Refresh</string>
+    <string name="netinfo_refresh">Re-read local network</string>
     <string name="netinfo_share_subject">Network Info summary</string>
     <string name="netinfo_copy_description">Copy %1$s</string>
     <string name="netinfo_copy_hint">Tap the copy icon or press and hold a value to copy it.</string>
@@ -1885,6 +1888,7 @@
     <string name="oui_rejected">Not a MAC address or OUI prefix</string>
     <string name="oui_no_entries">No entries to show.</string>
     <string name="oui_clear_results">Clear results</string>
+    <string name="oui_edit_input">Edit input</string>
     <string name="oui_share_subject">MAC Lookup results</string>
     <string name="oui_copied">Copied</string>
     <string name="help_oui_concept_heading">What a MAC address tells you</string>

@@ -116,4 +116,32 @@ class WolSavedDevicesTest {
         assertEquals(emptyList<WolSavedDevice>(), WolSavedDevices.decode(null))
         assertEquals(emptyList<WolSavedDevice>(), WolSavedDevices.decode(""))
     }
+
+    @Test
+    fun `encode and decode keep a saved broadcast address and port`() {
+        val device = WolSavedDevice(a.mac, "Desk", "192.168.1.255", 7)
+        assertEquals(listOf(device), WolSavedDevices.decode(WolSavedDevices.encode(listOf(device))))
+    }
+
+    @Test
+    fun `legacy two-field lines decode with the default broadcast and port`() {
+        assertEquals(
+            listOf(WolSavedDevice(a.mac, "Old", WakeOnLanViewModel.DEFAULT_BROADCAST, WakeOnLanViewModel.DEFAULT_PORT)),
+            WolSavedDevices.decode("AA:BB:CC:DD:EE:01\tOld"),
+        )
+    }
+
+    @Test
+    fun `invalid stored broadcast or port fall back to the defaults`() {
+        assertEquals(
+            listOf(WolSavedDevice(a.mac, "Bad", WakeOnLanViewModel.DEFAULT_BROADCAST, WakeOnLanViewModel.DEFAULT_PORT)),
+            WolSavedDevices.decode("AA:BB:CC:DD:EE:01\tBad\tnot-an-ip\t99999"),
+        )
+    }
+
+    @Test
+    fun `upsert records the broadcast address and port given on save`() {
+        val saved = WolSavedDevices.upsert(emptyList(), a.mac, "Desk", "10.0.0.255", 7)
+        assertEquals(listOf(WolSavedDevice(a.mac, "Desk", "10.0.0.255", 7)), saved)
+    }
 }
