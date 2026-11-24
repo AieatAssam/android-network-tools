@@ -1,4 +1,3 @@
-@file:Suppress("FunctionNaming", "ktlint:standard:function-naming")
 
 package net.aieat.netswissknife.app.ui.screens
 

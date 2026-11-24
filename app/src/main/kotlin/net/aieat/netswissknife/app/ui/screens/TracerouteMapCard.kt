@@ -1,4 +1,3 @@
-@file:Suppress("FunctionNaming", "ktlint:standard:function-naming") // Compose functions are PascalCase by convention.
 
 package net.aieat.netswissknife.app.ui.screens
 
