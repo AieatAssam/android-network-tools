@@ -17,8 +17,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -76,32 +76,33 @@ fun RecentHostsRow(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(shownHosts, key = { it }) { host ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        SuggestionChip(
-                            enabled = selectionEnabled,
-                            onClick = { onHostSelected(host) },
-                            label = {
-                                Text(
-                                    text = host,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.labelMedium
+                    InputChip(
+                        selected = false,
+                        enabled = selectionEnabled,
+                        onClick = { onHostSelected(host) },
+                        label = {
+                            Text(
+                                text = host,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        },
+                        trailingIcon = {
+                            IconButton(
+                                onClick = { onRemoveHost(host) },
+                                enabled = actionsEnabled,
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = removeDescription,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                        )
-                        IconButton(
-                            onClick = { onRemoveHost(host) },
-                            enabled = actionsEnabled,
-                            modifier = Modifier.size(ToolTouchTargetSize)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = removeDescription,
-                                modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
-                    }
+                    )
                 }
             }
             IconButton(

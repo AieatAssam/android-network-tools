@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -84,26 +85,37 @@ fun ToolHeroHeader(
                 if (iconContent != null) {
                     iconContent()
                 } else {
+                    // Gradient ring around a solid disc: the white icon sits on solid primary, which keeps
+                    // it readable. Putting it on the gradient's tertiary end fails contrast.
                     Box(
                         modifier = Modifier
                             .size(if (compact) 36.dp else 52.dp)
                             .clip(CircleShape)
                             .background(
-                                Brush.radialGradient(
+                                Brush.linearGradient(
                                     listOf(
                                         MaterialTheme.colorScheme.primary,
                                         MaterialTheme.colorScheme.tertiary,
                                     )
                                 )
-                            ),
+                            )
+                            .padding(if (compact) 2.dp else 3.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(if (compact) 20.dp else 28.dp),
-                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(if (compact) 20.dp else 28.dp),
+                            )
+                        }
                     }
                 }
 

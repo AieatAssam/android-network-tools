@@ -98,7 +98,7 @@ class SettingsScreenTest {
         val range = slider.config[SemanticsProperties.ProgressBarRangeInfo]
         assertEquals(500f, range.current)
         assertEquals(1f..500f, range.range)
-        assertEquals(498, range.steps)
+        assertEquals(0, range.steps)
     }
 
     private val context

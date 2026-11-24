@@ -87,9 +87,6 @@
     <string name="app_name_full">Net Swiss Knife</string>
 
     <!-- Home Screen -->
-    <string name="home_subtitle">Your all-in-one Android networking toolkit</string>
-    <string name="home_all_tools">All Tools</string>
-    <string name="home_tools_scroll_hint">Scroll for more tools</string>
 
     <!-- Bottom Navigation -->
     <string name="nav_home">Home</string>
@@ -396,6 +393,7 @@
     <string name="lan_copy_mac">Copy MAC address</string>
     <string name="lan_copy_hostname">Copy hostname</string>
     <string name="lan_copied">Copied to clipboard</string>
+    <string name="copied_to_clipboard">Copied to clipboard</string>
     <string name="lan_scan_button">Scan Network</string>
     <string name="lan_stop_button">Stop Scan</string>
     <string name="lan_rescan_button">Re-scan</string>
@@ -1250,8 +1248,11 @@
     <!-- Settings – Defaults -->
     <string name="settings_defaults_section">Tool Defaults</string>
     <string name="settings_ping_count_label">Default ping count: %1$d</string>
+    <string name="settings_ping_count_usage">Used by Ping.</string>
     <string name="settings_timeout_label">Default timeout: %1$d ms</string>
+    <string name="settings_timeout_usage">Used by Ping, Port Scanner and LAN Scanner.</string>
     <string name="settings_concurrency_label">Default concurrency: %1$d</string>
+    <string name="settings_concurrency_usage">Used by Port Scanner and LAN Scanner.</string>
     <string name="settings_wifi_refresh_interval_label">Wi-Fi auto-refresh interval</string>
 
     <!-- Settings – Data -->
@@ -1268,11 +1269,27 @@
     <string name="settings_version_label">Version</string>
     <string name="settings_source_code_label">Source Code</string>
     <string name="settings_source_code_url">github.com/AieatAssam/android-network-tools</string>
+    <string name="settings_source_code_link" translatable="false">https://github.com/AieatAssam/android-network-tools</string>
 
     <!-- Settings – Data Source Attributions -->
     <string name="settings_attributions_section">Data Source Attributions</string>
     <string name="settings_attribution_speedtest_title">Speed Test: Cloudflare</string>
     <string name="settings_attribution_speedtest_body">Speed Test contacts Cloudflare\'s public speed test service at speed.cloudflare.com to measure latency, download, and upload performance. It sends and receives synthetic measurement traffic only; it does not upload your hostnames, IP addresses, DNS results, Wi-Fi details, scan results, files, or other personal content. Net Swiss Knife is an independent app and is not affiliated with, sponsored by, or endorsed by Cloudflare, Inc. Cloudflare and the Cloudflare logo are trademarks of Cloudflare, Inc.</string>
+    <string name="settings_attribution_speedtest_url" translatable="false">https://speed.cloudflare.com</string>
+    <string name="settings_attribution_ipify_title">Public IP lookup: ipify</string>
+    <string name="settings_attribution_ipify_body">Network Info asks ipify for your public IPv4 and IPv6 addresses. Each request shows your public IP address to ipify.</string>
+    <string name="settings_attribution_ipify_ipv4_url" translatable="false">https://api4.ipify.org</string>
+    <string name="settings_attribution_ipify_ipv6_url" translatable="false">https://api6.ipify.org</string>
+    <string name="settings_attribution_geoip_title">IP geolocation providers</string>
+    <string name="settings_attribution_geoip_body">Traceroute and Network Info send public IP addresses to these providers to look up approximate country, city, ISP, and ASN. The app tries them in order until one responds.</string>
+    <string name="settings_attribution_ipinfo_url" translatable="false">https://ipinfo.io</string>
+    <string name="settings_attribution_ipwho_url" translatable="false">https://ipwho.is</string>
+    <string name="settings_attribution_ipapi_url" translatable="false">https://ipapi.co</string>
+    <string name="settings_attribution_whois_title">WHOIS and RDAP servers</string>
+    <string name="settings_attribution_whois_body">WHOIS Lookup sends the domain or IP address you enter to public RDAP or WHOIS servers that hold its record. The app downloads the IANA RDAP bootstrap list to choose a server.</string>
+    <string name="settings_attribution_rdap_url" translatable="false">https://rdap.org</string>
+    <string name="settings_attribution_whois_iana_url" translatable="false">https://whois.iana.org</string>
+    <string name="settings_attribution_whois_arin_url" translatable="false">https://whois.arin.net</string>
 
     <!-- Settings – Open Source Licenses -->
     <string name="settings_licenses_section">Open Source Licenses</string>
@@ -1396,30 +1413,23 @@
 
     <!-- Onboarding – Page 1: Welcome -->
     <string name="onboarding_page1_title">Welcome to Net Swiss Knife</string>
-    <string name="onboarding_page1_body">Everything you need to diagnose, secure, and understand your network - all on your device. No accounts, no ads, and nothing leaves your phone unless a tool explicitly sends it somewhere, like a DNS or WHOIS query.</string>
+    <string name="onboarding_page1_body">Diagnose, secure, and understand your network from one app. There are no accounts and no ads. Data leaves this device only when a tool contacts the target you entered or a lookup service it needs, such as a DNS or WHOIS query.</string>
 
     <!-- Onboarding – Page 2: What you can do (framed by use case, not tool name) -->
     <string name="onboarding_page2_title">Find the right tool for the job</string>
-    <string name="onboarding_usecase_diagnostics_q">Something\'s slow or won\'t connect?</string>
-    <string name="onboarding_usecase_diagnostics_a">Diagnostics - Ping, Traceroute, Port Scanner, LAN Scanner</string>
-    <string name="onboarding_usecase_wifi_q">Which Wi-Fi channel should I use?</string>
-    <string name="onboarding_usecase_wifi_a">Wi-Fi Analysis - scan networks and visualize the spectrum</string>
-    <string name="onboarding_usecase_security_q">Is this site or connection safe?</string>
-    <string name="onboarding_usecase_security_a">Security Tools - TLS certificates, HTTP headers, WHOIS records</string>
-    <string name="onboarding_usecase_speed_q">How fast is my connection, really?</string>
-    <string name="onboarding_usecase_speed_a">Speed Test - download, upload, and latency</string>
-    <string name="onboarding_usecase_dns_q">Need to look up or calculate addresses?</string>
-    <string name="onboarding_usecase_dns_a">DNS &amp; Subnet - resolve records, calculate subnets, browse mDNS</string>
 
     <!-- Onboarding – Page 3: How the app is organized -->
     <string name="onboarding_page3_title">Your tools, your way</string>
-    <string name="onboarding_page3_body">The Home tab lists every tool. The bottom bar keeps your 3 favorites one tap away - tap More to see everything else, and pin or unpin tools anytime your needs change.</string>
+    <plurals name="onboarding_page3_body">
+        <item quantity="one">The Home tab lists every tool. The navigation bar keeps %1$d pinned tool one tap away. Tap More to see the rest, and pin or unpin tools whenever your needs change.</item>
+        <item quantity="other">The Home tab lists every tool. The navigation bar keeps your %1$d favorites one tap away. Tap More to see the rest, and pin or unpin tools whenever your needs change.</item>
+    </plurals>
 
     <!-- Onboarding – Page 4: Permissions & privacy -->
     <string name="onboarding_page4_title">A couple of permissions, explained upfront</string>
-    <string name="onboarding_page4_permission1">Wi-Fi Scanner asks for Location because Android requires it for startScan and getScanResults - your location is never recorded or sent anywhere.</string>
+    <string name="onboarding_page4_permission1">Wi-Fi Scanner asks for Location because Android requires it to scan for Wi-Fi networks. Location is never recorded or sent anywhere.</string>
     <string name="onboarding_page4_permission2">On Android 13 and newer it also asks for Nearby Wi-Fi Devices. Android requires both permissions for a live Wi-Fi scan, and Location Services must be switched on.</string>
-    <string name="onboarding_page4_privacy">There\'s no analytics and no accounts. Diagnostic results stay on your device. Speed Test uses Cloudflare only to exchange synthetic measurement traffic.</string>
+    <string name="onboarding_page4_privacy">There are no analytics and no accounts. Diagnostic results stay on this device. Tools contact only the target you enter and the lookup services listed under Data Source Attributions in Settings.</string>
 
     <!-- Settings – Guide section -->
     <string name="settings_guide_section">Guide</string>

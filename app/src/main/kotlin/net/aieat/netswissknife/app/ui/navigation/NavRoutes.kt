@@ -5,7 +5,6 @@ import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ManageSearch
 import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.Devices
@@ -35,12 +34,10 @@ data class ToolInfo(
 
 sealed class NavRoutes(
     val route: String,
-    val label: String,
-    val icon: ImageVector,
 ) {
-    object Home : NavRoutes("home", "Home", Icons.Default.Home)
+    object Home : NavRoutes("home")
 
-    object Ping : NavRoutes("ping?host={host}&intent={intent}", "Ping", Icons.Default.NetworkCheck) {
+    object Ping : NavRoutes("ping?host={host}&intent={intent}") {
         const val baseRoute = "ping"
 
         /** Keep the established bare Ping route while allowing host-target handoffs. */
@@ -59,9 +56,9 @@ sealed class NavRoutes(
         }
     }
 
-    object Traceroute : NavRoutes("traceroute", "Traceroute", Icons.Default.Router)
+    object Traceroute : NavRoutes("traceroute")
 
-    object Ports : NavRoutes("ports?host={host}&intent={intent}", "Port Scanner", Icons.Default.TravelExplore) {
+    object Ports : NavRoutes("ports?host={host}&intent={intent}") {
         const val baseRoute = "ports"
 
         fun createRoute(host: String?): String =
@@ -80,17 +77,17 @@ sealed class NavRoutes(
         }
     }
 
-    object Lan : NavRoutes("lan", "LAN Scanner", Icons.Default.Devices)
+    object Lan : NavRoutes("lan")
 
-    object Dns : NavRoutes("dns", "DNS Lookup", Icons.Default.Language)
+    object Dns : NavRoutes("dns")
 
-    object DebugLogs : NavRoutes("debug_logs", "Debug Logs", Icons.Default.BugReport)
+    object DebugLogs : NavRoutes("debug_logs")
 
-    object WifiScan : NavRoutes("wifi_scan", "Wi-Fi Scanner", Icons.Default.WifiFind)
+    object WifiScan : NavRoutes("wifi_scan")
 
-    object TopologyDiscovery : NavRoutes("topology", "Network Topology", Icons.Default.AccountTree)
+    object TopologyDiscovery : NavRoutes("topology")
 
-    object TlsInspector : NavRoutes("tls?intent={intent}&host={host}&port={port}", "TLS Inspector", Icons.Default.Lock) {
+    object TlsInspector : NavRoutes("tls?intent={intent}&host={host}&port={port}") {
         const val baseRoute = "tls"
 
         fun createRoute(intent: ToolIntent): String {
@@ -103,9 +100,9 @@ sealed class NavRoutes(
         }
     }
 
-    object WhoisLookup : NavRoutes("whois", "WHOIS Lookup", Icons.AutoMirrored.Filled.ManageSearch)
+    object WhoisLookup : NavRoutes("whois")
 
-    object HttpProbe : NavRoutes("httprobe?intent={intent}&host={host}", "HTTP Probe", Icons.Default.Http) {
+    object HttpProbe : NavRoutes("httprobe?intent={intent}&host={host}") {
         const val baseRoute = "httprobe"
 
         /** Typed host handoffs keep HTTP inputs separate from arbitrary URL route arguments. */
@@ -118,13 +115,13 @@ sealed class NavRoutes(
         }
     }
 
-    object SubnetCalculator : NavRoutes("subnet", "Subnet Calculator", Icons.Default.Calculate)
+    object SubnetCalculator : NavRoutes("subnet")
 
-    object MdnsDiscovery : NavRoutes("mdns", "mDNS Browser", Icons.Default.CellTower)
+    object MdnsDiscovery : NavRoutes("mdns")
 
-    object SpeedTest : NavRoutes("speedtest", "Speed Test", Icons.Default.Speed)
+    object SpeedTest : NavRoutes("speedtest")
 
-    object WakeOnLan : NavRoutes("wol?intent={intent}&mac={mac}", "Wake-on-LAN", Icons.Default.PowerSettingsNew) {
+    object WakeOnLan : NavRoutes("wol?intent={intent}&mac={mac}") {
         const val baseRoute = "wol"
 
         fun createRoute(intent: ToolIntent): String {
@@ -137,11 +134,11 @@ sealed class NavRoutes(
         }
     }
 
-    object NetworkInfo : NavRoutes("netinfo", "Network Info", Icons.Default.SettingsEthernet)
+    object NetworkInfo : NavRoutes("netinfo")
 
-    object MacLookup : NavRoutes("oui", "MAC Lookup", Icons.Default.Fingerprint)
+    object MacLookup : NavRoutes("oui")
 
-    object Settings : NavRoutes("settings", "Settings", Icons.Default.Settings)
+    object Settings : NavRoutes("settings")
 
     companion object {
         /** All navigable tool screens (excluding Home). */

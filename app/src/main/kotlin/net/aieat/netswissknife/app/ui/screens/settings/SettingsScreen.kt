@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -23,13 +24,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SmartToy
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -51,6 +47,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,7 +61,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -74,12 +70,16 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.screens.wifi.WifiRefreshIntervalPicker
 import net.aieat.netswissknife.app.ui.theme.AppMotion
-import net.aieat.netswissknife.app.ui.theme.AppShapes
 import kotlin.math.roundToInt
 
 object SettingsScreenTestTags {
     const val DEFAULT_CONCURRENCY_SLIDER = "settings_default_concurrency_slider"
 }
+
+private val PING_COUNT_RANGE = 1..100
+private val CONCURRENCY_RANGE = 1..500
+private val TIMEOUT_RANGE_MS = 500..10_000
+private const val TIMEOUT_STEP_MS = 500
 
 @Composable
 fun SettingsScreen(
@@ -195,7 +195,7 @@ private fun ThemeSection(
     dynamicColor: Boolean,
     onDynamicColorChange: (Boolean) -> Unit,
 ) {
-    SectionHeader(Icons.Default.DarkMode, stringResource(R.string.settings_theme_section))
+    SectionHeader(stringResource(R.string.settings_theme_section))
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -261,30 +261,33 @@ private fun DefaultsSection(
     onConcurrencyChange: (Int) -> Unit,
     onWifiRefreshIntervalChange: (Long?) -> Unit,
 ) {
-    SectionHeader(Icons.Default.Tune, stringResource(R.string.settings_defaults_section))
+    SectionHeader(stringResource(R.string.settings_defaults_section))
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             SliderSetting(
-                label = stringResource(R.string.settings_ping_count_label, pingCount),
-                value = pingCount.toFloat(),
-                valueRange = 1f..100f,
-                steps = 98,
-                onValueChange = { onPingCountChange(it.roundToInt()) },
+                value = pingCount,
+                range = PING_COUNT_RANGE,
+                step = 1,
+                label = { stringResource(R.string.settings_ping_count_label, it) },
+                usage = stringResource(R.string.settings_ping_count_usage),
+                onValueCommit = onPingCountChange,
             )
             SliderSetting(
-                label = stringResource(R.string.settings_timeout_label, timeoutMs),
-                value = timeoutMs.toFloat(),
-                valueRange = 500f..10_000f,
-                steps = 18,
-                onValueChange = { onTimeoutChange((it / 500).roundToInt() * 500) },
+                value = timeoutMs,
+                range = TIMEOUT_RANGE_MS,
+                step = TIMEOUT_STEP_MS,
+                label = { stringResource(R.string.settings_timeout_label, it) },
+                usage = stringResource(R.string.settings_timeout_usage),
+                onValueCommit = onTimeoutChange,
             )
             SliderSetting(
-                label = stringResource(R.string.settings_concurrency_label, concurrency),
-                value = concurrency.toFloat(),
-                valueRange = 1f..500f,
-                steps = 498,
-                onValueChange = { onConcurrencyChange(it.roundToInt()) },
+                value = concurrency,
+                range = CONCURRENCY_RANGE,
+                step = 1,
+                label = { stringResource(R.string.settings_concurrency_label, it) },
+                usage = stringResource(R.string.settings_concurrency_usage),
+                onValueCommit = onConcurrencyChange,
                 testTag = SettingsScreenTestTags.DEFAULT_CONCURRENCY_SLIDER,
             )
             Text(
@@ -300,32 +303,54 @@ private fun DefaultsSection(
     }
 }
 
+/**
+ * Maps a continuous slider position to the nearest multiple of [step] inside [range].
+ * The slider drags continuously, but only the snapped value is written to the preference store.
+ */
+internal fun snapSliderValue(
+    raw: Float,
+    step: Int,
+    range: IntRange,
+): Int = ((raw / step).roundToInt() * step).coerceIn(range.first, range.last)
+
 @Composable
 private fun SliderSetting(
-    label: String,
-    value: Float,
-    valueRange: ClosedFloatingPointRange<Float>,
-    steps: Int,
-    onValueChange: (Float) -> Unit,
+    value: Int,
+    range: IntRange,
+    step: Int,
+    label: @Composable (Int) -> String,
+    usage: String,
+    onValueCommit: (Int) -> Unit,
     testTag: String? = null,
 ) {
+    // The thumb follows a local drag position and the preference is written once, when the
+    // finger lifts. Writing on every change made the thumb lag behind the DataStore round trip.
+    var dragPosition by remember(value) { mutableFloatStateOf(value.toFloat()) }
+    val shownValue = snapSliderValue(dragPosition, step, range)
+    val shownLabel = label(shownValue)
     Column {
         Text(
-            text = label,
+            text = shownLabel,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange,
-            steps = steps,
+            value = dragPosition,
+            onValueChange = { dragPosition = it },
+            onValueChangeFinished = { onValueCommit(snapSliderValue(dragPosition, step, range)) },
+            valueRange = range.first.toFloat()..range.last.toFloat(),
+            steps = 0,
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .semantics {
-                        contentDescription = "$label: ${value.toInt()}"
+                        contentDescription = shownLabel
                     }.then(testTag?.let { Modifier.testTag(it) } ?: Modifier),
+        )
+        Text(
+            text = usage,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -334,7 +359,7 @@ private fun SliderSetting(
 private fun DataSection(onClearRecents: () -> Unit) {
     var showConfirmDialog by remember { mutableStateOf(false) }
 
-    SectionHeader(Icons.Default.Delete, stringResource(R.string.settings_data_section))
+    SectionHeader(stringResource(R.string.settings_data_section))
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -395,7 +420,7 @@ private fun DataSection(onClearRecents: () -> Unit) {
 private fun OnboardingResetSection(onReset: () -> Unit) {
     var showConfirmDialog by remember { mutableStateOf(false) }
 
-    SectionHeader(Icons.Default.SmartToy, stringResource(R.string.settings_guide_section))
+    SectionHeader(stringResource(R.string.settings_guide_section))
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -440,8 +465,9 @@ private fun OnboardingResetSection(onReset: () -> Unit) {
 @Composable
 private fun AboutSection() {
     val uriHandler = LocalUriHandler.current
+    val sourceCodeUrl = stringResource(R.string.settings_source_code_link)
 
-    SectionHeader(Icons.Default.Info, stringResource(R.string.settings_about_section))
+    SectionHeader(stringResource(R.string.settings_about_section))
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column {
@@ -468,8 +494,9 @@ private fun AboutSection() {
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .clickable { uriHandler.openUri("https://github.com/AieatAssam/android-network-tools") }
-                        .padding(16.dp),
+                        .clickable { uriHandler.openUri(sourceCodeUrl) }
+                        .heightIn(min = 48.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -499,39 +526,89 @@ private fun AboutSection() {
     }
 }
 
+private data class AttributionSource(
+    val titleRes: Int,
+    val bodyRes: Int,
+    val linkRes: List<Int>,
+)
+
+private val ATTRIBUTION_SOURCES =
+    listOf(
+        AttributionSource(
+            titleRes = R.string.settings_attribution_speedtest_title,
+            bodyRes = R.string.settings_attribution_speedtest_body,
+            linkRes = listOf(R.string.settings_attribution_speedtest_url),
+        ),
+        AttributionSource(
+            titleRes = R.string.settings_attribution_ipify_title,
+            bodyRes = R.string.settings_attribution_ipify_body,
+            linkRes = listOf(R.string.settings_attribution_ipify_ipv4_url, R.string.settings_attribution_ipify_ipv6_url),
+        ),
+        AttributionSource(
+            titleRes = R.string.settings_attribution_geoip_title,
+            bodyRes = R.string.settings_attribution_geoip_body,
+            linkRes =
+                listOf(
+                    R.string.settings_attribution_ipinfo_url,
+                    R.string.settings_attribution_ipwho_url,
+                    R.string.settings_attribution_ipapi_url,
+                ),
+        ),
+        AttributionSource(
+            titleRes = R.string.settings_attribution_whois_title,
+            bodyRes = R.string.settings_attribution_whois_body,
+            linkRes =
+                listOf(
+                    R.string.settings_attribution_rdap_url,
+                    R.string.settings_attribution_whois_iana_url,
+                    R.string.settings_attribution_whois_arin_url,
+                ),
+        ),
+    )
+
 @Composable
 private fun AttributionsSection() {
-    val uriHandler = LocalUriHandler.current
-
-    SectionHeader(Icons.Default.Info, stringResource(R.string.settings_attributions_section))
+    SectionHeader(stringResource(R.string.settings_attributions_section))
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(imageVector = Icons.Default.Speed, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Text(
-                    text = stringResource(R.string.settings_attribution_speedtest_title),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
+            ATTRIBUTION_SOURCES.forEachIndexed { index, source ->
+                if (index > 0) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                }
+                AttributionEntry(source)
             }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = stringResource(R.string.settings_attribution_speedtest_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+@Composable
+private fun AttributionEntry(source: AttributionSource) {
+    val uriHandler = LocalUriHandler.current
+    Column {
+        Text(
+            text = stringResource(source.titleRes),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = stringResource(source.bodyRes),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        source.linkRes.forEach { linkRes ->
+            val url = stringResource(linkRes)
             Row(
                 modifier =
                     Modifier
-                        .clickable { uriHandler.openUri("https://speed.cloudflare.com") }
-                        .padding(vertical = 4.dp),
+                        .clickable { uriHandler.openUri(url) }
+                        .heightIn(min = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "speed.cloudflare.com",
+                    text = url,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     textDecoration = TextDecoration.Underline,
@@ -549,30 +626,27 @@ private fun AttributionsSection() {
 
 private data class LibraryInfo(
     val name: String,
-    val version: String,
     val license: String,
     val copyright: String? = null,
 )
 
 private val THIRD_PARTY_LIBRARIES =
     listOf(
-        LibraryInfo(
-            "dnsjava",
-            "3.6.5",
-            "BSD 3-Clause",
-            "Copyright (c) 1998-2024, Brian Wellington and the dnsjava contributors",
-        ),
-        LibraryInfo("SNMP4J", "3.13.1", "Apache 2.0"),
-        LibraryInfo("icmpenguin", "1.0.0-rc.4", "Apache 2.0"),
-        LibraryInfo("Dagger Hilt", "2.60.1", "Apache 2.0"),
-        LibraryInfo("Kotlin Coroutines", "1.11.0", "Apache 2.0"),
-        LibraryInfo("AndroidX / Jetpack Compose", "N/A", "Apache 2.0"),
-        LibraryInfo("AndroidX DataStore", "1.2.1", "Apache 2.0"),
+        LibraryInfo("AndroidX and Jetpack Compose", "Apache 2.0"),
+        LibraryInfo("AndroidX DataStore", "Apache 2.0"),
+        LibraryInfo("Dagger Hilt", "Apache 2.0"),
+        LibraryInfo("Kotlin Coroutines", "Apache 2.0"),
+        LibraryInfo("Kotlinx Serialization", "Apache 2.0"),
+        LibraryInfo("OkHttp (local fork in third_party/okhttp)", "Apache 2.0"),
+        LibraryInfo("Okio", "Apache 2.0"),
+        LibraryInfo("dnsjava", "BSD 3-Clause", "Copyright (c) 1998-2024, Brian Wellington and the dnsjava contributors"),
+        LibraryInfo("SNMP4J", "Apache 2.0"),
+        LibraryInfo("icmpenguin", "Apache 2.0"),
     )
 
 @Composable
 private fun LicensesSection() {
-    SectionHeader(Icons.Default.Info, stringResource(R.string.settings_licenses_section))
+    SectionHeader(stringResource(R.string.settings_licenses_section))
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
@@ -624,13 +698,6 @@ private fun LibraryRow(lib: LibraryInfo) {
                 )
             }
         }
-        if (lib.version != "N/A") {
-            Text(
-                text = "v${lib.version}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
         if (lib.copyright != null) {
             Text(
                 text = lib.copyright,
@@ -643,25 +710,11 @@ private fun LibraryRow(lib: LibraryInfo) {
 
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
-private fun SectionHeader(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp),
-        )
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-    }
+private fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onBackground,
+    )
 }
