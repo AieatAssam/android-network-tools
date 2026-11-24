@@ -153,6 +153,7 @@ object HostValidator {
         return when {
             text.isEmpty() -> HostProblem.BLANK
             text.any { it.isWhitespace() } -> HostProblem.CONTAINS_WHITESPACE
+            text.contains("://") -> HostProblem.URL_NOT_HOST
             text.contains(':') -> HostProblem.IPV6_INVALID
             ipv4ShapedRegex.matches(text.removeSuffix(".")) -> HostProblem.IPV4_INVALID
             text.length > MAX_HOSTNAME_LENGTH -> HostProblem.TOO_LONG

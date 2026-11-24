@@ -1090,6 +1090,18 @@ class TracerouteViewModelTest {
             assertEquals(64, SliderScale.MAX_HOPS.snap(70f))
             assertEquals(3, SliderScale.PROBES.steps)
         }
+
+        @Test
+        fun `every timeout the slider can report snaps to a half second the view model keeps`() {
+            // Material's Slider reports floats between stops while dragging (QA saw 3.3 s on the time chip).
+            (500..10_000 step 25).forEach { raw ->
+                val snapped = SliderScale.TIMEOUT_MS.snap(raw.toFloat())
+                assertEquals(0, snapped % 500, "snap($raw)")
+                viewModel.onTimeoutChange(snapped)
+                assertEquals(snapped, viewModel.timeoutMs.value, "onTimeoutChange($snapped)")
+            }
+            assertEquals(3_500, SliderScale.TIMEOUT_MS.snap(3_300f))
+        }
     }
 
     @Nested

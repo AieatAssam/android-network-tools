@@ -37,4 +37,25 @@ data class HopResult(
 
     /** Maximum successful probe RTT, or null when every probe timed out or failed. */
     val rttMaxMs: Long? get() = probeRttsMs.filterNotNull().maxOrNull()
+
+    /** Probes that received a reply; a result without per-probe RTTs counts its single [rtTimeMs]. */
+    val answeredProbes: Int
+        get() = if (probeRttsMs.isEmpty()) listOfNotNull(rtTimeMs).size else probeRttsMs.count { it != null }
+
+    /**
+     * The hop's RTT wherever one figure is shown: the median of the answered probes, so one slow probe
+     * does not set it. With an even number of replies it is the mean of the middle two, rounded. A result
+     * without per-probe RTTs uses [rtTimeMs]. Null when no probe was answered.
+     */
+    val rttMedianMs: Long?
+        get() {
+            val answered = probeRttsMs.filterNotNull().sorted()
+            if (answered.isEmpty()) return rtTimeMs.takeIf { probeRttsMs.isEmpty() }
+            val middle = answered.size / 2
+            return if (answered.size % 2 == 1) {
+                answered[middle]
+            } else {
+                Math.round((answered[middle - 1] + answered[middle]) / 2.0)
+            }
+        }
 }

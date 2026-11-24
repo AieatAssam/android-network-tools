@@ -10,5 +10,6 @@ enum class HostProblem {
     INVALID_LABEL,
     INVALID_CHARACTERS,
     TOO_LONG,
+    URL_NOT_HOST,
     INVALID,
 }

@@ -1,9 +1,11 @@
 package net.aieat.netswissknife.app.ui.screens.traceroute.map
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import kotlin.math.abs
 import kotlin.math.hypot
 
 @DisplayName("ArcGeometry")
@@ -77,5 +79,34 @@ class ArcGeometryTest {
 
         assertEquals(5f, arc.controlX, eps)
         assertEquals(5f, arc.controlY, eps)
+    }
+
+    @Test
+    fun `a tap on an arc's curve finds it, a tap on the straight chord of a tall arc does not`() {
+        val arc = ArcGeometry.arc(0f, 100f, 200f, 100f)
+        val top = arc.pointAt(0.5f)
+
+        assertEquals(0, nearestArcIndex(listOf(arc), top.x, top.y + 5f, radiusPx = 24f))
+        // A 200 px chord bows 30 px away, so the chord's midpoint is out of a 24 px reach.
+        assertEquals(30f, abs(top.y - 100f), eps)
+        assertNull(nearestArcIndex(listOf(arc), 100f, 100f, radiusPx = 24f))
+    }
+
+    @Test
+    fun `the nearest of two arcs within reach wins, and nothing out of reach is found`() {
+        val upper = ArcGeometry.arc(0f, 0f, 200f, 0f)
+        val lower = ArcGeometry.arc(0f, 300f, 200f, 300f)
+        val nearLower = lower.pointAt(0.3f)
+
+        assertEquals(1, nearestArcIndex(listOf(upper, lower), nearLower.x, nearLower.y - 3f, radiusPx = 24f))
+        assertNull(nearestArcIndex(listOf(upper, lower), 100f, 1_000f, radiusPx = 24f))
+        assertNull(nearestArcIndex(emptyList(), 0f, 0f, radiusPx = 24f))
+    }
+
+    @Test
+    fun `a zero-length arc is hit at its point`() {
+        val dot = ArcGeometry.arc(50f, 50f, 50f, 50f)
+
+        assertEquals(0, nearestArcIndex(listOf(dot), 60f, 50f, radiusPx = 24f))
     }
 }

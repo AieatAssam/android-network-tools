@@ -719,8 +719,12 @@
 
     <!-- Traceroute Results -->
     <string name="traceroute_result_header">Trace results</string>
-    <string name="traceroute_summary_destination_rtt">Destination RTT: %1$d ms at hop %2$d</string>
-    <string name="traceroute_summary_last_reply">Last reply: hop %1$d, %2$d ms</string>
+    <string name="traceroute_summary_destination_rtt">Destination RTT: %1$d ms (%2$s) at hop %3$d</string>
+    <string name="traceroute_summary_last_reply">Last reply: hop %1$d, %2$d ms (%3$s)</string>
+    <plurals name="traceroute_rtt_basis">
+        <item quantity="one">%1$d reply</item>
+        <item quantity="other">median of %1$d</item>
+    </plurals>
     <string name="traceroute_summary_silent_after">No replies after hop %1$d. Hops %2$d to %3$d were probed and did not answer.</string>
     <string name="traceroute_summary_silent_after_one">No reply after hop %1$d. Hop %2$d was probed and did not answer.</string>
     <plurals name="traceroute_summary_none_replied">
@@ -748,7 +752,7 @@
     <string name="traceroute_tab_map">Map</string>
     <!-- Traceroute route map -->
     <string name="traceroute_map_starts_at">The route starts at hop %1$d, the first hop with a known location. Your device\'s own location is not shown.</string>
-    <string name="traceroute_map_gesture_hint">Tap a marker for its hop. Pinch to zoom; once zoomed in, drag to move the map.</string>
+    <string name="traceroute_map_gesture_hint">Tap a marker or a line for details. Pinch, double tap or use the buttons to zoom; once zoomed in, drag to move the map.</string>
     <string name="traceroute_map_reset">Reset map view</string>
     <string name="traceroute_map_description">Route map, in hop order: %1$s</string>
     <string name="traceroute_map_stop_description">hop %1$s, %2$s, %3$s</string>
@@ -756,8 +760,8 @@
     <string name="traceroute_map_callout_hop">Hop %1$d</string>
     <string name="traceroute_map_callout_replies">Replies: %1$d of %2$d probes</string>
     <string name="traceroute_map_callout_jitter">Jitter: %1$d ms</string>
-    <string name="traceroute_map_callout_disputed">This location is contradicted by the measured RTT, so the hop is not on the drawn route.</string>
-    <string name="traceroute_map_legend_colour">Colour: RTT of the hop each line arrives at</string>
+    <string name="traceroute_map_callout_disputed">Location disputed (possibly anycast): the measured RTT rules this place out, so the hop is not on the drawn route.</string>
+    <string name="traceroute_map_legend_colour">Colour: median RTT of the hop each line arrives at</string>
     <string name="traceroute_map_band_under">Under %1$d ms</string>
     <string name="traceroute_map_band_range">%1$d to %2$d ms</string>
     <string name="traceroute_map_band_over">%1$d ms or more</string>
@@ -767,19 +771,51 @@
     <string name="traceroute_map_width_slow">Thin: under %1$d%%</string>
     <string name="traceroute_map_legend_line">Line pattern: one meaning each</string>
     <string name="traceroute_map_line_solid">Solid: every probe answered and jitter was low</string>
-    <string name="traceroute_map_line_dotted">Dotted: a probe was lost, or jitter was %1$d ms or more and at least %2$d%% of the RTT</string>
-    <string name="traceroute_map_line_dash_dot">Dash and dot: one probe answered, so stability is not known</string>
+    <string name="traceroute_map_line_dotted">Dotted: a probe was lost, or jitter was %1$d ms or more and at least %2$d%% of the median RTT</string>
+    <string name="traceroute_map_line_dash_dot">Dash and dot: stability not measured, because one probe was sent or the trace stopped before every reply was in</string>
     <string name="traceroute_map_line_dashed">Grey dashes: hops in between sent no reply or have no reliable location. The path, latency and speed here are unknown.</string>
     <string name="traceroute_map_stability_needs_probes">Stability needs 2 or more probes per hop. This trace sent 1.</string>
     <string name="traceroute_map_marker_head">Pulsing ring: the newest located hop while the trace runs</string>
     <string name="traceroute_map_waiting">No hop located yet. Hops with a public address appear here as their locations arrive.</string>
-    <plurals name="traceroute_map_not_located">
-        <item quantity="one">%1$d hop not yet located</item>
-        <item quantity="other">%1$d hops not yet located</item>
+    <plurals name="traceroute_map_off_no_reply">
+        <item quantity="one">Hop %1$s sent no reply.</item>
+        <item quantity="other">Hops %1$s sent no reply.</item>
     </plurals>
-    <plurals name="traceroute_map_off_map">
-        <item quantity="one">%1$d hop after the last located one is not on the map: it sent no reply or has no known location.</item>
-        <item quantity="other">%1$d hops after the last located one are not on the map: they sent no reply or have no known location.</item>
+    <plurals name="traceroute_map_off_not_located">
+        <item quantity="one">Hop %1$s has no known location.</item>
+        <item quantity="other">Hops %1$s have no known location.</item>
+    </plurals>
+    <plurals name="traceroute_map_off_not_located_yet">
+        <item quantity="one">Hop %1$s is not located yet.</item>
+        <item quantity="other">Hops %1$s are not located yet.</item>
+    </plurals>
+    <plurals name="traceroute_map_off_disputed">
+        <item quantity="one">Hop %1$s has a disputed location, so it is not joined into the route.</item>
+        <item quantity="other">Hops %1$s have disputed locations, so they are not joined into the route.</item>
+    </plurals>
+    <string name="traceroute_map_hop_range">%1$d to %2$d</string>
+    <string name="traceroute_map_list_and">%1$s and %2$s</string>
+    <string name="traceroute_map_list_comma">", "</string>
+    <string name="traceroute_map_segment_places">%1$s to %2$s</string>
+    <string name="traceroute_map_zoom_in">Zoom in</string>
+    <string name="traceroute_map_zoom_out">Zoom out</string>
+    <string name="traceroute_map_legend_title">Legend</string>
+    <string name="traceroute_map_legend_show">Show legend</string>
+    <string name="traceroute_map_legend_hide">Hide legend</string>
+    <string name="traceroute_map_segment_title">Hop %1$s to hop %2$s</string>
+    <string name="traceroute_map_segment_rtt">RTT at hop %1$s: %2$d ms (%3$s)</string>
+    <string name="traceroute_map_segment_added_rtt">Added RTT: %1$d ms</string>
+    <string name="traceroute_map_segment_rtt_drop">RTT fell by %1$d ms, so the speed is not measurable</string>
+    <string name="traceroute_map_segment_distance">Distance: %1$d km</string>
+    <string name="traceroute_map_segment_speed">Speed: %1$d%% of light in fibre</string>
+    <string name="traceroute_map_segment_speed_unknown">Speed: not measurable over this distance</string>
+    <string name="traceroute_map_segment_steady">Replies were steady: every probe answered and the times varied little.</string>
+    <string name="traceroute_map_segment_unsteady_loss">Replies were unsteady: %1$d of %2$d probes answered.</string>
+    <string name="traceroute_map_segment_unsteady_jitter">Replies were unsteady: the times varied by %1$d ms.</string>
+    <string name="traceroute_map_segment_not_measured">Steadiness not measured: too few probes reported for this hop.</string>
+    <plurals name="traceroute_map_segment_unknown">
+        <item quantity="one">Path unknown: hop %1$s in between sent no reply or has no reliable location, so latency and speed are not shown.</item>
+        <item quantity="other">Path unknown: hops %1$s in between sent no reply or have no reliable location, so latency and speed are not shown.</item>
     </plurals>
     <string name="traceroute_map_live_description">Trace running</string>
     <string name="traceroute_map_live_head">newest located hop %1$s</string>
@@ -1549,9 +1585,11 @@
         <item>The summary counts the hops that replied out of the hops probed, and says where replies stopped if the destination did not answer.</item>
         <item>Route geography: for hops with a public address, the country, network and approximate distance. Locations come from GeoIP data and can be wrong.</item>
         <item>Map: draws the route between located hops on an offline world map, and grows while the trace runs. It starts at the first located hop, because your own location is not known.</item>
-        <item>Arc colour is the RTT of the hop it arrives at, the same colours as the hop list. A thicker arc covered more distance per ms of added RTT.</item>
-        <item>Line patterns: solid means every probe answered with low jitter; dotted means lost probes or high jitter; dash and dot means one probe, so stability is not known; grey dashes mean the hops in between are unknown, with no latency or speed shown.</item>
-        <item>A hollow marker is a hop whose GeoIP location the measured RTT rules out; it is shown but not joined into the route.</item>
+        <item>Each hop\'s RTT is the median of its answered probes, in the hop list and on the map. The hop details also give the minimum, average and maximum.</item>
+        <item>Arc colour is the median RTT of the hop it arrives at, the same colours as the hop list. A thicker arc covered more distance per ms of added RTT.</item>
+        <item>Line patterns: solid means every probe answered with low jitter; dotted means lost probes or high jitter; dash and dot means stability was not measured, because one probe was sent or the trace was stopped first; grey dashes mean the hops in between are unknown, with no latency or speed shown.</item>
+        <item>A hollow marker is a hop whose GeoIP location the measured RTT rules out, often an anycast address; it is shown but not joined into the route.</item>
+        <item>Tap a marker or a line for its details. Markers too close to label separately share one label, which splits again as you zoom in.</item>
     </string-array>
 
     <!-- Port Scanner help -->
@@ -1871,6 +1909,7 @@
     <string name="error_host_invalid_characters">Hostnames can only contain letters, digits, hyphens and dots</string>
     <string name="error_host_too_long">A hostname can be at most 253 characters long</string>
     <string name="error_host_invalid">Enter a valid hostname or IP address</string>
+    <string name="error_host_url">Enter a hostname or IP address, without http:// or a path</string>
     <string name="error_invalid_url">Enter a valid URL (e.g. https://example.com)</string>
 
     <!-- Wake-on-LAN -->

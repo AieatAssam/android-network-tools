@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import me.impa.icmpenguin.trace.Response
 import net.aieat.netswissknife.core.network.operation.CancellationReason
@@ -655,5 +658,55 @@ class IcmpEnginTracerouteRepositoryImplTest {
 
             assertEquals("192.0.2.9", hop.ip)
             assertNull(hop.hostname)
+        }
+
+    @Test
+    fun `a slow hostname lookup that answers within ten seconds lets the trace proceed`() =
+        runTest {
+            var nativeHost: String? = null
+            val repository =
+                IcmpEnginTracerouteRepositoryImpl(
+                    nativeTraceFactory = { host, _, _, _, _, _, _ ->
+                        nativeHost = host
+                        flowOf(HopResult(1, "1.1.1.1", null, 9L, HopStatus.SUCCESS, destinationReached = true))
+                    },
+                    hostResolver =
+                        TracerouteHostResolver { _, _ ->
+                            // Longer than the former five-second limit: one lost DNS query and its retry.
+                            delay(7_000)
+                            "1.1.1.1"
+                        },
+                    dispatcher = StandardTestDispatcher(testScheduler),
+                    localAddresses = { emptySet() },
+                )
+
+            val hops = repository.trace("one.one.one.one", 2, 500, 1, TracerouteProbeType.ICMP, 56).toList()
+
+            assertEquals(10_000L, TracerouteOperation.MAX_HOST_RESOLUTION_WAIT_MILLIS)
+            assertEquals("1.1.1.1", nativeHost)
+            assertEquals(listOf(1), hops.map { it.hopNumber })
+        }
+
+    @Test
+    fun `a hostname lookup that takes longer than ten seconds fails with the lookup timeout`() =
+        runTest {
+            val repository =
+                IcmpEnginTracerouteRepositoryImpl(
+                    nativeTraceFactory = { _, _, _, _, _, _, _ -> flowOf() },
+                    hostResolver =
+                        TracerouteHostResolver { _, _ ->
+                            delay(10_500)
+                            "1.1.1.1"
+                        },
+                    dispatcher = StandardTestDispatcher(testScheduler),
+                    localAddresses = { emptySet() },
+                )
+
+            val failure =
+                runCatching {
+                    repository.trace("one.one.one.one", 2, 500, 1, TracerouteProbeType.ICMP, 56).toList()
+                }.exceptionOrNull()
+
+            assertInstanceOf(TracerouteHostResolutionTimeoutException::class.java, failure)
         }
 }

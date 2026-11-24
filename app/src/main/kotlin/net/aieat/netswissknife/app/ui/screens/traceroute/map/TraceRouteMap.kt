@@ -13,7 +13,10 @@ enum class Stability {
     /** A probe was lost or jitter is high (dotted line). */
     UNSTABLE,
 
-    /** The arriving hop sent one probe, so stability was not measured (dash-dot line). */
+    /**
+     * Stability was not measured (dash-dot line): the arriving hop sent one probe, not all of its probes
+     * have reported yet, or the trace was stopped before its missing replies could count as lost.
+     */
     NOT_MEASURED,
 
     /**
@@ -28,10 +31,11 @@ enum class SpeedBand { FAST, MEDIUM, SLOW, UNKNOWN }
 
 /** Probe results of one hop, the same data the hop list shows. */
 data class ProbeStats(
+    /** Probes that have reported, answered or not. */
     val sent: Int,
     val answered: Int,
-    /** Fastest answered probe, or null when none answered. */
-    val fastestMs: Long?,
+    /** [HopResult.rttMedianMs]: the hop's RTT everywhere it is shown as one figure. */
+    val medianMs: Long?,
     /** Fastest-to-slowest spread of answered probes, or null when fewer than two answered. */
     val jitterMs: Long?,
 ) {
@@ -46,7 +50,7 @@ data class ProbeStats(
             return ProbeStats(
                 sent = probes.size,
                 answered = answered.size,
-                fastestMs = answered.minOrNull(),
+                medianMs = hop.rttMedianMs,
                 jitterMs = jitter,
             )
         }
@@ -70,11 +74,20 @@ data class RouteStop(
     val isDestination: Boolean get() = hops.any { it.destinationReached }
     val label: String get() = labelOf(hopNumbers)
 
+    /** The marker's colour: the median RTT of its first hop, as that hop's row shows it. */
+    val rttMs: Long? get() = hops.first().rttMedianMs
+
     companion object {
         /** "7", "3-5", or "3-4, 6" for hop numbers merged across a gap. */
         fun labelOf(hopNumbers: List<Int>): String {
+            val runs = runsOf(hopNumbers)
+            return runs.joinToString(", ") { if (it.first == it.last) "${it.first}" else "${it.first}-${it.last}" }
+        }
+
+        /** Consecutive [hopNumbers] as ranges, in order: 3, 4, 6 gives 3..4 and 6..6. */
+        fun runsOf(hopNumbers: Collection<Int>): List<IntRange> {
             val runs = mutableListOf<IntRange>()
-            hopNumbers.sorted().forEach { number ->
+            hopNumbers.distinct().sorted().forEach { number ->
                 val last = runs.lastOrNull()
                 if (last != null && number == last.last + 1) {
                     runs[runs.lastIndex] = last.first..number
@@ -82,7 +95,7 @@ data class RouteStop(
                     runs += number..number
                 }
             }
-            return runs.joinToString(", ") { if (it.first == it.last) "${it.first}" else "${it.first}-${it.last}" }
+            return runs
         }
     }
 }
@@ -101,29 +114,38 @@ data class RouteSegment(
     val fromStop: Int,
     val toStop: Int,
     val key: SegmentKey,
-    /** RTT of the arriving hop, the value its hop list row shows; sets the colour. Null for an unknown path. */
+    /** Median RTT of the arriving hop, the value its hop list row shows; sets the colour. Null for an unknown path. */
     val rttMs: Long?,
     val probes: ProbeStats,
     val distanceKm: Double,
     /** Hops between the two stops that did not answer, have no location or have a disputed one. */
-    val skippedHops: Int,
+    val skippedHopNumbers: List<Int>,
+    /** Median RTT added since the previous stop's last answering hop; null for an unknown path. */
+    val addedRttMs: Long?,
     val speedFraction: Double?,
     val speed: SpeedBand,
     val stability: Stability,
 ) {
     val isUnknown: Boolean get() = stability == Stability.UNKNOWN
+    val skippedHops: Int get() = skippedHopNumbers.size
 }
 
 /**
- * Hops after the last stop on the route: [noReply] sent nothing back and [notLocated] answered but have
- * no location yet. A disputed hop in the range is drawn as its own marker, so it is in neither count.
+ * Hops after the first located one that are not on the drawn route, each for one stated reason: [noReply]
+ * sent nothing back, [notLocated] answered but have no location (yet, while the trace runs), and
+ * [disputed] have a GeoIP location the measured RTT rules out, drawn as hollow markers off the route.
  */
-data class TrailingHops(
-    val firstHop: Int,
-    val lastHop: Int,
-    val notLocated: Int,
-    val noReply: Int,
-)
+data class OffRouteHops(
+    val noReply: List<Int>,
+    val notLocated: List<Int>,
+    val disputed: List<Int>,
+) {
+    val isEmpty: Boolean get() = noReply.isEmpty() && notLocated.isEmpty() && disputed.isEmpty()
+
+    companion object {
+        val NONE = OffRouteHops(emptyList(), emptyList(), emptyList())
+    }
+}
 
 /** Thresholds for the map's line width and dash pattern. */
 object RouteClassification {
@@ -142,7 +164,7 @@ object RouteClassification {
     /** Dashes: jitter is high when it is at least this many ms ... */
     const val HIGH_JITTER_MIN_MS = 20L
 
-    /** ... and at least this fraction of the hop's fastest probe. */
+    /** ... and at least this fraction of the hop's median RTT. */
     const val HIGH_JITTER_MIN_FRACTION = 0.25
 
     /**
@@ -165,16 +187,25 @@ object RouteClassification {
             else -> SpeedBand.SLOW
         }
 
+    /**
+     * The arc's pattern. A hop with fewer reports than [expectedProbes] is still being measured. When the
+     * missing replies may have been [cutShort] by stopping the trace, they are not counted as lost; high
+     * jitter among the replies that did arrive still is.
+     */
     fun stability(
         probes: ProbeStats,
         skippedHops: Int,
+        expectedProbes: Int = probes.sent,
+        cutShort: Boolean = false,
     ): Stability {
         val jitter = probes.jitterMs
+        val highJitter = jitter != null && isHighJitter(jitter, probes)
+        val lost = probes.answered < probes.sent
         return when {
             skippedHops > 0 -> Stability.UNKNOWN
-            probes.sent < 2 -> Stability.NOT_MEASURED
-            probes.answered < probes.sent -> Stability.UNSTABLE
-            jitter != null && isHighJitter(jitter, probes) -> Stability.UNSTABLE
+            probes.sent < 2 || probes.sent < expectedProbes -> Stability.NOT_MEASURED
+            highJitter || (lost && !cutShort) -> Stability.UNSTABLE
+            lost -> Stability.NOT_MEASURED
             else -> Stability.STABLE
         }
     }
@@ -183,7 +214,7 @@ object RouteClassification {
         jitterMs: Long,
         probes: ProbeStats,
     ): Boolean {
-        val relativeFloorMs = ((probes.fastestMs ?: 0L) * HIGH_JITTER_MIN_FRACTION).roundToLong()
+        val relativeFloorMs = ((probes.medianMs ?: 0L) * HIGH_JITTER_MIN_FRACTION).roundToLong()
         return jitterMs >= HIGH_JITTER_MIN_MS && jitterMs >= relativeFloorMs
     }
 }
@@ -201,8 +232,8 @@ data class TraceRouteMap(
     val stops: List<RouteStop>,
     val segments: List<RouteSegment>,
     val disputedStops: List<RouteStop>,
-    /** Hops after the last stop, which the map cannot place yet. */
-    val trailing: TrailingHops? = null,
+    /** Hops after the first located one that are not on the drawn route, by reason. */
+    val offRoute: OffRouteHops = OffRouteHops.NONE,
 ) {
     val isEmpty: Boolean get() = stops.isEmpty() && disputedStops.isEmpty()
 
@@ -218,10 +249,21 @@ data class TraceRouteMap(
     /** False when no hop on the route sent two or more probes, so no arc can show stability. */
     val stabilityMeasurable: Boolean get() = stops.any { stop -> stop.hops.any { ProbeStats.of(it).sent >= 2 } }
 
+    /** Every stop drawn, route stops first, in the index order the canvas uses. */
+    val allStops: List<RouteStop> get() = stops + disputedStops
+
     companion object {
         private const val FULL_WORLD = 360.0
 
-        fun from(hops: List<HopResult>): TraceRouteMap {
+        /**
+         * The map of [hops]. [stopped] marks a trace that was stopped before its end: a hop's replies
+         * missing after its last answered probe may have been cut short, so they are not counted as lost.
+         * A missing reply followed by an answered one is still a loss.
+         */
+        fun from(
+            hops: List<HopResult>,
+            stopped: Boolean = false,
+        ): TraceRouteMap {
             val ordered = hops.sortedBy { it.hopNumber }
             val disputed = GeoPlausibility.implausibleHops(ordered)
             val stops = mutableListOf<RouteStop>()
@@ -242,33 +284,40 @@ data class TraceRouteMap(
                 }
                 if (!isDisputed) previousLon = lon
             }
+            // Results with per-probe RTTs report each probe; the most any hop has reported is the trace's setting.
+            val expectedProbes = ordered.maxOfOrNull { it.probeRttsMs.size }?.coerceAtLeast(1) ?: 1
+            val context = SegmentContext(ordered, expectedProbes, stopped)
             return TraceRouteMap(
                 stops = stops,
-                segments = segmentsOf(stops, ordered),
+                segments = segmentsOf(stops, context),
                 disputedStops = disputedStops,
-                trailing = trailingOf(stops, ordered, disputed),
+                offRoute = offRouteOf(stops + disputedStops, ordered, disputed),
             )
         }
 
-        private fun trailingOf(
-            stops: List<RouteStop>,
+        /** True when every missing reply of this hop came after its last answered one. */
+        private fun HopResult.missesOnlyTrailingReplies(): Boolean {
+            val upToLastReply = probeRttsMs.dropLastWhile { it == null }
+            return upToLastReply.none { it == null }
+        }
+
+        private class SegmentContext(
+            val ordered: List<HopResult>,
+            val expectedProbes: Int,
+            val stopped: Boolean,
+        )
+
+        private fun offRouteOf(
+            drawn: List<RouteStop>,
             ordered: List<HopResult>,
             disputed: Set<Int>,
-        ): TrailingHops? {
-            val lastStopHop =
-                stops
-                    .lastOrNull()
-                    ?.hops
-                    ?.last()
-                    ?.hopNumber
-            val after = ordered.filter { lastStopHop != null && it.hopNumber > lastStopHop }
-            if (after.isEmpty()) return null
-            val placeable = after.filter { it.hopNumber !in disputed }
-            return TrailingHops(
-                firstHop = after.first().hopNumber,
-                lastHop = after.last().hopNumber,
-                notLocated = placeable.count { it.ip != null && it.geoLocation == null },
-                noReply = placeable.count { it.ip == null },
+        ): OffRouteHops {
+            val first = drawn.flatMap { it.hopNumbers }.minOrNull() ?: return OffRouteHops.NONE
+            val after = ordered.filter { it.hopNumber > first }
+            return OffRouteHops(
+                noReply = after.filter { it.ip == null }.map { it.hopNumber },
+                notLocated = after.filter { it.ip != null && it.geoLocation == null }.map { it.hopNumber },
+                disputed = after.filter { it.hopNumber in disputed }.map { it.hopNumber },
             )
         }
 
@@ -297,38 +346,43 @@ data class TraceRouteMap(
 
         private fun segmentsOf(
             stops: List<RouteStop>,
-            ordered: List<HopResult>,
+            context: SegmentContext,
         ): List<RouteSegment> =
             stops.zipWithNext().mapIndexed { index, (from, to) ->
                 val arriving = to.hops.first()
                 val fromLast = from.hops.last().hopNumber
-                val between = ordered.filter { it.hopNumber > fromLast && it.hopNumber < arriving.hopNumber }
+                val between =
+                    context.ordered
+                        .filter { it.hopNumber > fromLast && it.hopNumber < arriving.hopNumber }
+                        .map { it.hopNumber }
                 val unknown = between.isNotEmpty()
                 val distanceKm = GeoPlausibility.distanceKm(from.location, to.location)
-                val anchorRtt = from.hops.lastOrNull { it.fastestRtt() != null }?.fastestRtt()
-                val arrivingRtt = arriving.fastestRtt()
-                val fraction =
-                    if (anchorRtt == null || arrivingRtt == null || unknown) {
-                        null
-                    } else {
-                        RouteClassification.speedFraction(distanceKm, (arrivingRtt - anchorRtt).toDouble())
-                    }
+                // The hop's median on both ends, the figure each hop's row shows.
+                val anchorRtt = from.hops.lastOrNull { it.rttMedianMs != null }?.rttMedianMs
+                val arrivingRtt = arriving.rttMedianMs
+                val addedRtt =
+                    if (anchorRtt == null || arrivingRtt == null || unknown) null else arrivingRtt - anchorRtt
+                val fraction = addedRtt?.let { RouteClassification.speedFraction(distanceKm, it.toDouble()) }
                 val probes = ProbeStats.of(arriving)
                 RouteSegment(
                     fromStop = index,
                     toStop = index + 1,
                     key = SegmentKey(fromHop = from.hops.first().hopNumber, toHop = arriving.hopNumber),
-                    rttMs = arriving.rtTimeMs.takeUnless { unknown },
+                    rttMs = arrivingRtt.takeUnless { unknown },
                     probes = probes,
                     distanceKm = distanceKm,
-                    skippedHops = between.size,
+                    skippedHopNumbers = between,
+                    addedRttMs = addedRtt,
                     speedFraction = fraction,
                     speed = RouteClassification.speedBand(fraction),
-                    stability = RouteClassification.stability(probes, between.size),
+                    stability =
+                        RouteClassification.stability(
+                            probes = probes,
+                            skippedHops = between.size,
+                            expectedProbes = context.expectedProbes,
+                            cutShort = context.stopped && arriving.missesOnlyTrailingReplies(),
+                        ),
                 )
             }
-
-        /** The same RTT [GeoPlausibility] uses: fastest probe, else the reported RTT. */
-        private fun HopResult.fastestRtt(): Long? = rttMinMs ?: rtTimeMs
     }
 }
