@@ -85,4 +85,27 @@ class HttpProbeFinalHopTimingTest {
             assertEquals(2L, probe.timings.transferMs)
             assertEquals(probe.responseTimeMs, probe.timings.totalMs)
         }
+
+    @Test
+    fun `sent request headers are the ones the engine sent on the final hop`() =
+        runTest {
+            val firstHopSent = listOf("Host" to "example.test", "X-QA-Test" to "first")
+            val finalHopSent =
+                listOf("Host" to "example.test", "User-Agent" to "okhttp", "Accept-Encoding" to "identity")
+            val engine =
+                ScriptedEngine(
+                    listOf(
+                        redirect("https://example.test/final", HttpTimings()).copy(requestHeaders = firstHopSent),
+                        ok(HttpTimings()).copy(requestHeaders = finalHopSent),
+                    ),
+                )
+
+            val result =
+                HttpProbeRepositoryImpl(engine).probe(
+                    HttpProbeRequest(url = "https://example.test/start", headers = listOf("X-QA-Test" to "first")),
+                )
+
+            val probe = (result as NetworkResult.Success).data
+            assertEquals(finalHopSent, probe.sentRequestHeaders)
+        }
 }

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ChipColors
 import androidx.compose.material3.CircularProgressIndicator
@@ -89,7 +90,6 @@ import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
-import net.aieat.netswissknife.app.ui.components.messageRes
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.scrollIntoViewOnFocus
 import net.aieat.netswissknife.app.ui.format.withSeparatorBreaks
@@ -345,6 +345,28 @@ private fun TlsHeaderCard(onHelpClick: () -> Unit) {
 // ── Input section ─────────────────────────────────────────────────────────────
 
 @Composable
+private fun ClearRecentHostsDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.tls_clear_recents_title)) },
+        text = { Text(stringResource(R.string.tls_clear_recents_message)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(R.string.tls_clear_recents_confirm), color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
+    )
+}
+
+@Composable
 private fun TlsInputSection(
     host: String,
     port: String,
@@ -363,6 +385,7 @@ private fun TlsInputSection(
     onClearRecentHosts: () -> Unit,
 ) {
     val dismissKeyboard = rememberDismissKeyboard()
+    var showClearRecentConfirm by remember { mutableStateOf(false) }
     val protocolToggleLabel = stringResource(R.string.tls_probe_protocols_label)
     val normalizedHost = HostValidator.normalize(host)
     val isHostInvalid = host.isNotBlank() && normalizedHost == null
@@ -384,11 +407,7 @@ private fun TlsInputSection(
                 supportingText =
                     if (isHostInvalid) {
                         {
-                            Text(
-                                stringResource(
-                                    HostValidator.problemOf(host)?.messageRes() ?: R.string.error_host_invalid,
-                                ),
-                            )
+                            Text(stringResource(tlsHostErrorRes(host)))
                         }
                     } else {
                         null
@@ -407,9 +426,18 @@ private fun TlsInputSection(
                 recentHosts = recentHosts,
                 onHostSelected = onHostChange,
                 onRemoveHost = onRemoveRecentHost,
-                onClearAll = onClearRecentHosts,
+                onClearAll = { showClearRecentConfirm = true },
                 selectionEnabled = !isLoading,
             )
+            if (showClearRecentConfirm) {
+                ClearRecentHostsDialog(
+                    onConfirm = {
+                        showClearRecentConfirm = false
+                        onClearRecentHosts()
+                    },
+                    onDismiss = { showClearRecentConfirm = false },
+                )
+            }
 
             // Port field
             OutlinedTextField(
@@ -622,7 +650,7 @@ private fun TlsErrorContent(
             }
 
             TlsInputErrorKeys.HOST_INVALID -> {
-                stringResource(HostValidator.problemOf(host)?.messageRes() ?: R.string.err_host_invalid)
+                stringResource(tlsHostErrorRes(host))
             }
 
             TlsInputErrorKeys.PORT_INVALID -> {
@@ -823,6 +851,13 @@ private fun ConnectionDetails(result: TlsInspectorResult) {
         LabeledValue(
             label = protocol,
             value = stringResource(if (supported) R.string.tls_supported else R.string.tls_not_supported),
+        )
+    }
+    if (legacyProtocolAdvisoryNeeded(result.protocolSupport)) {
+        Text(
+            text = stringResource(R.string.tls_legacy_protocol_advisory),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
     result.protocolProbeUnknown.sorted().forEach { protocol ->

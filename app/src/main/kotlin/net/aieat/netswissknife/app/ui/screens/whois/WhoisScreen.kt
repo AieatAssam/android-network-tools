@@ -711,9 +711,13 @@ fun WhoisResultsSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        when (result.queryType) {
-            WhoisQueryType.DOMAIN -> DomainResultCard(result, onOpenUrl)
-            WhoisQueryType.IPV4, WhoisQueryType.IPV6, WhoisQueryType.ASN -> IpAsnResultCard(result)
+        if (result.notRegistered) {
+            NotRegisteredCard(query = result.query)
+        } else {
+            when (result.queryType) {
+                WhoisQueryType.DOMAIN -> DomainResultCard(result, onOpenUrl)
+                WhoisQueryType.IPV4, WhoisQueryType.IPV6, WhoisQueryType.ASN -> IpAsnResultCard(result)
+            }
         }
 
         // Raw response accordion
@@ -722,6 +726,24 @@ fun WhoisResultsSection(
             copyText = buildWhoisShareText(result),
             onShare = onShare,
         )
+    }
+}
+
+@Composable
+private fun NotRegisteredCard(query: String) {
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = stringResource(R.string.whois_not_registered_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(R.string.whois_not_registered_body, query),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -915,11 +937,21 @@ fun IpAsnResultCard(result: WhoisResult) {
                             ),
                         ).padding(16.dp),
             ) {
-                Text(
-                    text = result.netName ?: result.query,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
+                val heading = ipAsnHeadingOf(result)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = heading.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                    heading.subtitle?.let { subtitle ->
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                }
             }
             HorizontalDivider()
             val netRange = result.netRange

@@ -83,6 +83,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -338,7 +339,7 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                         }
 
                         is DisplayState.Canceled -> {
-                            HttpProbeCanceledContent()
+                            HttpProbeCanceledContent { viewModel.send() }
                         }
 
                         is DisplayState.Error -> {
@@ -740,6 +741,7 @@ private fun HttpProbeInputCard(
                     modifier = Modifier.fillMaxWidth().height(120.dp),
                     textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                     maxLines = 6,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
                 )
             }
 
@@ -840,17 +842,19 @@ private fun HttpProbeIdlePlaceholder() {
 }
 
 @Composable
-private fun HttpProbeCanceledContent() {
+private fun HttpProbeCanceledContent(onRetry: () -> Unit) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.httprobe_request_canceled),
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.httprobe_request_canceled),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ToolRetryButton(text = stringResource(R.string.httprobe_retry), onClick = onRetry)
+        }
     }
 }
 
@@ -1061,7 +1065,7 @@ private fun OverviewTabContent(result: HttpProbeResult) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         LabeledValue(stringResource(R.string.httprobe_protocol_label), result.protocol)
-        TimingBreakdown(result.timings)
+        TimingBreakdown(result.timings, hasRedirects = result.redirectHops.isNotEmpty())
         LabeledValue(
             stringResource(R.string.httprobe_response_size),
             responseSizeText(result, stringResource(R.string.httprobe_response_size_at_least)),
@@ -1114,7 +1118,10 @@ private fun OverviewTabContent(result: HttpProbeResult) {
 }
 
 @Composable
-private fun TimingBreakdown(timings: HttpTimings) {
+private fun TimingBreakdown(
+    timings: HttpTimings,
+    hasRedirects: Boolean,
+) {
     val breakdown = HttpTimingBreakdown.from(timings)
     val segments =
         listOf(
@@ -1164,6 +1171,13 @@ private fun TimingBreakdown(timings: HttpTimings) {
             breakdown.ttfbTotalMs?.let { totalTtfb ->
                 LabeledValue(stringResource(R.string.httprobe_timing_ttfb), stringResource(R.string.httprobe_timing_value_ms, totalTtfb))
             }
+            if (hasRedirects) {
+                Text(
+                    text = stringResource(R.string.httprobe_timing_final_hop_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -1191,14 +1205,14 @@ private fun HeadersTabContent(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            } else if (result.request.headers.isEmpty()) {
+            } else if (result.sentRequestHeaders.isEmpty()) {
                 Text(
-                    text = stringResource(R.string.httprobe_no_custom_headers),
+                    text = stringResource(R.string.httprobe_no_headers),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                result.request.headers.forEach { (key, value) ->
+                result.sentRequestHeaders.forEach { (key, value) ->
                     HeaderRow(key, value)
                 }
             }

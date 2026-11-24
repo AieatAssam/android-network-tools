@@ -300,6 +300,7 @@ class HttpProbeRepositoryImpl internal constructor(
                             ),
                         protocol = response.protocol,
                         redirectHops = redirectHops.toList(),
+                        sentRequestHeaders = response.requestHeaders,
                     ),
                 )
             } catch (failure: Exception) {

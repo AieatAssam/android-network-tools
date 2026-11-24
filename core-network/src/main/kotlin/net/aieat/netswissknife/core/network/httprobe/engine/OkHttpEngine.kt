@@ -123,6 +123,7 @@ private class OkHttpEngineCall(
                     protocol = response.protocol.toString(),
                     timings = recorder.snapshot(),
                     timingSnapshot = recorder::snapshot,
+                    requestHeaders = sentRequestHeaders(response),
                 )
                 continuation.resume(result, onCancellation = { _, _, _ -> response.close() })
             }
@@ -176,29 +177,97 @@ internal fun tcpConnectMs(
     return ((tcpEndNs - connectStartNs) / NANOS_PER_MILLISECOND).coerceAtLeast(0L)
 }
 
+private fun sentRequestHeaders(response: okhttp3.Response): List<Pair<String, String>> {
+    val sent = (response.networkResponse?.request ?: response.request).headers
+    return List(sent.size) { index -> sent.name(index) to sent.value(index) }
+}
+
 /** EventListener-owned per-call monotonic timing snapshots. */
 private class TimingRecorder : EventListener() {
     @Volatile private var callStart: Long? = null
+
     @Volatile private var dnsStart: Long? = null
+
     @Volatile private var dnsEnd: Long? = null
+
     @Volatile private var connectStart: Long? = null
+
     @Volatile private var connectEnd: Long? = null
+
     @Volatile private var tlsStart: Long? = null
+
     @Volatile private var tlsEnd: Long? = null
+
     @Volatile private var headersStart: Long? = null
+
     @Volatile private var headersEnd: Long? = null
+
     @Volatile private var bodyEnd: Long? = null
 
-    override fun callStart(call: Call) { callStart = System.nanoTime() }
-    override fun dnsStart(call: Call, domainName: String) { dnsStart = System.nanoTime() }
-    override fun dnsEnd(call: Call, domainName: String, inetAddressList: List<java.net.InetAddress>) { dnsEnd = System.nanoTime() }
-    override fun connectStart(call: Call, inetSocketAddress: java.net.InetSocketAddress, proxy: java.net.Proxy) { connectStart = System.nanoTime() }
-    override fun connectEnd(call: Call, inetSocketAddress: java.net.InetSocketAddress, proxy: java.net.Proxy, protocol: okhttp3.Protocol?) { connectEnd = System.nanoTime() }
-    override fun secureConnectStart(call: Call) { tlsStart = System.nanoTime() }
-    override fun secureConnectEnd(call: Call, handshake: okhttp3.Handshake?) { tlsEnd = System.nanoTime() }
-    override fun responseHeadersStart(call: Call) { headersStart = System.nanoTime() }
-    override fun responseHeadersEnd(call: Call, response: okhttp3.Response) { headersEnd = System.nanoTime() }
-    override fun responseBodyEnd(call: Call, byteCount: Long) { bodyEnd = System.nanoTime() }
+    override fun callStart(call: Call) {
+        callStart = System.nanoTime()
+    }
+
+    override fun dnsStart(
+        call: Call,
+        domainName: String,
+    ) {
+        dnsStart = System.nanoTime()
+    }
+
+    override fun dnsEnd(
+        call: Call,
+        domainName: String,
+        inetAddressList: List<java.net.InetAddress>,
+    ) {
+        dnsEnd = System.nanoTime()
+    }
+
+    override fun connectStart(
+        call: Call,
+        inetSocketAddress: java.net.InetSocketAddress,
+        proxy: java.net.Proxy,
+    ) {
+        connectStart = System.nanoTime()
+    }
+
+    override fun connectEnd(
+        call: Call,
+        inetSocketAddress: java.net.InetSocketAddress,
+        proxy: java.net.Proxy,
+        protocol: okhttp3.Protocol?,
+    ) {
+        connectEnd = System.nanoTime()
+    }
+
+    override fun secureConnectStart(call: Call) {
+        tlsStart = System.nanoTime()
+    }
+
+    override fun secureConnectEnd(
+        call: Call,
+        handshake: okhttp3.Handshake?,
+    ) {
+        tlsEnd = System.nanoTime()
+    }
+
+    override fun responseHeadersStart(call: Call) {
+        headersStart = System.nanoTime()
+    }
+
+    override fun responseHeadersEnd(
+        call: Call,
+        response: okhttp3.Response,
+    ) {
+        headersEnd = System.nanoTime()
+    }
+
+    override fun responseBodyEnd(
+        call: Call,
+        byteCount: Long,
+    ) {
+        bodyEnd = System.nanoTime()
+    }
 
     fun bodyClosed() {
         if (bodyEnd == null) bodyEnd = System.nanoTime()
@@ -219,6 +288,11 @@ private class TimingRecorder : EventListener() {
         )
     }
 
-    private fun elapsed(start: Long?, end: Long?): Long? =
-        if (start == null || end == null) null else ((end - start) / 1_000_000L).coerceAtLeast(0L)
+    private fun elapsed(
+        start: Long?,
+        end: Long?,
+    ): Long? {
+        if (start == null || end == null) return null
+        return ((end - start) / 1_000_000L).coerceAtLeast(0L)
+    }
 }

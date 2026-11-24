@@ -148,6 +148,23 @@ class WhoisViewModelTest {
             }
 
         @Test
+        fun `clearing the query clears a finished result and its query chain`() =
+            runTest {
+                coEvery { whoisLookupUseCase(any(), any()) } returns NetworkResult.Success(stubResult)
+                viewModel.onQueryChange("example.com")
+                viewModel.lookup()
+                assertNotNull(viewModel.uiState.value.result)
+
+                viewModel.onQueryChange("")
+
+                val state = viewModel.uiState.value
+                assertNull(state.result)
+                assertTrue(state.hopStates.isEmpty())
+                assertEquals("", state.query)
+                assertFalse(state.queryInvalid)
+            }
+
+        @Test
         fun `editing to a different query clears a lookup error`() =
             runTest {
                 coEvery { whoisLookupUseCase(any(), any()) } returns NetworkResult.Error("lookup failed")

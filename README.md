@@ -142,6 +142,9 @@ SSL/TLS certificate analysis for any TCP host, without sending an HTTP request.
 - A server that answers the device's hello with a `handshake_failure` alert (for example a gateway with a P-521 certificate, which Android's built-in TLS cannot offer) is retried with a TLS 1.2 compatibility probe that only reads the unencrypted certificates. The result is shown as Untrusted with a note that the handshake was not completed, and protocol probes are skipped. If the certificates cannot be read either, the error explains that the server refused the handshake
 - Connection summary includes negotiated TLS version, ALPN, cipher suite, connect time, and handshake time
 - Optional older-TLS-version probes, expected SHA-256 leaf-certificate pin comparison, and PEM chain sharing
+- Older-TLS-version rows show "Not offered by this Android version" for a version this device cannot negotiate. When the server accepts TLS 1.0 or 1.1, an advisory row says they are deprecated
+- A URL typed into the host field gets its own message asking for a host name or IP address without `http://` or `https://`
+- Clearing recent hosts asks for confirmation first
 - Copy and Share sit at the foot of the results and send the connection summary, each certificate from leaf to root, and the chain findings as plain text. Share PEM still sends the PEM chain, next to them
 
 ### Network Topology Discovery
@@ -174,6 +177,8 @@ Domain, IP, and ASN registration lookup using RDAP with WHOIS fallback.
 - Parsed fields include registrar, registration/expiry/update dates, name servers, status codes, DNSSEC, registrant organization/country, and network ranges
 - Status chips show human-readable labels for both RDAP phrasing (e.g. "client transfer prohibited") and WHOIS codes (e.g. "clientTransferProhibited"), e.g. "Transfer Locked"; unlisted statuses keep their words
 - Each result states which protocol answered (RDAP or WHOIS port 43); the query chain names the server used
+- A name the registry has no record of shows a "No registration found" card above the raw response
+- IP and ASN results use the organisation name as the heading, with the registry handle beneath it
 - Live relay-chain visualiser shows the RDAP or WHOIS servers used; completed hops share one success colour
 - Invalid input names the specific problem (e.g. "An IPv4 address needs four numbers from 0 to 255" for 999.1.1.1)
 - The raw RDAP/WHOIS response section expands from its whole header row (one chevron shows its state; there is no second switch); the lookup keeps running across screen rotation. A single ASN or address range is shown once (for example `15169`), not as `15169-15169`
@@ -192,7 +197,7 @@ HTTP and HTTPS request tester with security header analysis. Plain HTTP requests
 - Cross-origin redirects that would resend a request body require approval for that redirect
 - Response display across four tabs:
   - **Overview**: status code (color-coded 2xx/3xx/4xx/5xx), DNS/connect/TLS/server-wait/transfer phases plus total time to first byte, negotiated HTTP/1.1 or HTTP/2 protocol, final URL, redirect hops, body size, Content-Type. The setup phases (DNS, connect, TLS) are capped so they never add up above time to first byte; TCP connect excludes the TLS handshake. A root URL shows `/`; only an existing path or query is marked `[path omitted]` or `[query omitted]`. Content-Type is read case-insensitively, so it matches the Headers tab.
-  - **Headers**: collapsible request and response header sections
+  - **Headers**: collapsible request and response header sections. The request section lists the headers the client sent on the final hop, including any it added itself, not only the custom headers entered
   - **Body**: scrollable monospace response body with copy-to-clipboard. The JSON validity row and pretty-print appear only for JSON responses (`application/json`, `text/json`, or a `+json` type). Bodies longer than 32,000 characters show only the first 32,000 with a truncation notice and skip pretty-print and the JSON check. Pretty-printing runs off the main thread. Response data is capped at 512 KB with a truncation notice; a truncated, compressed response reads its size as "at least"
   - **Security**: grades HSTS strength, CSP enforcement and script directives, clickjacking protection, deprecated X-XSS-Protection, MIME sniffing, referrer and permissions policies, cross-origin opener/embedder policies, Server version disclosure, and each Set-Cookie flag set. On non-HTML responses (for example JSON), a missing CSP, X-Frame-Options, COOP or COEP is rated Info, because browsers apply those headers only to documents. An Info chip in the summary counts Info results. HTTPS-to-HTTP downgrade evidence appears separately in a blocked-redirect warning.
 - Copy the configured request as a shell-quoted cURL command, including method, custom headers, body, and redirect behavior. Redirect following is omitted when custom headers, a body, or a non-GET/HEAD method could diverge from the app's redirect handling; otherwise exported commands only follow HTTPS redirects to prevent downgrades. The UI explains when following is suppressed. A "cURL command copied to clipboard" confirmation is shown. A result shown again after leaving the tool has no Copy as cURL action.

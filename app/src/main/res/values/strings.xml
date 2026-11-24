@@ -959,7 +959,12 @@
     <string name="tls_supported">Supported</string>
     <string name="tls_not_supported">Not supported</string>
     <string name="tls_probe_unknown">Could not determine</string>
-    <string name="tls_probe_not_testable">Not testable on this device</string>
+    <string name="tls_probe_not_testable">Not offered by this Android version</string>
+    <string name="tls_legacy_protocol_advisory">TLS 1.0 and 1.1 are deprecated. This server accepts them, so ask its operator to turn them off.</string>
+    <string name="tls_error_host_scheme">Enter a host name or IP address without http:// or https://</string>
+    <string name="tls_clear_recents_title">Clear recent hosts?</string>
+    <string name="tls_clear_recents_message">All recent TLS hosts will be removed. This cannot be undone.</string>
+    <string name="tls_clear_recents_confirm">Clear</string>
     <string name="tls_findings">Certificate findings</string>
     <string name="tls_hostname_label">Hostname</string>
     <string name="tls_hostname_matches">Matches the certificate</string>
@@ -1068,6 +1073,8 @@
     <string name="whois_registrant">Registrant</string>
     <string name="whois_net_range">Network Range</string>
     <string name="whois_org">Organization</string>
+    <string name="whois_not_registered_title">No registration found</string>
+    <string name="whois_not_registered_body">The registry has no record of %1$s.</string>
     <string name="whois_country">Country</string>
     <string name="whois_example_chip_domain">Domain</string>
     <string name="whois_example_chip_ip">IP Address</string>
@@ -1129,16 +1136,15 @@
     <string name="httprobe_redirect_chain">Redirect chain</string>
     <string name="httprobe_request_headers">Request Headers</string>
     <string name="httprobe_response_headers">Response Headers</string>
-    <string name="httprobe_no_custom_headers">No custom headers sent</string>
     <string name="httprobe_no_headers">No headers</string>
     <string name="httprobe_response_body">Response Body</string>
-    <string name="httprobe_copy_body">Copy</string>
+    <string name="httprobe_copy_body">Copy body</string>
     <string name="httprobe_body_truncated">Showing first %1$s of the response body</string>
     <string name="httprobe_response_size_at_least">≥ %1$s</string>
     <string name="httprobe_empty_body">Empty body (HEAD or no content)</string>
     <string name="httprobe_copy_curl">Copy as cURL</string>
     <string name="httprobe_curl_copied">cURL command copied to clipboard</string>
-    <string name="httprobe_curl_redirect_safety">Redirect following was disabled to avoid forwarding custom headers or a body, or changing the app’s redirect method behavior. The command sends only the initial request.</string>
+    <string name="httprobe_curl_redirect_safety">The copied cURL command sends only the initial request. It does not follow redirects, so custom headers, the body and the method are never resent to another host.</string>
     <string name="httprobe_pretty_json">Pretty JSON</string>
     <string name="httprobe_json_valid">Valid JSON</string>
     <string name="httprobe_json_invalid">Not valid JSON</string>
@@ -1156,6 +1162,7 @@
     <string name="httprobe_timing_ttfb">Time to first byte</string>
     <string name="httprobe_timing_server_wait">Server and headers</string>
     <string name="httprobe_timing_transfer">Transfer</string>
+    <string name="httprobe_timing_final_hop_note">Phases cover the final request only. Response time includes every redirect hop.</string>
     <string name="httprobe_timing_unavailable">Timing details are unavailable.</string>
     <string name="httprobe_timing_value_ms">%1$d ms</string>
     <string name="httprobe_sec_hsts_pass_strong">HSTS max-age is at least one year.</string>
@@ -1734,7 +1741,7 @@
     </string-array>
     <string-array name="help_httprobe_results_bullets">
         <item>Overview - status code, DNS/connect/TLS/server-wait/transfer phases, total time to first byte, HTTP protocol, and final URL after redirects.</item>
-        <item>Headers - every request and response header.</item>
+        <item>Headers - the request headers sent with the final request, and every response header.</item>
         <item>Body - inspect, copy, and optionally pretty-print valid JSON; size and truncation are shown when applicable.</item>
         <item>Copy as cURL exports the configured method, headers, body, URL, and redirect behavior as a shell-safe command.</item>
         <item>Security - header, cookie-flag, and HTTPS downgrade checks; see below.</item>

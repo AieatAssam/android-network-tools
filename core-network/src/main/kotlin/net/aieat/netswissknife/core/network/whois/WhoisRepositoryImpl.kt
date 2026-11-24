@@ -512,12 +512,14 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
             successful.lastOrNull { it.server.role == WhoisServerRole.REGISTRAR }?.rawResponse
                 ?: registryRecord
         val p = WhoisResponseParser
+        val domainName = p.parseDomainName(registryRecord)
         return NetworkResult.Success(
             WhoisResult(
                 query = query,
                 queryType = queryType,
                 hops = hops,
-                domainName = p.parseDomainName(registryRecord),
+                domainName = domainName,
+                notRegistered = isUnregisteredDomain(successful.map { it.rawResponse }, domainName),
                 registrar = p.parseRegistrar(contactRecord),
                 registrarUrl = p.parseRegistrarUrl(contactRecord),
                 registeredOn = p.parseRegisteredOn(registryRecord),
@@ -532,8 +534,8 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
                 netRange = null,
                 orgName = null,
                 country = null,
-                totalQueryTimeMs = clock.elapsedMillisSince(overallStart)
-            )
+                totalQueryTimeMs = clock.elapsedMillisSince(overallStart),
+            ),
         )
     }
 
@@ -541,7 +543,7 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         query: String,
         queryType: WhoisQueryType,
         hops: List<WhoisHop>,
-        overallStart: Long
+        overallStart: Long,
     ): NetworkResult<WhoisResult> {
         val lastResponse = hops.lastOrNull { it.error == null }?.rawResponse ?: ""
         val p = WhoisResponseParser
@@ -565,8 +567,8 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
                 netRange = p.parseNetRange(lastResponse),
                 orgName = p.parseOrgName(lastResponse),
                 country = p.parseCountry(lastResponse),
-                totalQueryTimeMs = clock.elapsedMillisSince(overallStart)
-            )
+                totalQueryTimeMs = clock.elapsedMillisSince(overallStart),
+            ),
         )
     }
 
@@ -595,19 +597,20 @@ class WhoisRepositoryImpl @JvmOverloads constructor(
         private const val IANA_SERVER = "whois.iana.org"
         private const val ARIN_SERVER = "whois.arin.net"
 
-        private val TLD_FALLBACK = mapOf(
-            "com"   to "whois.verisign-grs.com",
-            "net"   to "whois.verisign-grs.com",
-            "org"   to "whois.pir.org",
-            "io"    to "whois.nic.io",
-            "co.uk" to "whois.nic.uk",
-            "uk"    to "whois.nic.uk",
-            "de"    to "whois.denic.de",
-            "fr"    to "whois.nic.fr",
-            "edu"   to "whois.educause.edu",
-            "app"   to "whois.nic.google",
-            "dev"   to "whois.nic.google"
-        )
+        private val TLD_FALLBACK =
+            mapOf(
+                "com" to "whois.verisign-grs.com",
+                "net" to "whois.verisign-grs.com",
+                "org" to "whois.pir.org",
+                "io" to "whois.nic.io",
+                "co.uk" to "whois.nic.uk",
+                "uk" to "whois.nic.uk",
+                "de" to "whois.denic.de",
+                "fr" to "whois.nic.fr",
+                "edu" to "whois.educause.edu",
+                "app" to "whois.nic.google",
+                "dev" to "whois.nic.google",
+            )
     }
 }
 
