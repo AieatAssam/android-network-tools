@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.settings
 
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -54,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -358,6 +360,8 @@ private fun SliderSetting(
 @Composable
 private fun DataSection(onClearRecents: () -> Unit) {
     var showConfirmDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val clearedMessage = stringResource(R.string.settings_clear_recents_done)
 
     SectionHeader(stringResource(R.string.settings_data_section))
 
@@ -398,6 +402,7 @@ private fun DataSection(onClearRecents: () -> Unit) {
                     onClick = {
                         onClearRecents()
                         showConfirmDialog = false
+                        Toast.makeText(context, clearedMessage, Toast.LENGTH_SHORT).show()
                     },
                     colors =
                         ButtonDefaults.textButtonColors(
@@ -582,6 +587,11 @@ private fun AttributionsSection() {
                 }
                 AttributionEntry(source)
             }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+            // Base map of the Traceroute route map: bundled, offline, public domain. Shown once for all sources.
+            NaturalEarthAttribution(
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
@@ -624,11 +634,6 @@ private fun AttributionEntry(source: AttributionSource) {
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }
-            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-            // Base map of the Traceroute route map: bundled, offline, public domain.
-            NaturalEarthAttribution(
-                modifier = Modifier.fillMaxWidth(),
-            )
         }
     }
 }
@@ -646,7 +651,7 @@ private val THIRD_PARTY_LIBRARIES =
         LibraryInfo("Dagger Hilt", "Apache 2.0"),
         LibraryInfo("Kotlin Coroutines", "Apache 2.0"),
         LibraryInfo("Kotlinx Serialization", "Apache 2.0"),
-        LibraryInfo("OkHttp (local fork in third_party/okhttp)", "Apache 2.0"),
+        LibraryInfo("OkHttp (local fork)", "Apache 2.0"),
         LibraryInfo("Okio", "Apache 2.0"),
         LibraryInfo("dnsjava", "BSD 3-Clause", DNSJAVA_COPYRIGHT),
         LibraryInfo("SNMP4J", "Apache 2.0"),

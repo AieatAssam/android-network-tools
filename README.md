@@ -14,7 +14,7 @@
 
 ### Ping
 ICMP echo and reachability round-trip latency measurement with real-time streaming results. The app resolves a hostname once per session, then uses icmpenguin ICMP echo with transparent reachability fallback when the socket is unavailable.
-- Configurable probe count (1–100 via slider; default configurable in Settings) and timeout (100–30,000 ms)
+- Configurable probe count (1–100 via slider) and timeout (100–30,000 ms). Count and timeout follow the Settings defaults until you change them on this screen; a change made in Settings while Ping is open reaches it, except during a run, when it applies once the run ends
 - A host that does not resolve shows a "Ping failed" error with the name and a Retry action, not a packet-loss figure. Such a host is not kept in recents
 - Advanced payload size (0–1,472 bytes), TTL (1–255), and interval (100–10,000 ms, in 100 ms steps) controls, with a Reset to defaults action. The count, timeout, payload, TTL and interval sliders keep their values when you leave and return (in memory for the app session, and through saved state across rotation and process death); ping results are not kept
 - Rotating the device keeps a run going. A run stopped early (Stop, or the app going to the background) is labelled as stopped early, and its statistics cover only the probes that were sent
@@ -98,7 +98,7 @@ Local network device discovery across IPv4 subnets.
 ### DNS Lookup
 Full DNS record resolution with multiple resolver options and protocol-level response details.
 - 10 record types: A, AAAA, MX, TXT, CNAME, NS, SOA, PTR, SRV, CAA
-- Resolver options: system default, Google (8.8.8.8), Cloudflare (1.1.1.1), OpenDNS (208.67.222.222), Quad9 (9.9.9.9), or a custom server
+- Resolver options: system default, Google (8.8.8.8), Cloudflare (1.1.1.1), OpenDNS (208.67.222.222), Quad9 (9.9.9.9), or a custom server. Presets are read-only choices; Custom opens an empty address field that must hold an IPv4 or IPv6 address before Look up is enabled
 - PTR queries auto-reverse IPv4 addresses to `.in-addr.arpa` and IPv6 to `.ip6.arpa` form — just enter the IP
 - Returns each record's actual RR type and section, RCODE, AA/AD/TC/RD/RA flags, query time, server actually used, and raw DNS response
 - The domain field is checked as you type: names with spaces, empty labels or invalid characters show a plain-language message and Look up stays disabled. Names with leading underscores (SRV, TXT owner labels) are accepted

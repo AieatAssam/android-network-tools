@@ -275,82 +275,111 @@ class PingRepositoryImplTest {
         }
 
         @Test
-        fun `resolution failure retries at interval then pins first successful address`() = runTest {
-            val resolutionCount = AtomicInteger()
-            val probeCount = AtomicInteger()
-            val eventOrder = CopyOnWriteArrayList<String>()
-            val resolutionTimesNanos = CopyOnWriteArrayList<Long>()
-            val repository = PingRepositoryImpl(
-                checker = { ip, _ ->
-                    probeCount.incrementAndGet()
-                    eventOrder += "probe:$ip"
-                    ReachabilityResult(reachable = true, rtTimeMs = 1L)
-                },
-                delayBetweenProbesMs = 0L,
-                resolver = HostResolver {
-                    val attempt = resolutionCount.incrementAndGet()
-                    resolutionTimesNanos += System.nanoTime()
-                    eventOrder += "resolve:$attempt"
-                    if (attempt == 1) throw java.net.UnknownHostException("NXDOMAIN")
-                    if (attempt == 2) "192.0.2.10" else "192.0.2.20"
-                },
-            )
+        fun `unresolved host ends the run`() =
+            runTest {
+                val probes = AtomicInteger()
+                val resolutions = AtomicInteger()
+                val repo =
+                    PingRepositoryImpl(
+                        checker = countingChecker(probes),
+                        delayBetweenProbesMs = 0L,
+                        resolver = failingResolver(resolutions),
+                    )
 
-            val packets = repository.continuousPing(
-                PingRequest("changing.example", count = 0, timeoutMs = 1000, intervalMs = 50),
-            ).take(4).toList()
+                val request = PingRequest("missing.example", count = 0, timeoutMs = 1000)
+                val packets = repo.continuousPing(request).toList()
 
-            assertEquals(2, resolutionCount.get())
-            assertEquals(3, probeCount.get())
-            assertEquals(listOf(1, 2, 3, 4), packets.map { it.sequence })
-            assertEquals(PingStatus.ERROR, packets.first().status)
-            assertEquals("NXDOMAIN", packets.first().errorMessage)
-            assertNull(packets.first().fromIp)
-            assertTrue(packets.drop(1).all { it.status == PingStatus.SUCCESS })
-            assertEquals(listOf("192.0.2.10", "192.0.2.10", "192.0.2.10"), packets.drop(1).map { it.fromIp })
-            assertTrue(eventOrder.indexOf("probe:192.0.2.10") > eventOrder.indexOf("resolve:2"))
-            val retryDelayMillis = (resolutionTimesNanos[1] - resolutionTimesNanos[0]) / 1_000_000L
-            assertTrue(retryDelayMillis >= 30L, "retry should respect the configured 50 ms interval")
-            assertTrue(retryDelayMillis < 5_000L, "resolution retry should remain responsive")
-        }
+                assertEquals(1, resolutions.get())
+                assertEquals(0, probes.get())
+                assertEquals(1, packets.size)
+                assertEquals("NXDOMAIN", packets.single().errorMessage)
+                assertTrue(packets.single().unresolvedHost)
+            }
+
+        @Test
+        fun `resolved address is pinned`() =
+            runTest {
+                val probes = AtomicInteger()
+                val resolutions = AtomicInteger()
+                val repo =
+                    PingRepositoryImpl(
+                        checker = countingChecker(probes),
+                        delayBetweenProbesMs = 0L,
+                        resolver = resolvingTo("192.0.2.10", resolutions),
+                    )
+
+                val request = PingRequest("pinned.example", count = 0, timeoutMs = 1000)
+                val packets = repo.continuousPing(request).take(3).toList()
+
+                assertEquals(1, resolutions.get())
+                assertEquals(3, probes.get())
+                assertTrue(packets.all { it.status == PingStatus.SUCCESS })
+            }
     }
 
     @Test
-    fun `caller session cancellation interrupts blocking reachability without a late packet`() = runTest {
-        val checkerStarted = CountDownLatch(1)
-        val checkerInterrupted = CountDownLatch(1)
-        val neverReleased = CountDownLatch(1)
-        val collectorFinished = CountDownLatch(1)
-        val checker: (String, Int) -> ReachabilityResult = { _, _ ->
-            checkerStarted.countDown()
-            try {
-                neverReleased.await()
-                ReachabilityResult(reachable = true, rtTimeMs = 1)
-            } catch (interrupted: InterruptedException) {
-                checkerInterrupted.countDown()
-                throw IllegalStateException("reachability interrupted", interrupted)
+    fun `caller session cancellation interrupts blocking reachability without a late packet`() =
+        runTest {
+            val checkerStarted = CountDownLatch(1)
+            val checkerInterrupted = CountDownLatch(1)
+            val neverReleased = CountDownLatch(1)
+            val collectorFinished = CountDownLatch(1)
+            val checker: (String, Int) -> ReachabilityResult = { _, _ ->
+                checkerStarted.countDown()
+                try {
+                    neverReleased.await()
+                    ReachabilityResult(reachable = true, rtTimeMs = 1)
+                } catch (interrupted: InterruptedException) {
+                    checkerInterrupted.countDown()
+                    throw IllegalStateException("reachability interrupted", interrupted)
+                }
             }
-        }
-        val resolver = HostResolver { "192.0.2.1" }
-        val repository = PingRepositoryImpl(checker = checker, resolver = resolver)
-        val session = PingOperation.newSession()
-        val packets = mutableListOf<PingPacketResult>()
-        val collector = CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
-            try {
-                repository.ping(PingRequest("host.test", count = 1, timeoutMs = 1_000), session)
-                    .collect(packets::add)
-            } finally {
-                collectorFinished.countDown()
-            }
-        }
+            val resolver = HostResolver { "192.0.2.1" }
+            val repository = PingRepositoryImpl(checker = checker, resolver = resolver)
+            val session = PingOperation.newSession()
+            val packets = mutableListOf<PingPacketResult>()
+            val collector =
+                CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+                    try {
+                        val pings =
+                            repository.ping(
+                                PingRequest("host.test", count = 1, timeoutMs = 1_000),
+                                session,
+                            )
+                        pings.collect(packets::add)
+                    } finally {
+                        collectorFinished.countDown()
+                    }
+                }
 
-        assertTrue(withContext(Dispatchers.IO) { checkerStarted.await(2, TimeUnit.SECONDS) })
-        session.cancel(CancellationReason.USER_STOP)
-        assertTrue(withContext(Dispatchers.IO) { collectorFinished.await(2, TimeUnit.SECONDS) })
-        collector.join()
+            assertTrue(withContext(Dispatchers.IO) { checkerStarted.await(2, TimeUnit.SECONDS) })
+            session.cancel(CancellationReason.USER_STOP)
+            assertTrue(withContext(Dispatchers.IO) { collectorFinished.await(2, TimeUnit.SECONDS) })
+            collector.join()
 
-        assertTrue(withContext(Dispatchers.IO) { checkerInterrupted.await(2, TimeUnit.SECONDS) })
-        assertTrue(session.resources.isClosed)
-        assertTrue(packets.isEmpty())
-    }
+            assertTrue(withContext(Dispatchers.IO) { checkerInterrupted.await(2, TimeUnit.SECONDS) })
+            assertTrue(session.resources.isClosed)
+            assertTrue(packets.isEmpty())
+        }
 }
+
+private fun countingChecker(calls: AtomicInteger): (String, Int) -> ReachabilityResult =
+    { _, _ ->
+        calls.incrementAndGet()
+        ReachabilityResult(reachable = true, rtTimeMs = 1L)
+    }
+
+private fun failingResolver(calls: AtomicInteger): HostResolver =
+    HostResolver {
+        calls.incrementAndGet()
+        throw java.net.UnknownHostException("NXDOMAIN")
+    }
+
+private fun resolvingTo(
+    address: String,
+    calls: AtomicInteger,
+): HostResolver =
+    HostResolver {
+        calls.incrementAndGet()
+        address
+    }

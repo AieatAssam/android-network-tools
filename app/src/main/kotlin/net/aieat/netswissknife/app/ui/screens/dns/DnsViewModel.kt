@@ -193,18 +193,20 @@ class DnsViewModel
             clearStaleResult()
         }
 
+        /** Choosing a preset, or Custom (which arrives with an empty address), from the server menu. */
         fun onServerChange(server: DnsServer) {
             _selectedServer.value = server
             savedStateHandle[DNS_SERVER_KEY] = server.formKey()
+            if (server is DnsServer.Custom) {
+                _customServerAddress.value = server.address
+                savedStateHandle[DNS_CUSTOM_SERVER_KEY] = server.address
+            }
             clearStaleResult()
         }
 
+        /** Typing into the custom server field. */
         fun onCustomServerAddressChange(address: String) {
-            _customServerAddress.value = address
-            _selectedServer.value = DnsServer.Custom(address)
-            savedStateHandle[DNS_CUSTOM_SERVER_KEY] = address
-            savedStateHandle[DNS_SERVER_KEY] = _selectedServer.value.formKey()
-            clearStaleResult()
+            onServerChange(DnsServer.Custom(address))
         }
 
         /**

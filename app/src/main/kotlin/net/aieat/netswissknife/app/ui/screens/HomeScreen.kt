@@ -343,6 +343,7 @@ private fun AnimatedToolCard(
             Text(
                 text = stringResource(tool.labelRes),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                minLines = 2,
             )
 
             Text(

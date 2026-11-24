@@ -185,8 +185,8 @@ class PingRepositoryImpl(
             return@flow
         }
 
-        // Before the first successful lookup, report and retry DNS failures at the configured
-        // interval. Once resolved, keep the address pinned for the lifetime of this session.
+        // A name that does not resolve ends the run with one error packet; it is not retried.
+        // Once resolved, the address stays pinned for the lifetime of this session.
         var resolvedIp = request.resolvedIp
         var selectedEngine: PingEngine? = null
         var sequence = 1
@@ -207,14 +207,10 @@ class PingRepositoryImpl(
                             unresolvedHost = true,
                         ),
                     )
-                    sequence++
-                    delay(request.intervalMs.toLong().coerceAtLeast(0L))
-                    continue
+                    return@flow
                 } catch (e: Exception) {
-                    emit(errorPacket(request, e.message ?: e.javaClass.simpleName, sequence))
-                    sequence++
-                    delay(request.intervalMs.toLong().coerceAtLeast(0L))
-                    continue
+                    emit(errorPacket(request, e.message ?: e.javaClass.simpleName, sequence, unresolvedHost = true))
+                    return@flow
                 }
             }
 
@@ -225,10 +221,11 @@ class PingRepositoryImpl(
             // Recheck every probe so a continuous session does not keep retrying an
             // engine that already declared itself unavailable.
             val availableCandidates = candidates.filter { it.isAvailable }
-            val enginesToTry = buildList {
-                selectedEngine?.takeIf { it.isAvailable }?.let(::add)
-                availableCandidates.filter { it != selectedEngine }.forEach(::add)
-            }
+            val enginesToTry =
+                buildList {
+                    selectedEngine?.takeIf { it.isAvailable }?.let(::add)
+                    availableCandidates.filter { it != selectedEngine }.forEach(::add)
+                }
             var selectedPacket: PingPacketResult? = null
             var engineForPacket: PingEngine? = null
             val failureMessages = mutableListOf<String>()
@@ -262,14 +259,16 @@ class PingRepositoryImpl(
                 }
             }
 
-            emit(
-                (selectedPacket ?: errorPacket(
+            val packet =
+                selectedPacket ?: errorPacket(
                     probeRequest,
-                    allEnginesFailedMessage(failureMessages)
-                )).copy(
-                    sequence = sequence,
-                    engine = engineForPacket?.kind
+                    allEnginesFailedMessage(failureMessages),
                 )
+            emit(
+                packet.copy(
+                    sequence = sequence,
+                    engine = engineForPacket?.kind,
+                ),
             )
             sequence++
             delay(request.intervalMs.toLong().coerceAtLeast(0L))
@@ -296,5 +295,7 @@ class PingRepositoryImpl(
             "All ping engines failed: ${it.joinToString("; ")}"
         } ?: "All ping engines failed before producing a result"
 
-    private class EngineUnavailableException(message: String?) : Exception(message)
+    private class EngineUnavailableException(
+        message: String?,
+    ) : Exception(message)
 }

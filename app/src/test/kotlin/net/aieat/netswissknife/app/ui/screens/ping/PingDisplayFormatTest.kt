@@ -37,20 +37,36 @@ class PingDisplayFormatTest {
     }
 
     @Test
-    fun `timeout is labelled in seconds when whole, otherwise in milliseconds`() {
+    fun `timeout is labelled in seconds, with one decimal for tenths, otherwise in milliseconds`() {
         assertEquals("1 s", pingTimeoutLabel(1_000))
         assertEquals("30 s", pingTimeoutLabel(30_000))
-        assertEquals("1500 ms", pingTimeoutLabel(1_500))
+        assertEquals("1.5 s", pingTimeoutLabel(1_500))
+        assertEquals("5.5 s", pingTimeoutLabel(5_500))
+        assertEquals("1550 ms", pingTimeoutLabel(1_550))
+    }
+
+    @Test
+    fun `the start hint shows only for an empty host`() {
+        assertEquals(true, pingStartHintVisible(""))
+        assertEquals(true, pingStartHintVisible("   "))
+        assertEquals(false, pingStartHintVisible("a".repeat(300)))
+        assertEquals(false, pingStartHintVisible("http://x"))
     }
 
     @Test
     fun `timeout options contain the presets`() {
-        assertEquals(listOf(1_000, 2_000, 3_000, 5_000), pingTimeoutOptions(2_000))
+        assertEquals(listOf(1_000, 2_000, 3_000, 5_000, 10_000), pingTimeoutOptions(2_000))
+    }
+
+    @Test
+    fun `the preset chips stay the same whichever timeout is selected`() {
+        val presets = listOf(1_000, 2_000, 3_000, 5_000, 10_000)
+        presets.forEach { assertEquals(presets, pingTimeoutOptions(it)) }
     }
 
     @Test
     fun `a timeout that is not a preset is still offered and kept in order`() {
-        assertEquals(listOf(1_000, 1_500, 2_000, 3_000, 5_000), pingTimeoutOptions(1_500))
+        assertEquals(listOf(1_000, 1_500, 2_000, 3_000, 5_000, 10_000), pingTimeoutOptions(1_500))
     }
 
     @Test

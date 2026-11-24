@@ -12,6 +12,8 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
@@ -71,10 +73,15 @@ class PingSliderRestoreTest {
     private fun newViewModel(
         handle: SavedStateHandle = SavedStateHandle(),
         prefs: Preferences = emptyPreferences(),
+    ): PingViewModel = newViewModel(handle, MutableStateFlow(prefs))
+
+    private fun newViewModel(
+        handle: SavedStateHandle,
+        store: Flow<Preferences>,
     ): PingViewModel {
         val dataStore: DataStore<Preferences> =
             mockk {
-                every { data } returns flowOf(prefs)
+                every { data } returns store
             }
         val viewModel =
             PingViewModel(
@@ -131,6 +138,36 @@ class PingSliderRestoreTest {
 
         assertEquals(40, fresh.count.value)
         assertEquals(5_000, fresh.timeoutMs.value)
+    }
+
+    @Test
+    fun `a Settings default changed while the tool is open reaches an untouched slider`() {
+        val store = MutableStateFlow<Preferences>(defaults)
+        val open = newViewModel(SavedStateHandle(), store)
+
+        store.value =
+            mutablePreferencesOf(
+                AppPreferenceKeys.DEFAULT_PING_COUNT to 53,
+                AppPreferenceKeys.DEFAULT_TIMEOUT_MS to 5_000,
+            )
+
+        assertEquals(53, open.count.value)
+        assertEquals(5_000, open.timeoutMs.value)
+    }
+
+    @Test
+    fun `a slider the user set is not overwritten by a later Settings default`() {
+        val store = MutableStateFlow<Preferences>(defaults)
+        val open = newViewModel(SavedStateHandle(), store)
+        open.onCountChange(25)
+
+        store.value =
+            mutablePreferencesOf(
+                AppPreferenceKeys.DEFAULT_PING_COUNT to 53,
+                AppPreferenceKeys.DEFAULT_TIMEOUT_MS to 5_000,
+            )
+
+        assertEquals(25, open.count.value)
     }
 
     @Test
