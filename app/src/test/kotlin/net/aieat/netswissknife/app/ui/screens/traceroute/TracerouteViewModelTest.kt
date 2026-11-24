@@ -864,4 +864,72 @@ class TracerouteViewModelTest {
             viewModel.onStop()
             viewModel.uiState.first { it is TracerouteUiState.Canceled }
         }
+
+    @Nested
+    @DisplayName("view mode selection")
+    inner class ViewModeSelection {
+        private fun finishTrace() {
+            every { tracerouteUseCase(any(), any()) } returns flowOf(TracerouteFlowResult.Hop(stubHop))
+            viewModel.onHostChange("example.com")
+            viewModel.startTrace()
+        }
+
+        @Test
+        fun `a finished trace starts on Hop Details`() {
+            finishTrace()
+            val state = viewModel.uiState.value as TracerouteUiState.Finished
+            assertEquals(TracerouteViewMode.Visual, state.viewMode)
+        }
+
+        @Test
+        fun `the tabs are ordered Hop Details, Map, Raw Output`() {
+            assertEquals(
+                listOf(TracerouteViewMode.Visual, TracerouteViewMode.Map, TracerouteViewMode.Raw),
+                TracerouteViewMode.entries.toList(),
+            )
+        }
+
+        @Test
+        fun `each mode can be selected directly on a finished trace`() {
+            finishTrace()
+            TracerouteViewMode.entries.forEach { mode ->
+                viewModel.onSelectViewMode(mode)
+                assertEquals(mode, (viewModel.uiState.value as TracerouteUiState.Finished).viewMode)
+            }
+        }
+
+        @Test
+        fun `selecting the current mode keeps it`() {
+            finishTrace()
+            viewModel.onSelectViewMode(TracerouteViewMode.Map)
+            viewModel.onSelectViewMode(TracerouteViewMode.Map)
+            assertEquals(TracerouteViewMode.Map, (viewModel.uiState.value as TracerouteUiState.Finished).viewMode)
+        }
+
+        @Test
+        fun `a canceled trace can show its partial route on the map`() =
+            runTest {
+                every { tracerouteUseCase(any(), any()) } returns
+                    flow {
+                        emit(TracerouteFlowResult.Hop(stubHop))
+                        awaitCancellation()
+                    }
+                viewModel.onHostChange("example.com")
+                viewModel.startTrace()
+                viewModel.onStop()
+                viewModel.uiState.first { it is TracerouteUiState.Canceled }
+
+                viewModel.onSelectViewMode(TracerouteViewMode.Map)
+
+                val state = viewModel.uiState.value as TracerouteUiState.Canceled
+                assertEquals(TracerouteViewMode.Map, state.viewMode)
+                assertEquals(listOf(stubHop), state.result.hops)
+            }
+
+        @Test
+        fun `selecting a mode without a result changes nothing`() {
+            viewModel.onSelectViewMode(TracerouteViewMode.Map)
+            assertEquals(TracerouteUiState.Idle, viewModel.uiState.value)
+        }
+    }
 }

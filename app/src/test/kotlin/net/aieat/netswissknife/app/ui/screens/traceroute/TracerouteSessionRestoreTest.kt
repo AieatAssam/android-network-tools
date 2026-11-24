@@ -24,7 +24,10 @@ import net.aieat.netswissknife.app.data.ToolSessionMemory
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.Transport
+import net.aieat.netswissknife.core.domain.TracerouteFlowResult
 import net.aieat.netswissknife.core.domain.TracerouteUseCase
+import net.aieat.netswissknife.core.network.traceroute.HopResult
+import net.aieat.netswissknife.core.network.traceroute.HopStatus
 import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -142,5 +145,23 @@ class TracerouteSessionRestoreTest {
 
             assertEquals("192.0.2.8", returned.host.value)
             assertTrue(returned.uiState.value is TracerouteUiState.Idle)
+        }
+
+    @Test
+    fun `the selected map view is shown again with the kept result`() =
+        runTest {
+            every { tracerouteUseCase(any(), any()) } returns
+                flowOf(TracerouteFlowResult.Hop(HopResult(1, "192.0.2.1", null, 3L, HopStatus.SUCCESS)))
+            val first = newViewModel()
+            first.onHostChange("example.com")
+            first.startTrace()
+            first.onSelectViewMode(TracerouteViewMode.Map)
+            leave(first)
+
+            val returned = newViewModel()
+
+            val restored = returned.uiState.value
+            assertTrue(restored is TracerouteUiState.Finished, "state was $restored")
+            assertEquals(TracerouteViewMode.Map, (restored as TracerouteUiState.Finished).viewMode)
         }
 }

@@ -274,7 +274,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                             viewMode = state.viewMode,
                             canceled = true,
                         stoppedWhenLeft = state.stoppedWhenLeft,
-                            onToggleMode = viewModel::onToggleViewMode,
+                            onSelectMode = viewModel::onSelectViewMode,
                             onClear = viewModel::onClear,
                         )
                         is TracerouteUiState.Finished -> {
@@ -282,7 +282,7 @@ fun TracerouteScreen(viewModel: TracerouteViewModel = hiltViewModel()) {
                                 result       = state.result,
                                 viewMode     = state.viewMode,
                                 timeLimitReached = state.timeLimitReached,
-                                onToggleMode = viewModel::onToggleViewMode,
+                                onSelectMode = viewModel::onSelectViewMode,
                                 onClear      = viewModel::onClear,
                             )
                         }
@@ -782,7 +782,7 @@ private fun TracerouteFinishedPanel(
     canceled: Boolean = false,
     stoppedWhenLeft: Boolean = false,
     timeLimitReached: Boolean = false,
-    onToggleMode: () -> Unit,
+    onSelectMode: (TracerouteViewMode) -> Unit,
     onClear: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -825,21 +825,21 @@ private fun TracerouteFinishedPanel(
         // Summary stats card
         TraceStatsSummary(result = result, onClear = onClear)
 
-        // Tab row: Hop Details / Raw Output
+        // Tab row: Hop Details / Map / Raw Output
         // TabRow uses SubcomposeLayout internally, which causes IllegalStateException when
         // nested inside the outer AnimatedContent (also SubcomposeLayout) during the
         // Running→Finished transition – same root cause as the Crossfade issue above.
         // Replaced with a plain Row of clickable surfaces; no SubcomposeLayout involved.
-        val tabIndex = if (viewMode == TracerouteViewMode.Visual) 0 else 1
+        val tabIndex = TracerouteViewMode.entries.indexOf(viewMode)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(MaterialTheme.shapes.small)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            listOf(
-                Icons.Default.Router      to stringResource(R.string.traceroute_tab_hops),
-                Icons.AutoMirrored.Filled.TextSnippet to stringResource(R.string.traceroute_tab_raw)
+            tracerouteViewTabs(
+                // One tab per mode, in TracerouteViewMode order: Hop Details, Map, Raw Output.
+                modes = TracerouteViewMode.entries,
             ).forEachIndexed { index, (icon, label) ->
                 val selected = tabIndex == index
                 Row(
@@ -850,7 +850,7 @@ private fun TracerouteFinishedPanel(
                             if (selected) MaterialTheme.colorScheme.secondaryContainer
                             else Color.Transparent
                         )
-                        .clickable { if (tabIndex != index) onToggleMode() }
+                        .clickable { if (tabIndex != index) onSelectMode(TracerouteViewMode.entries[index]) }
                         .padding(vertical = 12.dp),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment     = Alignment.CenterVertically
@@ -874,13 +874,13 @@ private fun TracerouteFinishedPanel(
         }
 
         // Crossfade (= AnimatedContent internally, uses SubcomposeLayout) must NOT be
-        // nested inside the outer AnimatedContent – when both animations run simultaneously
-        // (e.g. outer Running→Finished transition still in flight while the user taps a tab)
-        // the two SubcomposeLayout instances fight over the slot table and the outgoing
-        // subcomposition reads a disposed State<T>, causing IllegalStateException.
-        // Plain when-branch with no animation is safe and avoids the nesting entirely.
+        // nested inside the outer AnimatedContent: when both run at once (the outer
+        // Running→Finished transition still in flight while the user taps a tab) the outgoing
+        // subcomposition reads a disposed State<T> and throws IllegalStateException.
+        // A plain when-branch with no animation avoids the nesting entirely.
         when (viewMode) {
             TracerouteViewMode.Visual -> HopDetailList(result.hops)
+            TracerouteViewMode.Map -> TracerouteMapCard(hops = result.hops, colorFor = ::rttColor)
             TracerouteViewMode.Raw    -> RawOutputCard(result.rawOutput)
         }
 
@@ -1254,12 +1254,12 @@ private fun formatDistance(km: Double): String = when {
     else         -> "${km.roundToInt()} km"
 }
 
-private fun rttColor(rtTimeMs: Long?): Color = when {
-    rtTimeMs == null -> StatusUnknown
-    rtTimeMs < 50    -> StatusGood
-    rtTimeMs < 150   -> StatusLime
-    rtTimeMs < 300   -> StatusBad
-    else             -> StatusCritical
+private fun rttColor(rtTimeMs: Long?): Color = when (TraceLatencyBand.of(rtTimeMs)) {
+    TraceLatencyBand.UNKNOWN -> StatusUnknown
+    TraceLatencyBand.GOOD -> StatusGood
+    TraceLatencyBand.FAIR -> StatusLime
+    TraceLatencyBand.SLOW -> StatusBad
+    TraceLatencyBand.CRITICAL -> StatusCritical
 }
 
 // ── Hop detail list ───────────────────────────────────────────────────────────
@@ -1494,10 +1494,10 @@ private fun HopCard(hop: HopResult, index: Int) {
                         }
                     )
                     hop.geoLocation?.let { geo ->
-                        val location = buildString {
-                            if (geo.city.isNotBlank()) append("${geo.city}, ")
-                            append(CountryFlags.label(geo.countryCode, geo.country))
-                        }
+                        val location = hopLocationLabel(
+                            // Shared with the route map callout, so both show the same text.
+                            geo,
+                        )
                         HopDetailRow(stringResource(R.string.traceroute_hop_detail_location), location)
                         geo.isp?.let { HopDetailRow(stringResource(R.string.traceroute_hop_detail_isp), it) }
                         geo.asn?.let { HopDetailRow(stringResource(R.string.traceroute_hop_detail_asn), it) }
@@ -1543,10 +1543,10 @@ private fun GeoLocationChip(geo: HopGeoLocation) {
             tint     = MaterialTheme.colorScheme.tertiary
         )
         Spacer(Modifier.width(3.dp))
-        val location = buildString {
-            if (geo.city.isNotBlank()) append("${geo.city}, ")
-            append(CountryFlags.label(geo.countryCode, geo.country))
-        }
+        val location = hopLocationLabel(
+            // Shared with the route map callout, so both show the same text.
+            geo,
+        )
         Text(
             text  = location,
             style = MaterialTheme.typography.labelSmall,

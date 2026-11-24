@@ -727,6 +727,36 @@
     <string name="traceroute_stats_light_speed_note">Estimate based on speed of light in fibre ≈ 200 km/ms</string>
     <string name="traceroute_tab_hops">Hop Details</string>
     <string name="traceroute_tab_raw">Raw Output</string>
+    <string name="traceroute_tab_map">Map</string>
+    <!-- Traceroute route map -->
+    <string name="traceroute_map_starts_at">The route starts at hop %1$d, the first hop with a known location. Your device\'s own location is not shown.</string>
+    <string name="traceroute_map_gesture_hint">Tap a marker for its hop. Pinch to zoom; once zoomed in, drag to move the map.</string>
+    <string name="traceroute_map_reset">Reset map view</string>
+    <string name="traceroute_map_description">Route map, in hop order: %1$s</string>
+    <string name="traceroute_map_stop_description">hop %1$s, %2$s, %3$s</string>
+    <string name="traceroute_map_disputed_description">Location disputed: %1$s</string>
+    <string name="traceroute_map_callout_hop">Hop %1$d</string>
+    <string name="traceroute_map_callout_replies">Replies: %1$d of %2$d probes</string>
+    <string name="traceroute_map_callout_jitter">Jitter: %1$d ms</string>
+    <string name="traceroute_map_callout_disputed">This location is contradicted by the measured RTT, so the hop is not on the drawn route.</string>
+    <string name="traceroute_map_legend_colour">Colour: RTT of the hop each line arrives at</string>
+    <string name="traceroute_map_band_under">Under %1$d ms</string>
+    <string name="traceroute_map_band_range">%1$d to %2$d ms</string>
+    <string name="traceroute_map_band_over">%1$d ms or more</string>
+    <string name="traceroute_map_legend_width">Width: distance covered per ms of added RTT, compared with light in fibre</string>
+    <string name="traceroute_map_width_fast">Thick: %1$d%% of light speed or more</string>
+    <string name="traceroute_map_width_medium">Medium: %1$d to %2$d%%, or not measurable (under %3$d km, or no RTT increase)</string>
+    <string name="traceroute_map_width_slow">Thin: under %1$d%%</string>
+    <string name="traceroute_map_legend_line">Line: how steady the arriving hop\'s replies were</string>
+    <string name="traceroute_map_line_solid">Solid: every probe answered and jitter was low</string>
+    <string name="traceroute_map_line_dashed">Dashed: a probe was lost, or jitter was %1$d ms or more and at least %2$d%% of the RTT</string>
+    <string name="traceroute_map_line_dotted">Dotted: path inferred across hops with no reply, no location or a disputed location</string>
+    <string name="traceroute_map_stability_needs_probes">Stability needs 2 or more probes per hop. This trace sent 1, so a solid line here does not mean steady.</string>
+    <string name="traceroute_map_marker_destination">Double ring: the destination answered here</string>
+    <string name="traceroute_map_marker_disputed">Hollow marker: GeoIP location contradicted by the measured RTT; not on the drawn route</string>
+    <string name="traceroute_map_attribution">Base map: Natural Earth (public domain)</string>
+    <string name="traceroute_map_attribution_title">Traceroute map: Natural Earth</string>
+    <string name="traceroute_map_attribution_body">The Traceroute route map draws land from Natural Earth 1:110m data, which is in the public domain. The map ships with the app and works offline; no map tiles are downloaded.</string>
     <string name="traceroute_raw_title">Raw Trace Output</string>
     <string name="traceroute_stat_hops">Hops</string>
     <string name="traceroute_stat_time">Time</string>
@@ -1483,6 +1513,10 @@
         <item>Each row is one router hop along the path.</item>
         <item>\'*\' means that router didn\'t respond - common with routers configured to ignore these probes, not necessarily a problem.</item>
         <item>Journey Intelligence - for public IPs, shows geographic location, RTT analysis, and which ISP owns that hop.</item>
+        <item>Map - draws the route between hops with a known location as arcs on an offline world map. It starts at the first located hop, because your own location is not known.</item>
+        <item>Arc colour is the RTT of the hop it arrives at, the same colours as the hop list. A thicker arc covered more distance per ms of added RTT.</item>
+        <item>A solid arc had every probe answered with low jitter; dashed means lost probes or high jitter; dotted means hops in between did not answer or had no reliable location. Judging stability needs 2 or more probes per hop.</item>
+        <item>A hollow marker is a hop whose GeoIP location the measured RTT rules out; it is shown but not joined into the route.</item>
     </string-array>
 
     <!-- Port Scanner help -->

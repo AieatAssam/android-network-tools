@@ -487,4 +487,115 @@ class TracerouteScreenTest {
         every { viewModel.networkStatus } returns MutableStateFlow(networkStatus)
         return viewModel
     }
+
+    private val mapMode = net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewMode.Map
+
+    private fun locatedHop(
+        hopNumber: Int,
+        city: String,
+        lat: Double,
+        lon: Double,
+        rtt: Long,
+    ): HopResult {
+        val geo =
+            HopGeoLocation(
+                ip = "198.51.100.$hopNumber",
+                country = "United Kingdom",
+                countryCode = "GB",
+                city = city,
+                lat = lat,
+                lon = lon,
+            )
+        return HopResult(
+            hopNumber = hopNumber,
+            ip = "198.51.100.$hopNumber",
+            hostname = null,
+            rtTimeMs = rtt,
+            status = HopStatus.SUCCESS,
+            geoLocation = geo,
+            probeRttsMs = listOf(rtt),
+        )
+    }
+
+    private fun mapResult(hops: List<HopResult>): TracerouteResult =
+        TracerouteResult(
+            host = "example.com",
+            resolvedIp = "198.51.100.9",
+            hops = hops,
+            rawOutput = "traceroute output",
+            totalTimeMs = 500,
+        )
+
+    private fun showFinished(state: TracerouteUiState) = showScreen(fakeViewModel(state))
+
+    private fun showScreen(viewModel: TracerouteViewModel) {
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TracerouteScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.mainClock.autoAdvance = true
+    }
+
+    @Test
+    fun mapTab_selectsMapViewMode() {
+        val viewModel = fakeViewModel(TracerouteUiState.Finished(mapResult(listOf(fakeHop(1, "10.0.0.1")))))
+        showScreen(viewModel)
+
+        composeRule.onNodeWithText(context.getString(R.string.traceroute_tab_map)).performScrollTo().performClick()
+
+        verify { viewModel.onSelectViewMode(mapMode) }
+        composeRule.mainClock.autoAdvance = false
+    }
+
+    @Test
+    fun mapView_showsRouteStartAndLegendForLocatedHops() {
+        val hops =
+            listOf(
+                fakeHop(1, "10.0.0.1"),
+                locatedHop(2, "London", 51.5074, -0.1278, 12),
+                locatedHop(3, "Manchester", 53.4808, -2.2426, 18),
+            )
+        showFinished(TracerouteUiState.Finished(mapResult(hops), viewMode = mapMode))
+
+        composeRule.onNodeWithTag("traceroute_map_canvas").performScrollTo().assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.traceroute_map_starts_at, 2))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.traceroute_map_legend_colour))
+            .performScrollTo()
+            .assertIsDisplayed()
+        // One probe per hop: stability is not claimed.
+        composeRule
+            .onNodeWithText(context.getString(R.string.traceroute_map_stability_needs_probes))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.mainClock.autoAdvance = false
+    }
+
+    @Test
+    fun mapView_withoutLocatedHops_reusesTheNoPublicIpMessage() {
+        showFinished(
+            TracerouteUiState.Finished(mapResult(listOf(fakeHop(1, "10.0.0.1"))), viewMode = mapMode),
+        )
+
+        composeRule.onNodeWithTag("traceroute_map_empty").performScrollTo().assertIsDisplayed()
+        composeRule.mainClock.autoAdvance = false
+    }
+
+    @Test
+    fun mapView_worksForAStoppedTrace() {
+        val hops = listOf(locatedHop(4, "London", 51.5074, -0.1278, 12))
+        showFinished(TracerouteUiState.Canceled(mapResult(hops), viewMode = mapMode))
+
+        composeRule.onNodeWithTag("traceroute_map_canvas").performScrollTo().assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.traceroute_map_starts_at, 4))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.mainClock.autoAdvance = false
+    }
 }
