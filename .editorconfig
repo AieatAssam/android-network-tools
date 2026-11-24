@@ -17,3 +17,5 @@ max_line_length = 240
 # Wildcard imports are already established throughout the Compose and test
 # sources; leave import organization to the IDE while KtLint checks formatting.
 ktlint_standard_no-wildcard-imports = disabled
+# Compose requires PascalCase names for @Composable functions that emit UI.
+ktlint_function_naming_ignore_when_annotated_with = Composable
