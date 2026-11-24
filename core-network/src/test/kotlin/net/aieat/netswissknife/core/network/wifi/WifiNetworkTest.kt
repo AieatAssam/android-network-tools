@@ -81,12 +81,6 @@ class WifiNetworkTest {
         }
 
         @Test
-        @DisplayName("reports the best signal quality across BSSIDs")
-        fun signalQuality() {
-            assertEquals(100, multiBand.signalQualityPercent)
-        }
-
-        @Test
         @DisplayName("reports the best signal level across BSSIDs")
         fun signalLevel() {
             assertEquals(SignalLevel.EXCELLENT, multiBand.signalLevel)

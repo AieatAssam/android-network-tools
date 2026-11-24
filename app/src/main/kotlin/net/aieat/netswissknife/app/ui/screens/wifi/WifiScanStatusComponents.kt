@@ -14,7 +14,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
@@ -25,17 +24,28 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import android.os.SystemClock
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.core.network.wifi.WifiConnectionInfo
 import net.aieat.netswissknife.core.network.wifi.WifiScanResult
 import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
+import net.aieat.netswissknife.core.network.wifi.signalLevelForRssi
 
 @Composable
 fun WifiLocationDisabledScreen(onOpenSettings: () -> Unit) {
@@ -71,52 +81,59 @@ fun WifiLocationDisabledScreen(onOpenSettings: () -> Unit) {
     }
 }
 
+/** Ticks the scan age once every few seconds while the screen is resumed, so the label stays current. */
+@Composable
+private fun rememberWifiScanAgeSeconds(result: WifiScanResult): Long? {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var nowElapsedMs by remember(result) { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    LaunchedEffect(result, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                nowElapsedMs = SystemClock.elapsedRealtime()
+                delay(WIFI_AGE_TICK_MS)
+            }
+        }
+    }
+    return wifiScanAgeSeconds(result.scanAgeMs, result.cacheReadElapsedRealtimeMs, nowElapsedMs)
+}
+
+private const val WIFI_AGE_TICK_MS = 5_000L
+
 @Composable
 fun WifiScanFreshnessStatus(
     result: WifiScanResult,
     onRequestPermission: (() -> Unit)? = null
 ) {
-    val ageSeconds = result.scanAgeMs?.let { (it / 1_000L).coerceAtLeast(0L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt() }
+    val ageSeconds = rememberWifiScanAgeSeconds(result)
     val ageLabel = if (ageSeconds == null) {
         stringResource(R.string.wifi_results_age_unknown)
     } else {
-        pluralStringResource(R.plurals.wifi_results_age, ageSeconds, ageSeconds)
+        val count = ageSeconds.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        pluralStringResource(R.plurals.wifi_results_age, count, count)
+    }
+    val statusLabel = when (result.refreshStatus) {
+        WifiScanRefreshStatus.NOT_REQUESTED,
+        WifiScanRefreshStatus.UPDATED -> null
+        WifiScanRefreshStatus.NOT_UPDATED -> stringResource(R.string.wifi_scan_not_updated)
+        WifiScanRefreshStatus.TIMED_OUT -> stringResource(R.string.wifi_scan_timed_out)
+        WifiScanRefreshStatus.REJECTED -> stringResource(R.string.wifi_scan_rejected)
+        WifiScanRefreshStatus.FAILED -> stringResource(R.string.wifi_scan_failed_cached)
+        WifiScanRefreshStatus.PERMISSION_DENIED -> stringResource(R.string.wifi_scan_permission_denied_cached)
     }
 
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            AssistChip(
-                onClick = {},
-                label = {
-                    Text(
-                        when (result.refreshStatus) {
-                            WifiScanRefreshStatus.NOT_REQUESTED,
-                            WifiScanRefreshStatus.UPDATED -> ageLabel
-                            WifiScanRefreshStatus.NOT_UPDATED -> stringResource(R.string.wifi_scan_not_updated)
-                            WifiScanRefreshStatus.TIMED_OUT -> stringResource(R.string.wifi_scan_timed_out)
-                            WifiScanRefreshStatus.REJECTED -> stringResource(R.string.wifi_scan_rejected)
-                            WifiScanRefreshStatus.FAILED -> stringResource(R.string.wifi_scan_failed_cached)
-                            WifiScanRefreshStatus.PERMISSION_DENIED -> stringResource(R.string.wifi_scan_permission_denied_cached)
-                        }
-                    )
-                }
+        if (statusLabel != null) {
+            Text(
+                statusLabel,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            if (result.refreshStatus !in setOf(
-                    WifiScanRefreshStatus.NOT_REQUESTED,
-                    WifiScanRefreshStatus.UPDATED
-                )
-            ) {
-                Text(
-                    ageLabel,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
+        Text(
+            ageLabel,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         if (result.refreshStatus == WifiScanRefreshStatus.PERMISSION_DENIED && onRequestPermission != null) {
             Button(onClick = onRequestPermission) {
                 Text(stringResource(R.string.wifi_grant_permission))
@@ -153,6 +170,12 @@ fun WifiRefreshIntervalPicker(
 @Composable
 fun WifiConnectedNetworkCard(info: WifiConnectionInfo) {
     val unavailableValue = stringResource(R.string.wifi_value_unavailable)
+    val title = if (info.ssid.isBlank()) {
+        stringResource(R.string.wifi_connected_network_header)
+    } else {
+        stringResource(R.string.wifi_connected_to_ssid, info.ssid)
+    }
+    val levelLabel = stringResource(signalLevelLabelRes(signalLevelForRssi(info.rssi)))
     ElevatedCard(Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -162,8 +185,33 @@ fun WifiConnectedNetworkCard(info: WifiConnectionInfo) {
                 Icon(Icons.Default.Wifi, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    stringResource(R.string.wifi_connected_network_header),
+                    title,
                     style = MaterialTheme.typography.titleMedium
+                )
+            }
+            ConnectionDetailRow(stringResource(R.string.wifi_detail_bssid), info.bssid.ifBlank { unavailableValue })
+            ConnectionDetailRow(
+                stringResource(R.string.wifi_detail_band_channel),
+                stringResource(R.string.wifi_band_channel_value, info.band.ghzLabel, info.channel)
+            )
+            ConnectionDetailRow(
+                stringResource(R.string.wifi_detail_signal),
+                stringResource(R.string.wifi_rssi_with_level, info.rssi, levelLabel)
+            )
+            ConnectionDetailRow(
+                stringResource(R.string.wifi_detail_link_speed),
+                stringResource(R.string.wifi_link_speed_value, info.linkSpeedMbps)
+            )
+            if (info.txLinkSpeedMbps >= 0) {
+                ConnectionDetailRow(
+                    stringResource(R.string.wifi_detail_tx_speed),
+                    stringResource(R.string.wifi_link_speed_value, info.txLinkSpeedMbps)
+                )
+            }
+            if (info.rxLinkSpeedMbps >= 0) {
+                ConnectionDetailRow(
+                    stringResource(R.string.wifi_detail_rx_speed),
+                    stringResource(R.string.wifi_link_speed_value, info.rxLinkSpeedMbps)
                 )
             }
             ConnectionDetailRow(

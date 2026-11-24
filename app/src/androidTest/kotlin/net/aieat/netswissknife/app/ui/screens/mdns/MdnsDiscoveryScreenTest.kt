@@ -254,6 +254,25 @@ class MdnsDiscoveryScreenTest {
     }
 
     @Test
+    fun errorState_retryButtonStartsAScanAgain() {
+        val viewModel =
+            fakeViewModel(
+                state = MdnsDiscoveryUiState(error = "network down", errorReason = MdnsScanFailure.NETWORK_FAILED),
+            )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                MdnsDiscoveryScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.mdns_error_network_failed)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.mdns_error_retry)).performClick()
+
+        verify(exactly = 1) { viewModel.startScan() }
+    }
+
+    @Test
     fun groupedResults_showServiceTypeHeader() {
         val service = fakeService("_http._tcp", "printer")
         composeRule.setContent {

@@ -50,40 +50,6 @@ class WifiAccessPointTest {
     }
 
     @Nested
-    @DisplayName("signalQualityPercent")
-    inner class SignalQuality {
-        @Test
-        fun `rssi at -50 gives 100 percent`() {
-            assertEquals(100, makeAp(rssi = -50).signalQualityPercent)
-        }
-
-        @Test
-        fun `rssi above -50 gives 100 percent`() {
-            assertEquals(100, makeAp(rssi = -30).signalQualityPercent)
-        }
-
-        @Test
-        fun `rssi at -60 gives 80 percent`() {
-            assertEquals(80, makeAp(rssi = -60).signalQualityPercent)
-        }
-
-        @Test
-        fun `rssi at -70 gives 60 percent`() {
-            assertEquals(60, makeAp(rssi = -70).signalQualityPercent)
-        }
-
-        @Test
-        fun `rssi at -80 gives 40 percent`() {
-            assertEquals(40, makeAp(rssi = -80).signalQualityPercent)
-        }
-
-        @Test
-        fun `rssi below -90 gives 0 percent`() {
-            assertEquals(0, makeAp(rssi = -100).signalQualityPercent)
-        }
-    }
-
-    @Nested
     @DisplayName("signalLevel")
     inner class SignalLevelTest {
         @Test

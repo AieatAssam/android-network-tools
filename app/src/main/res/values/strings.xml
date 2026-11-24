@@ -586,12 +586,9 @@
     <string name="wifi_detail_signal">Signal</string>
     <string name="wifi_connected_network_header">Currently Connected</string>
     <string name="wifi_rssi_dbm">%1$d dBm</string>
-    <string name="wifi_signal_quality_pct">%1$d%%</string>
     <string name="wifi_network_info_header">Network Information</string>
-    <string name="wifi_live_connection_header">Live Connection</string>
     <string name="wifi_spectrum_title">Spectrum Analyser</string>
     <string name="wifi_spectrum_a11y">Wi-Fi spectrum on %2$s: access point count %1$d, strongest access point %3$s at %4$d dBm</string>
-    <string name="wifi_signal_gauge_a11y">Signal quality: %1$d%%, %2$s</string>
     <string name="wifi_signal_level_excellent">Excellent</string>
     <string name="wifi_signal_level_good">Good</string>
     <string name="wifi_signal_level_fair">Fair</string>
@@ -604,7 +601,50 @@
         <item quantity="one">%1$d network</item>
         <item quantity="other">%1$d networks</item>
     </plurals>
-    <string name="wifi_aps_count">%1$d APs</string>
+    <plurals name="wifi_aps_count">
+        <item quantity="one">%1$d AP</item>
+        <item quantity="other">%1$d APs</item>
+    </plurals>
+    <plurals name="wifi_aps_of_total">
+        <item quantity="one">%1$d of %2$d AP</item>
+        <item quantity="other">%1$d of %2$d APs</item>
+    </plurals>
+    <string name="wifi_sort_signal">Signal</string>
+    <string name="wifi_sort_name">Name</string>
+    <string name="wifi_sort_channel">Channel</string>
+    <string name="wifi_band_all">All</string>
+    <string name="wifi_error_generic">Something went wrong during the Wi-Fi scan. Try again.</string>
+    <string name="wifi_scan_timed_out_error">Wi-Fi scan timed out</string>
+    <string name="wifi_spectrum_show">Show spectrum</string>
+    <string name="wifi_spectrum_hide">Hide spectrum</string>
+    <string name="wifi_spectrum_axis_unit">dBm</string>
+    <string name="wifi_connected_to_ssid">Connected to %1$s</string>
+    <string name="wifi_detail_bssid">BSSID</string>
+    <string name="wifi_detail_band_channel">Band and channel</string>
+    <string name="wifi_band_channel_value">%1$s GHz, channel %2$d</string>
+    <string name="wifi_link_speed_value">%1$d Mbps</string>
+    <string name="wifi_rssi_with_level">%1$d dBm, %2$s</string>
+    <string name="wifi_channel_badge">Channel %1$d</string>
+    <string name="wifi_detail_center_freq_0">Center frequency (first)</string>
+    <string name="wifi_detail_center_freq_1">Center frequency (second)</string>
+    <string name="wifi_center_freq_value">%1$d MHz</string>
+    <string name="wifi_center_freq_80_80_value">%1$d MHz (80+80)</string>
+    <plurals name="wifi_share_access_points">
+        <item quantity="one">%1$d access point</item>
+        <item quantity="other">%1$d access points</item>
+    </plurals>
+    <string name="wifi_share_freshness">Freshness: %1$s</string>
+    <string name="wifi_share_fresh">Fresh</string>
+    <string name="wifi_share_cached">Cached</string>
+    <string name="wifi_share_sample_age">Sample age: %1$s</string>
+    <string name="wifi_share_age_ms">%1$d ms</string>
+    <string name="wifi_share_unknown">unknown</string>
+    <string name="wifi_share_refresh_status">Refresh status: %1$s</string>
+    <string name="wifi_share_status_not_requested">Not requested</string>
+    <string name="wifi_share_status_updated">Updated</string>
+    <string name="wifi_share_sample_time">Sample time: %1$s</string>
+    <string name="wifi_share_wifi_disabled">Wi-Fi is off</string>
+    <string name="wifi_share_location_disabled">Location services are off</string>
 
     <!-- Traceroute Screen -->
     <string name="traceroute_screen_title">Traceroute</string>
@@ -1302,6 +1342,40 @@
     <string name="httprobe_cleartext_warning">Plain HTTP is not encrypted. The request and the response can be read or changed by anyone on the network path. Use it for local devices you trust.</string>
     <string name="httprobe_invalid_handoff">The supplied destination could not be verified. Enter a valid HTTP URL to continue.</string>
     <string name="mdns_ping_address">Ping %1$s</string>
+    <string name="mdns_error_retry">Retry</string>
+    <string name="mdns_elapsed_value">%1$d s</string>
+    <plurals name="mdns_services_count">
+        <item quantity="one">%1$d service</item>
+        <item quantity="other">%1$d services</item>
+    </plurals>
+    <plurals name="mdns_services_of_total">
+        <item quantity="one">%1$d of %2$d service</item>
+        <item quantity="other">%1$d of %2$d services</item>
+    </plurals>
+    <string name="mdns_group_label">Group:</string>
+    <string name="mdns_group_by_type">By type</string>
+    <string name="mdns_group_by_device">By device</string>
+    <string name="mdns_group_expand">Expand %1$s</string>
+    <string name="mdns_group_collapse">Collapse %1$s</string>
+    <string name="mdns_txt_show_all">Show all %1$d</string>
+    <string name="mdns_txt_show_less">Show less</string>
+    <string name="mdns_type_http">Web server</string>
+    <string name="mdns_type_https">Secure web server</string>
+    <string name="mdns_type_ssh">SSH server</string>
+    <string name="mdns_type_printer">Printer</string>
+    <string name="mdns_type_cast">Chromecast</string>
+    <string name="mdns_type_airplay">AirPlay</string>
+    <string name="mdns_type_smb">File sharing</string>
+    <string name="mdns_type_workstation">Workstation</string>
+    <string name="mdns_type_generic">Network service</string>
+    <string name="mdns_share_count">mDNS services: %1$d</string>
+    <string name="mdns_share_filter">Filter: %1$s</string>
+    <string name="mdns_share_stopping">Discovery stopping; partial results.</string>
+    <string name="mdns_share_in_progress">Discovery in progress; partial results.</string>
+    <string name="mdns_share_canceled">Discovery canceled; partial results.</string>
+    <string name="mdns_share_complete">Discovery window complete.</string>
+    <string name="mdns_share_addresses">Addresses: %1$s</string>
+    <string name="mdns_share_txt">TXT %1$s=%2$s</string>
 
     <!-- Onboarding -->
     <string name="onboarding_get_started">Get Started</string>
@@ -1350,7 +1424,6 @@
     <string name="action_help">Help</string>
     <string name="a11y_loading">Loading</string>
     <string name="a11y_scanning">Scanning in progress</string>
-    <string name="wifi_signal_quality">Signal Quality</string>
 
     <!-- Ping help -->
     <string name="help_ping_title">Ping</string>

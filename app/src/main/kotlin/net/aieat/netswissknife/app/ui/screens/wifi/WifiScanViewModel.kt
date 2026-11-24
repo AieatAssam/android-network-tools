@@ -82,44 +82,83 @@ sealed interface WifiScanUiState {
         val scanAgeMs: Long? get() = result.scanAgeMs
         val refreshStatus: WifiScanRefreshStatus get() = result.refreshStatus
 
-        val filteredAccessPoints: List<WifiAccessPoint> get() {
-            val base = if (bandFilter == null) result.accessPoints
-                       else result.accessPoints.filter { it.band == bandFilter }
-            return when (sortOrder) {
-                ApSortOrder.SIGNAL  -> base.sortedByDescending { it.rssi }
-                ApSortOrder.SSID    -> base.sortedBy { it.displaySsid.lowercase() }
-                ApSortOrder.CHANNEL -> base.sortedWith(compareBy({ it.band.ordinal }, { it.channel }, { -it.rssi }))
-            }
-        }
+        /** Access points in the selected band, sorted. Computed once per state instance. */
+        val filteredAccessPoints: List<WifiAccessPoint> =
+            sortedAccessPoints(result.accessPoints, bandFilter, sortOrder)
 
-        val filteredNetworks: List<WifiNetwork> get() {
-            val networks = if (bandFilter == null) result.networks
-                           else result.networks.filter { n -> n.accessPoints.any { it.band == bandFilter } }
-                               .map { n ->
-                                   n.copy(accessPoints = n.accessPoints.filter { it.band == bandFilter }
-                                       .sortedByDescending { it.rssi })
-                               }
-            val sorted = when (sortOrder) {
-                ApSortOrder.SIGNAL  -> networks.sortedByDescending { it.bestRssi }
-                ApSortOrder.SSID    -> networks.sortedBy { it.displaySsid.lowercase() }
-                ApSortOrder.CHANNEL -> networks.sortedWith(
-                    compareBy({ it.sortedBands.firstOrNull()?.ordinal ?: 99 }, { it.bestRssi * -1 })
-                )
-            }
-            val pinnedOrder = frozenOrder ?: return sorted
-            val positionOf = pinnedOrder.withIndex().associate { (i, id) -> id to i }
-            // Stable sort: anything not in the pinned order (newly appeared since the
-            // freeze) falls through to the end, in its normal live-sort relative order.
-            return sorted.sortedBy { positionOf[it.id] ?: Int.MAX_VALUE }
-        }
+        /** Networks in the selected band, sorted and pinned while inspecting. Computed once per state instance. */
+        val filteredNetworks: List<WifiNetwork> =
+            sortedNetworks(result.networks, bandFilter, sortOrder, frozenOrder)
     }
 
-    /** An error occurred during scanning. */
-    data class Error(val message: String) : WifiScanUiState
+    /**
+     * An error occurred during scanning. [message] is diagnostic text for logs and tests;
+     * the screen shows [bodyRes].
+     */
+    data class Error(
+        val message: String,
+        @StringRes val bodyRes: Int = R.string.wifi_error_generic,
+    ) : WifiScanUiState
 }
 
-enum class ApSortOrder(val label: String) {
-    SIGNAL("Signal"), SSID("Name"), CHANNEL("Channel")
+/** Band whose spectrum is drawn: the selected band, else the connected AP's band, else the first band seen. */
+internal fun spectrumBandFor(
+    bandFilter: WifiBand?,
+    connectedBand: WifiBand?,
+    detectedBands: List<WifiBand>,
+): WifiBand? =
+    bandFilter
+        ?: connectedBand?.takeIf { it in detectedBands }
+        ?: detectedBands.firstOrNull()
+
+internal fun sortedAccessPoints(
+    all: List<WifiAccessPoint>,
+    bandFilter: WifiBand?,
+    sortOrder: ApSortOrder,
+): List<WifiAccessPoint> {
+    val base = if (bandFilter == null) all else all.filter { it.band == bandFilter }
+    return when (sortOrder) {
+        ApSortOrder.SIGNAL -> base.sortedByDescending { it.rssi }
+        ApSortOrder.SSID -> base.sortedBy { it.displaySsid.lowercase() }
+        ApSortOrder.CHANNEL -> base.sortedWith(compareBy({ it.band.ordinal }, { it.channel }, { -it.rssi }))
+    }
+}
+
+internal fun sortedNetworks(
+    all: List<WifiNetwork>,
+    bandFilter: WifiBand?,
+    sortOrder: ApSortOrder,
+    frozenOrder: List<String>?,
+): List<WifiNetwork> {
+    val networks = if (bandFilter == null) {
+        all
+    } else {
+        all.filter { n -> n.accessPoints.any { it.band == bandFilter } }
+            .map { n ->
+                n.copy(
+                    accessPoints = n.accessPoints.filter { it.band == bandFilter }
+                        .sortedByDescending { it.rssi },
+                )
+            }
+    }
+    val sorted = when (sortOrder) {
+        ApSortOrder.SIGNAL -> networks.sortedByDescending { it.bestRssi }
+        ApSortOrder.SSID -> networks.sortedBy { it.displaySsid.lowercase() }
+        ApSortOrder.CHANNEL -> networks.sortedWith(
+            compareBy({ it.sortedBands.firstOrNull()?.ordinal ?: 99 }, { it.bestRssi * -1 }),
+        )
+    }
+    val pinnedOrder = frozenOrder ?: return sorted
+    val positionOf = pinnedOrder.withIndex().associate { (i, id) -> id to i }
+    // Stable sort: anything not in the pinned order (newly appeared since the
+    // freeze) falls through to the end, in its normal live-sort relative order.
+    return sorted.sortedBy { positionOf[it.id] ?: Int.MAX_VALUE }
+}
+
+enum class ApSortOrder(@StringRes val labelRes: Int) {
+    SIGNAL(R.string.wifi_sort_signal),
+    SSID(R.string.wifi_sort_name),
+    CHANNEL(R.string.wifi_sort_channel),
 }
 
 data class ApDisappearedEvent(@StringRes val messageResId: Int = R.string.wifi_ap_disappeared)
@@ -255,9 +294,7 @@ class WifiScanViewModel @Inject constructor(
                     }
                     val successState = WifiScanUiState.Success(
                         result = visibleResult,
-                        bandFilter = prev?.bandFilter
-                            ?.takeIf { it in visibleResult.detectedBands }
-                            ?: visibleResult.detectedBands.firstOrNull(),
+                        bandFilter = prev?.bandFilter?.takeIf { it in visibleResult.detectedBands },
                         sortOrder = prev?.sortOrder ?: ApSortOrder.SIGNAL,
                         selectedAp = stillPresentAp,
                         frozenOrder = prev?.frozenOrder
@@ -276,7 +313,10 @@ class WifiScanViewModel @Inject constructor(
                         result = cachedResultAfterFailure(prev.result, WifiScanRefreshStatus.TIMED_OUT)
                     )
                 } else {
-                    _uiState.value = WifiScanUiState.Error("Wi-Fi scan timed out")
+                    _uiState.value = WifiScanUiState.Error(
+                        message = "Wi-Fi scan timed out",
+                        bodyRes = R.string.wifi_scan_timed_out_error,
+                    )
                 }
             } catch (e: WifiNotSupportedException) {
                 if (generation != scanGeneration) return@launch
@@ -294,7 +334,7 @@ class WifiScanViewModel @Inject constructor(
                 if (generation != scanGeneration) return@launch
                 _uiState.value = prev?.copy(
                     result = cachedResultAfterFailure(prev.result, WifiScanRefreshStatus.FAILED)
-                ) ?: WifiScanUiState.Error(e.message ?: "Unknown error")
+                ) ?: WifiScanUiState.Error(message = e.message.orEmpty())
             } finally {
                 if (scanOperationSession === operationSession) scanOperationSession = null
                 if (scanJob === coroutineContext[Job]) scanJob = null

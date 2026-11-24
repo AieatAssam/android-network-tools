@@ -81,6 +81,7 @@ class MdnsDiscoveryViewModel
     ) : ViewModel() {
         companion object {
             const val DEFAULT_SCAN_DURATION_MS = 8_000L
+            const val ELAPSED_TICK_MS = 1_000L
             private const val LIFECYCLE_CLOSEABLE_KEY = "mdns_operation_lifecycle"
         }
 
@@ -125,7 +126,8 @@ class MdnsDiscoveryViewModel
             timerJob =
                 viewModelScope.launch {
                     while (true) {
-                        delay(100)
+                        // The screen shows whole seconds, so a 1 s tick is enough and avoids recomposing 10 times a second.
+                        delay(ELAPSED_TICK_MS)
                         val elapsedMs = ((SystemMonotonicClock.nowNanos() - startTime).coerceAtLeast(0L) / 1_000_000L)
                         if (activeScanGeneration == generation) {
                             _uiState.update { state ->

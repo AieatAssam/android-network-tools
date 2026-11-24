@@ -44,8 +44,6 @@ data class WifiNetwork(
     val bssidCount: Int get() = accessPoints.size
     val isConnected: Boolean get() = accessPoints.any { it.isConnected }
 
-    val signalQualityPercent: Int get() = accessPoints.maxOf { it.signalQualityPercent }
-
     /** Best (strongest) signal level across all BSSIDs. */
     val signalLevel: SignalLevel get() =
         accessPoints.minByOrNull { it.signalLevel.ordinal }?.signalLevel ?: SignalLevel.POOR
