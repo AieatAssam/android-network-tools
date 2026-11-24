@@ -102,7 +102,7 @@ internal data class HttpProbeSessionSnapshot(
     val result: HttpProbeResult?,
 )
 
-/** Drops the request headers, body and replay callback before a result is kept in memory. */
+/** Drops the request headers (entered and sent), body and replay callback before a result is kept in memory. */
 internal fun HttpProbeResult.forSessionMemory(): HttpProbeResult =
     copy(
         request =
@@ -111,6 +111,7 @@ internal fun HttpProbeResult.forSessionMemory(): HttpProbeResult =
                 body = null,
                 approveCrossOriginEntityReplay = null,
             ),
+        sentRequestHeaders = emptyList(),
     )
 
 @HiltViewModel

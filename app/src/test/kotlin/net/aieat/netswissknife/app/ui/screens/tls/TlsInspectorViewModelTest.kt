@@ -2,6 +2,7 @@ package net.aieat.netswissknife.app.ui.screens.tls
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewModelScope
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -15,8 +16,11 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -64,6 +68,10 @@ class TlsInspectorViewModelTest {
     private lateinit var recentHostsRepository: RecentHostsRepository
     private lateinit var viewModel: TlsInspectorViewModel
 
+    // Every view model that starts an inspection in a test; joined in tearDown so no coroutine
+    // (including the IO-hopped logging call) outlives the test.
+    private val inspectedViewModels = mutableListOf<TlsInspectorViewModel>()
+
     private val stubCert =
         TlsCertificate(
             subjectCN = "example.com",
@@ -105,13 +113,20 @@ class TlsInspectorViewModelTest {
                 every { getRecents(any()) } returns flowOf(emptyList())
             }
         viewModel = TlsInspectorViewModel(useCase, recentHostsRepository)
+        inspectedViewModels += viewModel
     }
 
     @AfterEach
-    fun tearDown() {
-        unmockkObject(AppLogger)
-        Dispatchers.resetMain()
-    }
+    fun tearDown() =
+        runBlocking {
+            // Cancel and join before unmocking AppLogger and resetting Main (LanScanViewModelTest pattern).
+            (inspectedViewModels + viewModel).forEach { inspected ->
+                inspected.viewModelScope.coroutineContext.job
+                    .cancelAndJoin()
+            }
+            unmockkObject(AppLogger)
+            Dispatchers.resetMain()
+        }
 
     @Test
     fun `initial state has empty host and no result`() {
@@ -222,6 +237,7 @@ class TlsInspectorViewModelTest {
                     recentHostsRepository,
                     savedStateHandle = SavedStateHandle(routeArgs),
                 )
+            inspectedViewModels += active
             coEvery { useCase(any(), capture(sessionSlot)) } coAnswers { awaitCancellation() }
 
             active.inspect()
@@ -424,6 +440,7 @@ class TlsInspectorViewModelTest {
                         TlsInspectorUseCase(repository),
                         recentHostsRepository,
                     )
+                inspectedViewModels += cancelViewModel
                 cancelViewModel.onHostChange("example.com")
                 cancelViewModel.inspect()
 

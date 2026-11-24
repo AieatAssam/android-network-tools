@@ -1,8 +1,6 @@
 package net.aieat.netswissknife.core.domain
 
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -15,6 +13,7 @@ import net.aieat.netswissknife.core.network.portscan.PortConnectChecker
 import net.aieat.netswissknife.core.network.portscan.PortConnectResult
 import net.aieat.netswissknife.core.network.portscan.PortScanRepository
 import net.aieat.netswissknife.core.network.portscan.PortScanRepositoryImpl
+import net.aieat.netswissknife.core.network.portscan.PortScanUpdate
 import net.aieat.netswissknife.core.network.portscan.PortStatus
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -23,19 +22,48 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 
+/**
+ * Hand-written collaborator: records every session-bearing scan call and never probes.
+ * Used instead of a mock so no bytecode generation runs inside `runTest`.
+ */
+private class RecordingPortScanRepository : PortScanRepository {
+    data class Call(
+        val host: String,
+        val ports: List<Int>,
+        val timeoutMs: Int,
+        val concurrency: Int,
+        val aggressiveProbes: Boolean,
+        val session: OperationSession,
+    )
+
+    val calls = mutableListOf<Call>()
+
+    override fun scan(
+        host: String,
+        ports: List<Int>,
+        timeoutMs: Int,
+        concurrency: Int,
+    ): Flow<PortScanUpdate> = flowOf()
+
+    override fun scan(
+        host: String,
+        ports: List<Int>,
+        timeoutMs: Int,
+        concurrency: Int,
+        aggressiveProbes: Boolean,
+        operationSession: OperationSession,
+    ): Flow<PortScanUpdate> {
+        calls += Call(host, ports, timeoutMs, concurrency, aggressiveProbes, operationSession)
+        return flowOf()
+    }
+}
+
 @DisplayName("PortScanUseCase")
 class PortScanUseCaseTest {
     @Test
     fun `each collection of a cold scan flow receives a fresh operation session`() =
         runTest {
-            val repository = mockk<PortScanRepository>()
-            val sessions = mutableListOf<OperationSession>()
-            every {
-                repository.scan("example.com", PortScanPreset.WEB.ports, 2_000, 100, true, any())
-            } answers {
-                sessions += lastArg<OperationSession>()
-                flowOf()
-            }
+            val repository = RecordingPortScanRepository()
             val scan =
                 PortScanUseCase(repository).invoke(
                     PortScanParams(host = "example.com", preset = PortScanPreset.WEB),
@@ -44,18 +72,15 @@ class PortScanUseCaseTest {
             scan.toList()
             scan.toList()
 
-            assertEquals(2, sessions.size)
-            assertTrue(sessions[0] !== sessions[1])
+            assertEquals(2, repository.calls.size)
+            assertTrue(repository.calls[0].session !== repository.calls[1].session)
         }
 
     @Test
     fun `caller operation session is forwarded to repository`() =
         runTest {
-            val repository = mockk<PortScanRepository>()
+            val repository = RecordingPortScanRepository()
             val session = OperationSession(OperationBudget.start())
-            every {
-                repository.scan("example.com", PortScanPreset.WEB.ports, 2_000, 100, true, session)
-            } returns flowOf()
 
             PortScanUseCase(repository)
                 .invoke(
@@ -63,19 +88,26 @@ class PortScanUseCaseTest {
                     session,
                 ).toList()
 
-            verify(exactly = 1) {
-                repository.scan("example.com", PortScanPreset.WEB.ports, 2_000, 100, true, session)
-            }
+            assertEquals(
+                listOf(
+                    RecordingPortScanRepository.Call(
+                        "example.com",
+                        PortScanPreset.WEB.ports,
+                        2_000,
+                        100,
+                        true,
+                        session,
+                    ),
+                ),
+                repository.calls,
+            )
         }
 
     @Test
     fun `passive probe opt out is forwarded to repository`() =
         runTest {
-            val repository = mockk<PortScanRepository>()
+            val repository = RecordingPortScanRepository()
             val session = OperationSession(OperationBudget.start())
-            every {
-                repository.scan("example.com", PortScanPreset.WEB.ports, 2_000, 100, false, session)
-            } returns flowOf()
 
             PortScanUseCase(repository)
                 .invoke(
@@ -83,15 +115,25 @@ class PortScanUseCaseTest {
                     session,
                 ).toList()
 
-            verify(exactly = 1) {
-                repository.scan("example.com", PortScanPreset.WEB.ports, 2_000, 100, false, session)
-            }
+            assertEquals(
+                listOf(
+                    RecordingPortScanRepository.Call(
+                        "example.com",
+                        PortScanPreset.WEB.ports,
+                        2_000,
+                        100,
+                        false,
+                        session,
+                    ),
+                ),
+                repository.calls,
+            )
         }
 
     @Test
     fun `request above derived hard ceiling is rejected before repository probes`() =
         runTest {
-            val repository = mockk<PortScanRepository>()
+            val repository = RecordingPortScanRepository()
             val useCase = PortScanUseCase(repository)
             val params =
                 PortScanParams(
@@ -107,7 +149,7 @@ class PortScanUseCaseTest {
             val results = useCase(params, session).toList()
 
             assertTrue(results.single() is PortScanFlowResult.ValidationError)
-            verify(exactly = 0) { repository.scan(any(), any(), any(), any(), any()) }
+            assertTrue(repository.calls.isEmpty())
         }
 
     private val openChecker: PortConnectChecker = { _, _ ->

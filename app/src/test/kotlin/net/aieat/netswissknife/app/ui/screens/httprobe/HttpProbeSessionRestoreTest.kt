@@ -65,6 +65,7 @@ class HttpProbeSessionRestoreTest {
             finalUrl = url,
             redirectChain = emptyList(),
             securityChecks = emptyList(),
+            sentRequestHeaders = listOf("Authorization" to secretHeaderValue),
         )
 
     @BeforeEach

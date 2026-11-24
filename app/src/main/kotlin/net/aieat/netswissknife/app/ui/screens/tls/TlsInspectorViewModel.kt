@@ -359,9 +359,7 @@ class TlsInspectorViewModel
                                 )
                         }
 
-                        else -> {
-                            Unit
-                        }
+                        else -> {}
                     }
                     throw e
                 } catch (e: Exception) {
