@@ -4,14 +4,7 @@ import android.app.Activity
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -80,7 +73,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -124,11 +116,18 @@ import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.components.messageRes
 import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
+import net.aieat.netswissknife.app.ui.screens.ping.pingAxisLabel
+import net.aieat.netswissknife.app.ui.screens.ping.pingLossLabel
+import net.aieat.netswissknife.app.ui.screens.ping.pingTimeoutLabel
+import net.aieat.netswissknife.app.ui.screens.ping.pingTimeoutOptions
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.i18n.asString
+import net.aieat.netswissknife.app.ui.screens.ping.PING_ROLLING_WINDOW
 import net.aieat.netswissknife.app.ui.screens.ping.PingCsvSerializer
 import net.aieat.netswissknife.app.ui.screens.ping.PingUiState
+import net.aieat.netswissknife.app.ui.screens.ping.pingBarFraction
+import net.aieat.netswissknife.core.network.ping.PingEngineKind
 import net.aieat.netswissknife.app.ui.screens.ping.PingViewModel
 import net.aieat.netswissknife.app.ui.screens.ping.pingChartSuccessSegments
 import net.aieat.netswissknife.app.ui.theme.AppMotion
@@ -224,7 +223,6 @@ fun PingScreen(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // ── Hero header ─────────────────────────────────────────────────
         item {
             Box {
                 ToolStateAnnouncer(stringResource(R.string.help_ping_title), announcementPhase)
@@ -270,7 +268,6 @@ fun PingScreen(
             }
         }
 
-        // ── Input card ──────────────────────────────────────────────────
         item {
             PingInputCard(
                 host = host,
@@ -297,7 +294,6 @@ fun PingScreen(
             )
         }
 
-        // ── Results area ─────────────────────────────────────────────────
         item {
             AnimatedContent(
                 targetState = uiState,
@@ -350,17 +346,9 @@ fun PingScreen(
     }
 }
 
-// ── Hero header ───────────────────────────────────────────────────────────────
 
 @Composable
 private fun PingHeroHeader(onHelpClick: () -> Unit) {
-    val infiniteTransition = rememberInfiniteTransition(label = "ping_pulse")
-    val pulse by infiniteTransition.animateFloat(
-        initialValue = 0.85f, targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
-        label = "hero_pulse"
-    )
-
     ToolHeroHeader(
         title = stringResource(R.string.ping_screen_title),
         subtitle = stringResource(R.string.ping_screen_subtitle),
@@ -370,7 +358,6 @@ private fun PingHeroHeader(onHelpClick: () -> Unit) {
             Box(
                 modifier = Modifier
                     .size(52.dp)
-                    .scale(pulse)
                     .clip(CircleShape)
                     .background(
                         Brush.radialGradient(
@@ -393,7 +380,6 @@ private fun PingHeroHeader(onHelpClick: () -> Unit) {
     )
 }
 
-// ── Input card ────────────────────────────────────────────────────────────────
 
 @Composable
 private fun PingInputCard(
@@ -646,7 +632,6 @@ private fun PingSliderRow(
 
 @Composable
 private fun PingTimeoutRow(timeoutMs: Int, onTimeoutChange: (Int) -> Unit, enabled: Boolean) {
-    val options = listOf(1_000 to "1s", 2_000 to "2s", 3_000 to "3s", 5_000 to "5s")
     Column {
         Text(
             text = stringResource(R.string.ping_timeout_label),
@@ -657,11 +642,11 @@ private fun PingTimeoutRow(timeoutMs: Int, onTimeoutChange: (Int) -> Unit, enabl
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.horizontalScroll(rememberScrollState())
         ) {
-            options.forEach { (ms, label) ->
+            pingTimeoutOptions(timeoutMs).forEach { ms ->
                 FilterChip(
                     selected = timeoutMs == ms,
                     onClick = { if (enabled) onTimeoutChange(ms) },
-                    label = { Text(label) },
+                    label = { Text(pingTimeoutLabel(ms)) },
                     enabled = enabled
                 )
             }
@@ -669,7 +654,6 @@ private fun PingTimeoutRow(timeoutMs: Int, onTimeoutChange: (Int) -> Unit, enabl
     }
 }
 
-// ── Idle panel ────────────────────────────────────────────────────────────────
 
 @Composable
 private fun PingIdlePanel(hasHost: Boolean) {
@@ -703,7 +687,6 @@ private fun PingIdlePanel(hasHost: Boolean) {
     }
 }
 
-// ── Running panel ─────────────────────────────────────────────────────────────
 
 @Composable
 private fun PingRunningPanel(state: PingUiState.Running) {
@@ -757,7 +740,7 @@ private fun PingRunningPanel(state: PingUiState.Running) {
                             MaterialTheme.colorScheme.error
                         LiveStatLabel(
                             label = stringResource(R.string.ping_packet_loss),
-                            value = "${"%.0f".format(liveStats.lossPercent)}%",
+                            value = pingLossLabel(liveStats.lossPercent),
                             color = lossColor
                         )
                         if (liveStats.received > 0) {
@@ -772,12 +755,16 @@ private fun PingRunningPanel(state: PingUiState.Running) {
 
         // Live RTT chart (rolling window in continuous mode)
         if (state.packets.any { it.rtTimeMs != null }) {
-            RttChartCard(packets = state.packets)
+            RttChartCard(
+                packets = state.packets,
+                totalSent = if (state.isContinuous) state.pingsSent else state.packets.size,
+            )
         }
 
-        // Live packet list — bounded to last 50 in continuous mode
+        // Live packet list, bounded to the rolling window in continuous mode
         if (state.packets.isNotEmpty()) {
-            val displayLimit = 50
+            val displayLimit = PING_ROLLING_WINDOW
+            val maxRtt = displayPackets.mapNotNull { it.rtTimeMs }.maxOrNull() ?: 0L
             val displayPackets = if (state.isContinuous) state.packets.takeLast(displayLimit) else state.packets
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -795,7 +782,7 @@ private fun PingRunningPanel(state: PingUiState.Running) {
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
-                        items(displayPackets, key = { it.sequence }) { packet -> PacketRow(packet) }
+                        items(displayPackets, key = { it.sequence }) { packet -> PacketRow(packet, maxRttMs = maxRtt) }
                     }
                 }
             }
@@ -803,7 +790,6 @@ private fun PingRunningPanel(state: PingUiState.Running) {
     }
 }
 
-// ── Finished panel ────────────────────────────────────────────────────────────
 
 @Composable
 private fun PingFinishedPanel(
@@ -832,14 +818,14 @@ private fun PingFinishedPanel(
                 Icon(
                     Icons.Default.Warning,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = stringResource(R.string.ping_interrupted_banner, result.stats.sent),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -852,11 +838,18 @@ private fun PingFinishedPanel(
             )
         }
         // Stats card
-        StatsCard(stats = result.stats)
+        StatsCard(stats = result.stats, interrupted = state.interrupted)
+        Text(
+            text = stringResource(
+                if (result.engine == PingEngineKind.ICMP) R.string.ping_engine_icmp else R.string.ping_engine_reachability,
+            ),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         // RTT chart
         if (result.packets.any { it.rtTimeMs != null }) {
-            RttChartCard(packets = result.packets)
+            RttChartCard(packets = result.packets, totalSent = result.stats.sent)
         }
 
         // Packet list card
@@ -885,10 +878,10 @@ private fun PingFinishedPanel(
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
-                result.packets.forEach { packet ->
-                    PacketRow(packet)
-                    if (packet != result.packets.last()) {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                val maxRtt = result.packets.mapNotNull { it.rtTimeMs }.maxOrNull() ?: 0L
+                LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                    items(result.packets, key = { it.sequence }) { packet ->
+                        PacketRow(packet, maxRttMs = maxRtt)
                     }
                 }
             }
@@ -901,6 +894,11 @@ private fun PingFinishedPanel(
             onToggle = onToggleRaw
         )
 
+        Text(
+            text = stringResource(R.string.ping_export_csv_label),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         // Copy sends the CSV; Share sends the session CSV file when there is one, else the same CSV as text.
         ResultActionsRow(
             copyText = PingCsvSerializer.serialize(result),
@@ -927,7 +925,6 @@ private fun PingFinishedPanel(
     }
 }
 
-// ── Error panel ───────────────────────────────────────────────────────────────
 
 @Composable
 private fun PingErrorPanel(
@@ -944,28 +941,14 @@ private fun PingErrorPanel(
     }
 }
 
-// ── Stats card ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun StatsCard(stats: PingStats) {
-    var targetLoss   by remember { mutableStateOf(0f) }
-    var targetMin    by remember { mutableStateOf(0f) }
-    var targetAvg    by remember { mutableStateOf(0f) }
-    var targetMax    by remember { mutableStateOf(0f) }
-    var targetJitter by remember { mutableStateOf(0f) }
-    LaunchedEffect(stats) {
-        targetLoss   = stats.lossPercent
-        targetMin    = stats.minMs.toFloat()
-        targetAvg    = stats.avgMs.toFloat()
-        targetMax    = stats.maxMs.toFloat()
-        targetJitter = stats.jitterMs.toFloat()
-    }
-    val animSpec = AppMotion.effect<Float>(700)
-    val animLoss    by animateFloatAsState(targetLoss,   animSpec, label = "stat_loss")
-    val animMin     by animateFloatAsState(targetMin,    animSpec, label = "stat_min")
-    val animAvg     by animateFloatAsState(targetAvg,    animSpec, label = "stat_avg")
-    val animMax     by animateFloatAsState(targetMax,    animSpec, label = "stat_max")
-    val animJitter  by animateFloatAsState(targetJitter, animSpec, label = "stat_jitter")
+private fun StatsCard(stats: PingStats, interrupted: Boolean = false) {
+    val animLoss = stats.lossPercent
+    val animMin = stats.minMs.toFloat()
+    val animAvg = stats.avgMs.toFloat()
+    val animMax = stats.maxMs.toFloat()
+    val animJitter = stats.jitterMs.toFloat()
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -1006,12 +989,13 @@ private fun StatsCard(stats: PingStats) {
                 )
                 StatItem(
                     label = stringResource(R.string.ping_packet_loss),
-                    value = "${"%.0f".format(animLoss)}%",
+                    value = pingLossLabel(animLoss),
                     // Red is reserved for loss; a clean run reads as neutral, not as a success colour.
-                    color = if (stats.lossPercent == 0f)
-                        MaterialTheme.colorScheme.onSurface
-                    else
-                        MaterialTheme.colorScheme.error
+                    color = when {
+                        interrupted -> MaterialTheme.colorScheme.onSurfaceVariant
+                        stats.lossPercent == 0f -> MaterialTheme.colorScheme.onSurface
+                        else -> MaterialTheme.colorScheme.error
+                    }
                 )
             }
             if (stats.received > 0) {
@@ -1088,10 +1072,9 @@ private fun LiveStatLabel(label: String, value: String, color: Color = MaterialT
     }
 }
 
-// ── RTT chart ─────────────────────────────────────────────────────────────────
 
 @Composable
-private fun RttChartCard(packets: List<PingPacketResult>) {
+private fun RttChartCard(packets: List<PingPacketResult>, totalSent: Int) {
     val successfulPackets = packets.filter { it.status == PingStatus.SUCCESS && it.rtTimeMs != null }
     val successfulRtts = successfulPackets.mapNotNull { it.rtTimeMs }
     if (successfulRtts.isEmpty()) return
@@ -1138,6 +1121,14 @@ private fun RttChartCard(packets: List<PingPacketResult>) {
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(modifier = Modifier.height(12.dp))
+            if (totalSent > packets.size) {
+                Text(
+                    text = stringResource(R.string.ping_chart_window, packets.size),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1158,7 +1149,7 @@ private fun RttChartCard(packets: List<PingPacketResult>) {
                         strokeWidth = 1f
                     )
                     val rttAtLine = maxRtt * (gridLines - 1 - i) / (gridLines - 1)
-                    val labelText = "${rttAtLine}ms"
+                    val labelText = pingAxisLabel(rttAtLine.toFloat(), "ms")
                     val measured = textMeasurer.measure(labelText, style = labelStyle)
                     drawText(
                         textLayoutResult = measured,
@@ -1212,7 +1203,8 @@ private fun RttChartCard(packets: List<PingPacketResult>) {
                     val y = if (packet.status == PingStatus.SUCCESS && rtt != null)
                         chartHeight - edgePad - (rtt.toFloat() / maxRtt) * (chartHeight - 2 * edgePad)
                     else
-                        chartHeight - edgePad
+                        // Failed probes sit on the top edge so they never read as a 0 ms sample.
+                        edgePad
                     drawCircle(color = dotColor, radius = 5f, center = Offset(x, y))
                     drawCircle(color = dotColor.copy(alpha = 0.3f), radius = 9f, center = Offset(x, y))
                 }
@@ -1221,21 +1213,12 @@ private fun RttChartCard(packets: List<PingPacketResult>) {
     }
 }
 
-// ── Packet row ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun PacketRow(packet: PingPacketResult) {
-    var targetAlpha by remember { mutableStateOf(0f) }
-    LaunchedEffect(Unit) { targetAlpha = 1f }
-    val animatedAlpha by animateFloatAsState(
-        targetValue = targetAlpha,
-        animationSpec = spring(stiffness = Spring.StiffnessLow),
-        label = "packet_alpha"
-    )
+private fun PacketRow(packet: PingPacketResult, maxRttMs: Long) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(animatedAlpha)
             .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -1278,8 +1261,8 @@ private fun PacketRow(packet: PingPacketResult) {
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.weight(1f)
                 )
-                // Simple bar proportional to RTT (relative to 200ms max)
-                val rtRatio = ((packet.rtTimeMs ?: 0L).toFloat() / 200f).coerceIn(0f, 1f)
+                // Bar scaled to the slowest packet in the list
+                val rtRatio = pingBarFraction(packet.rtTimeMs ?: 0L, maxRttMs)
                 Box(
                     modifier = Modifier
                         .width(80.dp)
@@ -1335,7 +1318,6 @@ private fun PacketRow(packet: PingPacketResult) {
     }
 }
 
-// ── Raw output card ───────────────────────────────────────────────────────────
 
 @Composable
 private fun RawOutputCard(
@@ -1359,10 +1341,10 @@ private fun RawOutputCard(
                 )
                 Row {
                     if (showRaw) {
-                        IconButton(onClick = {
-                            copyRaw(rawOutput)
-                        }) {
-                            Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.ping_copy_raw))
+                        TextButton(onClick = { copyRaw(rawOutput) }) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(stringResource(R.string.ping_copy_raw))
                         }
                     }
                     IconButton(onClick = onToggle) {

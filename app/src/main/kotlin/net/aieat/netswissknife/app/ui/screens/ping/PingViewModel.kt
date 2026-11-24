@@ -190,7 +190,6 @@ class PingViewModel @Inject constructor(
         // The operation's finally block closes native/socket resources. Keep this
         // join alive if the screen's ViewModel is cleared while cleanup is blocked.
         private val lifecycleCleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        private const val ROLLING_WINDOW = 100
         private const val HANDOFF_CONSUMED_KEY = "pingHandoffConsumed"
         private const val HANDOFF_SOURCE_KEY = "pingHandoffSource"
         private const val EDITED_HOST_KEY = "editedHost"
@@ -491,7 +490,7 @@ class PingViewModel @Inject constructor(
         val trimmedHost = HostValidator.normalize(_host.value) ?: _host.value.trim()
         val availability = availabilityFor(trimmedHost)
         if (!availability.allowed) {
-            _uiState.value = PingUiState.Error(availability.denialMessage())
+            _uiState.value = availabilityError(availability)
             return
         }
         val params = PingParams(
@@ -547,7 +546,10 @@ class PingViewModel @Inject constructor(
                 val current = _uiState.value
                 if (pingOperationSession === operationSession && current is PingUiState.Running) {
                     _uiState.value = when {
-                        current.packets.isEmpty() -> PingUiState.Error("No response received from $trimmedHost")
+                        current.packets.isEmpty() -> PingUiState.Error(
+                            UiText.Res(R.string.ping_error_no_response, listOf(trimmedHost)),
+                            "No response received from $trimmedHost",
+                        )
                         isUnresolvedHostRun(current.packets) -> unresolvedHostState(trimmedHost, current.packets)
                         else -> PingUiState.Finished(buildResult(current.host, current.packets, params.count))
                     }
@@ -556,7 +558,7 @@ class PingViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 if (pingOperationSession === operationSession) {
-                    _uiState.value = PingUiState.Error(e.message ?: "Ping failed")
+                    _uiState.value = genericPingError(e)
                 }
             } finally {
                 if (pingOperationSession === operationSession) pingOperationSession = null
@@ -576,10 +578,14 @@ class PingViewModel @Inject constructor(
         val trimmedHost = HostValidator.normalize(_host.value) ?: _host.value.trim()
         val availability = availabilityFor(trimmedHost)
         if (!availability.allowed || availability.reason == AvailabilityReason.CONNECTIVITY_UNVALIDATED) {
-            _uiState.value = PingUiState.Error(
-                if (availability.allowed) "Continuous ping requires validated connectivity"
-                else availability.denialMessage(),
-            )
+            _uiState.value = if (availability.allowed) {
+                PingUiState.Error(
+                    UiText.Res(R.string.ping_error_connectivity_unvalidated),
+                    "Continuous ping requires validated connectivity",
+                )
+            } else {
+                availabilityError(availability)
+            }
             return
         }
         val params = ContinuousPingParams(
@@ -629,7 +635,7 @@ class PingViewModel @Inject constructor(
         )
 
         val producer = viewModelScope.launch(start = CoroutineStart.LAZY) {
-            val window = ArrayDeque<PingPacketResult>(ROLLING_WINDOW)
+            val window = ArrayDeque<PingPacketResult>(PING_ROLLING_WINDOW)
             val stats = PingStatsAccumulator()
             var seq = 0
             var savedToRecents = false
@@ -648,7 +654,7 @@ class PingViewModel @Inject constructor(
                             }
                             session.logWriter.append(seq, result.packet)
                             stats.add(result.packet)
-                            if (window.size >= ROLLING_WINDOW) window.removeFirst()
+                            if (window.size >= PING_ROLLING_WINDOW) window.removeFirst()
                             window.addLast(result.packet)
                             _uiState.value = PingUiState.Running(
                                 host = trimmedHost,
@@ -681,7 +687,7 @@ class PingViewModel @Inject constructor(
                 if (continuousSession === session) {
                     continuousSession = null
                     session.file.deleteSessionLog()
-                    _uiState.value = PingUiState.Error(e.message ?: "Ping failed")
+                    _uiState.value = genericPingError(e)
                 }
             }
         }
@@ -705,6 +711,20 @@ class PingViewModel @Inject constructor(
             status = networkStatusProvider.status.value,
             localNetworkPermissionAllowed = localPermission,
         )
+    }
+
+    private fun availabilityError(availability: OperationAvailability): PingUiState.Error {
+        val text = when (availability.reason) {
+            AvailabilityReason.NO_ROUTE -> UiText.Res(R.string.ping_error_no_route)
+            AvailabilityReason.LOCAL_NETWORK_PERMISSION_DENIED -> UiText.Res(R.string.ping_error_local_permission)
+            else -> UiText.Res(R.string.ping_error_unavailable)
+        }
+        return PingUiState.Error(text, availability.denialMessage())
+    }
+
+    private fun genericPingError(e: Exception): PingUiState.Error {
+        val developerMessage = e.message ?: "Ping failed"
+        return PingUiState.Error(UiText.Res(R.string.ping_error_generic), developerMessage)
     }
 
     private fun typedError(info: ErrorInfo, developerMessage: String): PingUiState.Error =
@@ -832,12 +852,8 @@ class PingViewModel @Inject constructor(
     ): String = buildString {
         val firstPacket = packets.firstOrNull()
         val resolvedIp = firstPacket?.fromIp
-        val engine = firstPacket?.engine ?: observedEngine()
-        appendLine(
-            "PING $host${resolvedIp?.let { " ($it)" } ?: ""}: " +
-                "${_payloadBytes.value} data bytes, ttl ${_ttl.value}, " +
-                "engine ${if (engine == PingEngineKind.ICMP) "ICMP" else "Reachability (ICMP/TCP fallback)"}"
-        )
+        val engine = firstPacket?.engine ?: observedEngine() ?: PingEngineKind.REACHABILITY
+        appendLine(pingRawHeader(host, resolvedIp, _payloadBytes.value, _ttl.value, engine))
         appendLine()
         packets.forEach { p ->
             when (p.status) {
