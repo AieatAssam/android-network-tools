@@ -5,19 +5,22 @@ import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import kotlin.math.roundToLong
 
-/** How steady the arriving hop's replies were; drawn as the arc's dash pattern. */
+/** The arc's line pattern. Each pattern has one meaning. */
 enum class Stability {
-    /** Every probe answered and jitter is low (solid line). */
+    /** Two or more probes, every one answered, low jitter (solid line). */
     STABLE,
 
-    /** A probe was lost or jitter is high (dashed line). */
+    /** A probe was lost or jitter is high (dotted line). */
     UNSTABLE,
 
-    /** Only one probe was sent, so stability cannot be judged (solid line, explained by the legend). */
+    /** The arriving hop sent one probe, so stability was not measured (dash-dot line). */
     NOT_MEASURED,
 
-    /** The arc bridges hops that did not answer, have no location, or have a disputed location (dotted line). */
-    INFERRED,
+    /**
+     * The path runs through hops that did not answer, have no location, or have a disputed one. Nothing
+     * about it is measured: grey dashed line, with no latency, speed or stability claim.
+     */
+    UNKNOWN,
 }
 
 /** Distance covered per ms of added RTT, against light in fibre; drawn as the arc's width. */
@@ -84,11 +87,21 @@ data class RouteStop(
     }
 }
 
+/**
+ * Identifies an arc by the first hop of the stops it joins, so it keeps its identity while a running
+ * trace adds hops and an arc that is drawn once is not drawn again.
+ */
+data class SegmentKey(
+    val fromHop: Int,
+    val toHop: Int,
+)
+
 /** An arc between two consecutive [TraceRouteMap.stops]. */
 data class RouteSegment(
     val fromStop: Int,
     val toStop: Int,
-    /** RTT of the arriving hop, the value its hop list row shows; sets the colour. */
+    val key: SegmentKey,
+    /** RTT of the arriving hop, the value its hop list row shows; sets the colour. Null for an unknown path. */
     val rttMs: Long?,
     val probes: ProbeStats,
     val distanceKm: Double,
@@ -97,6 +110,19 @@ data class RouteSegment(
     val speedFraction: Double?,
     val speed: SpeedBand,
     val stability: Stability,
+) {
+    val isUnknown: Boolean get() = stability == Stability.UNKNOWN
+}
+
+/**
+ * Hops after the last stop on the route: [noReply] sent nothing back and [notLocated] answered but have
+ * no location yet. A disputed hop in the range is drawn as its own marker, so it is in neither count.
+ */
+data class TrailingHops(
+    val firstHop: Int,
+    val lastHop: Int,
+    val notLocated: Int,
+    val noReply: Int,
 )
 
 /** Thresholds for the map's line width and dash pattern. */
@@ -145,7 +171,7 @@ object RouteClassification {
     ): Stability {
         val jitter = probes.jitterMs
         return when {
-            skippedHops > 0 -> Stability.INFERRED
+            skippedHops > 0 -> Stability.UNKNOWN
             probes.sent < 2 -> Stability.NOT_MEASURED
             probes.answered < probes.sent -> Stability.UNSTABLE
             jitter != null && isHighJitter(jitter, probes) -> Stability.UNSTABLE
@@ -168,14 +194,23 @@ object RouteClassification {
  * The device's own location is unknown (its first hops are private), so the route starts
  * at the first located hop. Hops whose GeoIP position the RTTs contradict (see
  * [GeoPlausibility.implausibleHops]) are kept out of the arc chain and listed in
- * [disputedStops]; the arc across them is drawn as inferred, with no speed claim.
+ * [disputedStops]; the arc across them is an unknown path, like one across hops with no reply or
+ * no location.
  */
 data class TraceRouteMap(
     val stops: List<RouteStop>,
     val segments: List<RouteSegment>,
     val disputedStops: List<RouteStop>,
+    /** Hops after the last stop, which the map cannot place yet. */
+    val trailing: TrailingHops? = null,
 ) {
     val isEmpty: Boolean get() = stops.isEmpty() && disputedStops.isEmpty()
+
+    /** The newest stop on the route; marked as the head of a running trace. */
+    val head: RouteStop? get() = stops.lastOrNull()
+
+    /** The line patterns the map draws, so the legend lists only those. */
+    val linePatterns: Set<Stability> get() = segments.mapTo(mutableSetOf()) { it.stability }
 
     /** First hop drawn on the map, or null when no hop is located. */
     val firstLocatedHop: Int? get() = (stops + disputedStops).flatMap { it.hopNumbers }.minOrNull()
@@ -207,7 +242,34 @@ data class TraceRouteMap(
                 }
                 if (!isDisputed) previousLon = lon
             }
-            return TraceRouteMap(stops, segmentsOf(stops, ordered, disputed), disputedStops)
+            return TraceRouteMap(
+                stops = stops,
+                segments = segmentsOf(stops, ordered),
+                disputedStops = disputedStops,
+                trailing = trailingOf(stops, ordered, disputed),
+            )
+        }
+
+        private fun trailingOf(
+            stops: List<RouteStop>,
+            ordered: List<HopResult>,
+            disputed: Set<Int>,
+        ): TrailingHops? {
+            val lastStopHop =
+                stops
+                    .lastOrNull()
+                    ?.hops
+                    ?.last()
+                    ?.hopNumber
+            val after = ordered.filter { lastStopHop != null && it.hopNumber > lastStopHop }
+            if (after.isEmpty()) return null
+            val placeable = after.filter { it.hopNumber !in disputed }
+            return TrailingHops(
+                firstHop = after.first().hopNumber,
+                lastHop = after.last().hopNumber,
+                notLocated = placeable.count { it.ip != null && it.geoLocation == null },
+                noReply = placeable.count { it.ip == null },
+            )
         }
 
         /**
@@ -236,18 +298,17 @@ data class TraceRouteMap(
         private fun segmentsOf(
             stops: List<RouteStop>,
             ordered: List<HopResult>,
-            disputed: Set<Int>,
         ): List<RouteSegment> =
             stops.zipWithNext().mapIndexed { index, (from, to) ->
                 val arriving = to.hops.first()
                 val fromLast = from.hops.last().hopNumber
                 val between = ordered.filter { it.hopNumber > fromLast && it.hopNumber < arriving.hopNumber }
-                val bridgesDisputed = between.any { it.hopNumber in disputed }
+                val unknown = between.isNotEmpty()
                 val distanceKm = GeoPlausibility.distanceKm(from.location, to.location)
                 val anchorRtt = from.hops.lastOrNull { it.fastestRtt() != null }?.fastestRtt()
                 val arrivingRtt = arriving.fastestRtt()
                 val fraction =
-                    if (anchorRtt == null || arrivingRtt == null || bridgesDisputed) {
+                    if (anchorRtt == null || arrivingRtt == null || unknown) {
                         null
                     } else {
                         RouteClassification.speedFraction(distanceKm, (arrivingRtt - anchorRtt).toDouble())
@@ -256,7 +317,8 @@ data class TraceRouteMap(
                 RouteSegment(
                     fromStop = index,
                     toStop = index + 1,
-                    rttMs = arriving.rtTimeMs,
+                    key = SegmentKey(fromHop = from.hops.first().hopNumber, toHop = arriving.hopNumber),
+                    rttMs = arriving.rtTimeMs.takeUnless { unknown },
                     probes = probes,
                     distanceKm = distanceKm,
                     skippedHops = between.size,

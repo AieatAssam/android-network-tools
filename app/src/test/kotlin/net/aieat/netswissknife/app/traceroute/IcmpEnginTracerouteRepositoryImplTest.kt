@@ -189,6 +189,33 @@ class IcmpEnginTracerouteRepositoryImplTest {
         }
 
     @Test
+    fun `an earlier hop that times out after the destination answered still reaches the user`() =
+        runBlocking {
+            val repository =
+                IcmpEnginTracerouteRepositoryImpl(
+                    nativeTraceFactory = { _, _, _, _, _, _, _ ->
+                        flow {
+                            (1..6).forEach { emit(HopResult(it, "192.0.2.$it", null, 3L, HopStatus.SUCCESS)) }
+                            (8..10).forEach { emit(HopResult(it, "192.0.2.$it", null, 3L, HopStatus.SUCCESS)) }
+                            emit(HopResult(11, "1.1.1.1", null, 21L, HopStatus.SUCCESS, destinationReached = true))
+                            emit(HopResult(12, "1.1.1.1", null, 21L, HopStatus.SUCCESS, destinationReached = true))
+                            // Hop 7's probe times out only after the destination replied.
+                            emit(HopResult(7, null, null, null, HopStatus.TIMEOUT, probeRttsMs = listOf(null)))
+                            emit(HopResult(13, "1.1.1.1", null, 21L, HopStatus.SUCCESS, destinationReached = true))
+                        }
+                    },
+                    hostResolver = TracerouteHostResolver { _, _ -> "1.1.1.1" },
+                )
+
+            val hops =
+                withTimeout(5_000) {
+                    repository.trace("1.1.1.1", 30, 500, 1, TracerouteProbeType.ICMP, 56).toList()
+                }
+
+            assertEquals((1..11).toList(), hops.map { it.hopNumber }.sorted())
+        }
+
+    @Test
     fun `replies that all come from this device stop the trace early as unreachable`() =
         runBlocking {
             val device = "10.109.208.146"

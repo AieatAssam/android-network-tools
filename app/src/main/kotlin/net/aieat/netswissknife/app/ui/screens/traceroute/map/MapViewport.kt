@@ -4,6 +4,7 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 
 /** Bounding box of map points; longitudes may lie outside ±180 after antimeridian unwrapping. */
 data class GeoBounds(
@@ -68,6 +69,35 @@ data class MapViewport(
             .filter { offset ->
                 centerLon + halfSpan > offset - HALF_WORLD && centerLon - halfSpan < offset + HALF_WORLD
             }
+    }
+
+    /** True when ([lat], [lon]) is on screen, at least [marginFraction] of the canvas size from each edge. */
+    fun shows(
+        lat: Double,
+        lon: Double,
+        widthPx: Float,
+        heightPx: Float,
+        marginFraction: Double,
+    ): Boolean {
+        val x = xOf(lon, widthPx)
+        val y = yOf(lat, heightPx)
+        val marginX = widthPx * marginFraction
+        val marginY = heightPx * marginFraction
+        return x >= marginX && x <= widthPx - marginX && y >= marginY && y <= heightPx - marginY
+    }
+
+    /** The view [t] of the way from this one to [to]: the centre moves evenly and the zoom changes evenly. */
+    fun lerp(
+        to: MapViewport,
+        t: Float,
+    ): MapViewport {
+        val f = t.coerceIn(0f, 1f).toDouble()
+        if (f == 0.0 || f == 1.0) return if (f == 0.0) this else to
+        return MapViewport(
+            centerLon = centerLon + (to.centerLon - centerLon) * f,
+            centerLat = centerLat + (to.centerLat - centerLat) * f,
+            pxPerDegree = pxPerDegree * (to.pxPerDegree / pxPerDegree).pow(f),
+        )
     }
 
     /** True when this view is closer than [fitted], the automatic fit of the route. */

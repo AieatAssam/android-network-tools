@@ -24,10 +24,10 @@ import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
+import net.aieat.netswissknife.core.network.traceroute.TraceCompletion
 import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
 import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
 import net.aieat.netswissknife.core.network.traceroute.TracerouteRepository
-import net.aieat.netswissknife.core.network.traceroute.TracerouteStopPolicy
 
 /**
  * [TracerouteRepository] implementation powered by the **icmpenguin** library.
@@ -134,7 +134,7 @@ class IcmpEnginTracerouteRepositoryImpl(
                             throw failure
                         }.map { hop ->
                             hop.copy(resolvedDestinationIp = resolvedHost.takeIf(String::isNotBlank))
-                        }.untilTraceFinishes(deviceAddresses)
+                        }.untilTraceFinishes(probesPerHop, deviceAddresses)
                         .collect { hop ->
                             currentCoroutineContext().ensureActive()
                             operationSession.budget.throwIfExpired()
@@ -146,17 +146,19 @@ class IcmpEnginTracerouteRepositoryImpl(
 }
 
 /**
- * Passes hops until [TracerouteStopPolicy] says the trace is finished (destination reached, or every
- * reply came from this device). Probes already in flight for later TTLs are dropped here.
+ * Passes hops until [TraceCompletion] says the route is complete (every TTL up to the destination has
+ * reported, or every reply came from this device). Probes for TTLs past the destination are dropped.
  */
-private fun Flow<HopResult>.untilTraceFinishes(deviceAddresses: Set<String>): Flow<HopResult> =
+private fun Flow<HopResult>.untilTraceFinishes(
+    probesPerHop: Int,
+    deviceAddresses: Set<String>,
+): Flow<HopResult> =
     flow {
-        val observed = mutableListOf<HopResult>()
+        val completion = TraceCompletion(probesPerHop, deviceAddresses)
         emitAll(
             transformWhile { hop ->
-                observed += hop
-                emit(hop)
-                TracerouteStopPolicy.stopAfter(observed, deviceAddresses) == null
+                if (completion.accept(hop)) emit(hop)
+                !completion.isFinished
             },
         )
     }

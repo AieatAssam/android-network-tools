@@ -230,6 +230,10 @@ extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension> {
                     // Traceroute route map: pure model, geometry and asset parser (no Compose).
                     "net.aieat.netswissknife.app.ui.screens.traceroute.map.*",
                     "net.aieat.netswissknife.app.ui.screens.TraceLatencyBand*",
+                    // Traceroute hop rows, summary counts and slider stops.
+                    "net.aieat.netswissknife.app.ui.screens.traceroute.TraceSummary*",
+                    "net.aieat.netswissknife.app.ui.screens.traceroute.HopListRow*",
+                    "net.aieat.netswissknife.app.ui.screens.traceroute.SliderScale*",
                     "net.aieat.netswissknife.app.data.AppPreferenceKeys",
                     "net.aieat.netswissknife.app.data.RecentHostsRepository",
                     "net.aieat.netswissknife.app.platform.LinkInfoMapper",

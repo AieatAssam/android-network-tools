@@ -109,7 +109,7 @@ class TracerouteUseCase(
                     ).collect { hop ->
                         observed += hop
                         output.send(TracerouteFlowResult.Hop(hop))
-                        val hopIp = hop.ip ?: return@collect
+                        val hopIp = hop.ip?.takeIf { observed.isFirstReportOf(hop) } ?: return@collect
 
                         launch {
                             val hostnameLookup = async {
@@ -190,4 +190,10 @@ class TracerouteUseCase(
     private companion object {
         const val MAX_ENRICHMENT_CONCURRENCY = 4
     }
+}
+
+/** A hop is reported again as each of its probes completes; its address is looked up only once. */
+private fun List<HopResult>.isFirstReportOf(hop: HopResult): Boolean {
+    val reports = count { it.hopNumber == hop.hopNumber && it.ip == hop.ip }
+    return reports == 1
 }

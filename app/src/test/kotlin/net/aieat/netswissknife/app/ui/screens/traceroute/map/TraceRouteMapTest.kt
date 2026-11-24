@@ -121,19 +121,21 @@ class TraceRouteMapTest {
     @DisplayName("segments")
     inner class Segments {
         @Test
-        fun `a segment carries the arriving hop's RTT, probe results, distance and skipped hops`() {
+        fun `a segment carries the arriving hop's RTT, probe results and distance`() {
             val map =
                 TraceRouteMap.from(
-                    listOf(hop(3, london, listOf(10L, 11L, 12L)), timeout(4), hop(5, newYork, listOf(80L, null, 85L))),
+                    listOf(hop(3, london, listOf(10L, 11L, 12L)), hop(4, newYork, listOf(80L, null, 85L))),
                 )
 
             val segment = map.segments.single()
             assertEquals(0, segment.fromStop)
             assertEquals(1, segment.toStop)
+            assertEquals(SegmentKey(fromHop = 3, toHop = 4), segment.key)
             assertEquals(80L, segment.rttMs)
             assertEquals(ProbeStats(sent = 3, answered = 2, fastestMs = 80L, jitterMs = 5L), segment.probes)
             assertEquals(GeoPlausibility.distanceKm(london, newYork), segment.distanceKm, 1e-6)
-            assertEquals(1, segment.skippedHops)
+            assertEquals(0, segment.skippedHops)
+            assertFalse(segment.isUnknown)
         }
 
         @Test
@@ -195,11 +197,12 @@ class TraceRouteMapTest {
         }
 
         @Test
-        fun `the arc bridging a disputed hop is drawn as inferred`() {
+        fun `the arc bridging a disputed hop is an unknown path`() {
             val segment = TraceRouteMap.from(hops).segments.single()
 
             assertEquals(1, segment.skippedHops)
-            assertEquals(Stability.INFERRED, segment.stability)
+            assertEquals(Stability.UNKNOWN, segment.stability)
+            assertNull(segment.rttMs)
         }
 
         @Test
@@ -262,9 +265,25 @@ class TraceRouteMapTest {
         }
 
         @Test
-        fun `skipped hops make the path inferred, whatever the probes say`() {
-            assertEquals(Stability.INFERRED, stabilityOf(listOf(40L, 41L), skipped = 2))
-            assertEquals(Stability.INFERRED, stabilityOf(listOf(40L), skipped = 1))
+        fun `skipped hops make the path unknown, whatever the probes say`() {
+            assertEquals(Stability.UNKNOWN, stabilityOf(listOf(40L, 41L), skipped = 2))
+            assertEquals(Stability.UNKNOWN, stabilityOf(listOf(40L), skipped = 1))
+        }
+
+        @Test
+        fun `a single-probe hop on a route probed more than once is not drawn as stable`() {
+            val map =
+                TraceRouteMap.from(
+                    listOf(
+                        hop(3, london, listOf(10L, 11L)),
+                        hop(4, paris, listOf(14L, 15L)),
+                        hop(5, frankfurt, listOf(20L)),
+                    ),
+                )
+
+            assertTrue(map.stabilityMeasurable)
+            assertEquals(listOf(Stability.STABLE, Stability.NOT_MEASURED), map.segments.map { it.stability })
+            assertEquals(setOf(Stability.STABLE, Stability.NOT_MEASURED), map.linePatterns)
         }
 
         @Test
@@ -351,6 +370,160 @@ class TraceRouteMapTest {
             val segment = TraceRouteMap.from(hops).segments.single()
 
             assertEquals(SpeedBand.UNKNOWN, segment.speed)
+        }
+    }
+
+    @Nested
+    @DisplayName("hops with unknown information")
+    inner class UnknownHops {
+        @Test
+        fun `unknown hops at the start are left out, the route starts at the first located hop`() {
+            val map = TraceRouteMap.from(listOf(timeout(1), hop(2), hop(3, london), hop(4, paris)))
+
+            assertEquals(3, map.firstLocatedHop)
+            assertFalse(map.segments.single().isUnknown)
+            assertNull(map.trailing)
+        }
+
+        @Test
+        fun `unknown hops in the middle are bridged by a dashed path with no latency, speed or stability claim`() {
+            val map =
+                TraceRouteMap.from(
+                    listOf(hop(3, london, listOf(10L, 11L)), timeout(4), hop(5), hop(6, newYork, listOf(80L, 81L))),
+                )
+
+            val bridge = map.segments.single()
+            assertTrue(bridge.isUnknown)
+            assertEquals(Stability.UNKNOWN, bridge.stability)
+            assertEquals(2, bridge.skippedHops)
+            assertNull(bridge.rttMs)
+            assertNull(bridge.speedFraction)
+            assertEquals(SpeedBand.UNKNOWN, bridge.speed)
+            assertEquals(SegmentKey(fromHop = 3, toHop = 6), bridge.key)
+            // The stop itself still carries its measured RTT.
+            assertEquals(
+                80L,
+                map.stops
+                    .last()
+                    .hops
+                    .first()
+                    .rtTimeMs,
+            )
+        }
+
+        @Test
+        fun `unknown hops at the end are counted, not drawn`() {
+            val map =
+                TraceRouteMap.from(
+                    listOf(hop(3, london), hop(4, paris), hop(5), hop(6), timeout(7), timeout(8)),
+                )
+
+            assertEquals(1, map.segments.size)
+            assertEquals(TrailingHops(firstHop = 5, lastHop = 8, notLocated = 2, noReply = 2), map.trailing)
+        }
+
+        @Test
+        fun `a disputed hop after the last stop is drawn, so it is not counted as unlocated`() {
+            val map = TraceRouteMap.from(listOf(hop(3, london, listOf(10L)), hop(4, sydney, listOf(12L)), timeout(5)))
+
+            assertEquals(TrailingHops(firstHop = 4, lastHop = 5, notLocated = 0, noReply = 1), map.trailing)
+        }
+
+        @Test
+        fun `when no hop is located the map is empty and draws nothing`() {
+            val map = TraceRouteMap.from(listOf(hop(1), timeout(2), hop(3)))
+
+            assertTrue(map.isEmpty)
+            assertTrue(map.segments.isEmpty())
+            assertNull(map.head)
+            assertNull(map.trailing)
+        }
+
+        @Test
+        fun `a single located hop is the head of the route, with the hops after it counted`() {
+            val map = TraceRouteMap.from(listOf(hop(1), hop(2, frankfurt), hop(3)))
+
+            assertEquals(listOf(2), map.head?.hopNumbers)
+            assertTrue(map.segments.isEmpty())
+            assertEquals(TrailingHops(firstHop = 3, lastHop = 3, notLocated = 1, noReply = 0), map.trailing)
+        }
+
+        @Test
+        fun `the legend patterns list only what the map draws`() {
+            val map =
+                TraceRouteMap.from(
+                    listOf(hop(3, london, listOf(10L, null)), timeout(4), hop(5, newYork, listOf(80L, 81L))),
+                )
+
+            assertEquals(setOf(Stability.UNKNOWN), map.linePatterns)
+            assertTrue(TraceRouteMap.from(emptyList()).linePatterns.isEmpty())
+        }
+    }
+
+    @Nested
+    @DisplayName("live updates")
+    inner class LiveUpdates {
+        private val route =
+            listOf(
+                hop(1),
+                hop(2, london, listOf(5L, 6L)),
+                hop(3, paris, listOf(9L, 10L)),
+                hop(4, frankfurt, listOf(15L, 16L)),
+                hop(5, newYork, listOf(85L, 86L), destination = true),
+            )
+
+        @Test
+        fun `each new hop adds a segment and keeps the keys of the segments already drawn`() {
+            val keysPerStep = (1..route.size).map { n -> TraceRouteMap.from(route.take(n)).segments.map { it.key } }
+
+            keysPerStep.zipWithNext().forEach { (before, after) ->
+                assertEquals(before, after.take(before.size))
+            }
+            assertEquals(
+                listOf(SegmentKey(2, 3), SegmentKey(3, 4), SegmentKey(4, 5)),
+                keysPerStep.last(),
+            )
+        }
+
+        @Test
+        fun `the head is the newest located stop`() {
+            assertEquals(listOf(3), TraceRouteMap.from(route.take(3)).head?.hopNumbers)
+            assertEquals(listOf(5), TraceRouteMap.from(route).head?.hopNumbers)
+        }
+
+        @Test
+        fun `a hop whose location has not arrived yet is counted as not located`() {
+            val pending = route.take(3) + route[3].copy(geoLocation = null)
+
+            val map = TraceRouteMap.from(pending)
+
+            assertEquals(listOf(SegmentKey(2, 3)), map.segments.map { it.key })
+            assertEquals(TrailingHops(firstHop = 4, lastHop = 4, notLocated = 1, noReply = 0), map.trailing)
+        }
+
+        @Test
+        fun `a late location replaces the unknown bridge with measured segments`() {
+            val pending = route.take(3) + route[3].copy(geoLocation = null) + route[4]
+            val before = TraceRouteMap.from(pending)
+            assertEquals(listOf(SegmentKey(2, 3), SegmentKey(3, 5)), before.segments.map { it.key })
+            assertTrue(before.segments.last().isUnknown)
+
+            val after = TraceRouteMap.from(route)
+
+            assertEquals(listOf(SegmentKey(2, 3), SegmentKey(3, 4), SegmentKey(4, 5)), after.segments.map { it.key })
+            assertFalse(after.segments.any { it.isUnknown })
+            assertNull(after.trailing)
+        }
+
+        @Test
+        fun `a hop that joins an existing stop keeps that stop's segment key`() {
+            val sameCity = listOf(hop(2, london, listOf(5L, 6L)), hop(3, paris, listOf(9L, 10L)))
+            val grown = sameCity + hop(4, paris, listOf(11L, 12L))
+
+            assertEquals(
+                TraceRouteMap.from(sameCity).segments.map { it.key },
+                TraceRouteMap.from(grown).segments.map { it.key },
+            )
         }
     }
 }

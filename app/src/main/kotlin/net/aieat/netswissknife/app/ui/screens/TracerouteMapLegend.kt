@@ -99,21 +99,28 @@ private fun CalloutHopRow(
     }
 }
 
-/** Text legend for every visual channel; colour is never the only signal. */
+/**
+ * Text legend for every visual channel the map draws, and only those; colour is never the only signal.
+ * While [live], the ring marking the newest stop is explained too.
+ */
 @Composable
 internal fun MapLegend(
     map: TraceRouteMap,
+    live: Boolean,
     colorFor: (Long?) -> Color,
 ) {
     Column(modifier = Modifier.testTag("traceroute_map_legend"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (map.segments.isNotEmpty()) {
+        if (map.segments.any { !it.isUnknown }) {
             LegendHeading(stringResource(R.string.traceroute_map_legend_colour))
             TraceLatencyBand.entries.filter { it != TraceLatencyBand.UNKNOWN }.forEach { band ->
                 LegendRow(bandLabel(band), colorFor(band.lowerBoundMs), ArcWidthMedium, Stability.STABLE)
             }
             WidthLegend()
-            LineLegend(stabilityMeasurable = map.stabilityMeasurable)
         }
+        if (map.segments.isNotEmpty()) {
+            LineLegend(map.linePatterns, map.stabilityMeasurable, colorFor(null))
+        }
+        if (live && map.head != null) LegendNote(stringResource(R.string.traceroute_map_marker_head))
         if ((map.stops + map.disputedStops).any { it.isDestination }) {
             LegendNote(stringResource(R.string.traceroute_map_marker_destination))
         }
@@ -139,22 +146,32 @@ private fun WidthLegend() {
 }
 
 @Composable
-private fun LineLegend(stabilityMeasurable: Boolean) {
+private fun LineLegend(
+    patterns: Set<Stability>,
+    stabilityMeasurable: Boolean,
+    unknownColor: Color,
+) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     LegendHeading(stringResource(R.string.traceroute_map_legend_line))
-    if (stabilityMeasurable) {
+    if (Stability.STABLE in patterns) {
         LegendRow(stringResource(R.string.traceroute_map_line_solid), muted, ArcWidthMedium, Stability.STABLE)
+    }
+    if (Stability.UNSTABLE in patterns) {
         val jitterPct = (RouteClassification.HIGH_JITTER_MIN_FRACTION * PERCENT).roundToInt()
         LegendRow(
-            stringResource(R.string.traceroute_map_line_dashed, RouteClassification.HIGH_JITTER_MIN_MS, jitterPct),
+            stringResource(R.string.traceroute_map_line_dotted, RouteClassification.HIGH_JITTER_MIN_MS, jitterPct),
             muted,
             ArcWidthMedium,
             Stability.UNSTABLE,
         )
-    } else {
-        LegendNote(stringResource(R.string.traceroute_map_stability_needs_probes))
     }
-    LegendRow(stringResource(R.string.traceroute_map_line_dotted), muted, ArcWidthMedium, Stability.INFERRED)
+    if (Stability.NOT_MEASURED in patterns) {
+        LegendRow(stringResource(R.string.traceroute_map_line_dash_dot), muted, ArcWidthMedium, Stability.NOT_MEASURED)
+        if (!stabilityMeasurable) LegendNote(stringResource(R.string.traceroute_map_stability_needs_probes))
+    }
+    if (Stability.UNKNOWN in patterns) {
+        LegendRow(stringResource(R.string.traceroute_map_line_dashed), unknownColor, ArcWidthMedium, Stability.UNKNOWN)
+    }
 }
 
 @Composable
