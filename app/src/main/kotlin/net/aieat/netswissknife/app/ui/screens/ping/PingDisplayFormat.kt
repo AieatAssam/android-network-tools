@@ -8,11 +8,14 @@ internal const val PING_ROLLING_WINDOW = 100
 
 internal val PING_TIMEOUT_PRESETS_MS = listOf(1_000, 2_000, 3_000, 5_000)
 
+private const val MIN_VISIBLE_LOSS_PERCENT = 0.1f
+private const val MILLIS_PER_SECOND = 1_000
+
 /** Packet loss as a percentage; a non-zero loss never reads as 0%. */
 internal fun pingLossLabel(lossPercent: Float): String =
     when {
         lossPercent <= 0f -> "0%"
-        lossPercent < 0.1f -> "<0.1%"
+        lossPercent < MIN_VISIBLE_LOSS_PERCENT -> "<0.1%"
         lossPercent % 1f == 0f -> "${lossPercent.roundToInt()}%"
         else -> "${"%.1f".format(lossPercent)}%"
     }
@@ -28,7 +31,10 @@ internal fun pingAxisLabel(
         else -> "${rttMs.roundToInt()} $unit"
     }
 
-internal fun pingTimeoutLabel(timeoutMs: Int): String = if (timeoutMs % 1_000 == 0) "${timeoutMs / 1_000} s" else "$timeoutMs ms"
+internal fun pingTimeoutLabel(timeoutMs: Int): String {
+    val seconds = timeoutMs / MILLIS_PER_SECOND
+    return if (timeoutMs % MILLIS_PER_SECOND == 0) "$seconds s" else "$timeoutMs ms"
+}
 
 /** Preset timeouts plus the current value, so the selected chip always matches the setting. */
 internal fun pingTimeoutOptions(currentMs: Int): List<Int> = (PING_TIMEOUT_PRESETS_MS + currentMs).distinct().sorted()

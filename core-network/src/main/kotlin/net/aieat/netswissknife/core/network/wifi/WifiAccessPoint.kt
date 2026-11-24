@@ -50,13 +50,18 @@ data class WifiAccessPoint(
 
 enum class SignalLevel { EXCELLENT, GOOD, FAIR, WEAK, POOR }
 
+private const val RSSI_EXCELLENT_DBM = -50
+private const val RSSI_GOOD_DBM = -60
+private const val RSSI_FAIR_DBM = -70
+private const val RSSI_WEAK_DBM = -80
+
 /** Level bucket for an RSSI reading in dBm: -50 and above is EXCELLENT, below -80 is POOR. */
 fun signalLevelForRssi(rssi: Int): SignalLevel =
     when {
-        rssi >= -50 -> SignalLevel.EXCELLENT
-        rssi >= -60 -> SignalLevel.GOOD
-        rssi >= -70 -> SignalLevel.FAIR
-        rssi >= -80 -> SignalLevel.WEAK
+        rssi >= RSSI_EXCELLENT_DBM -> SignalLevel.EXCELLENT
+        rssi >= RSSI_GOOD_DBM -> SignalLevel.GOOD
+        rssi >= RSSI_FAIR_DBM -> SignalLevel.FAIR
+        rssi >= RSSI_WEAK_DBM -> SignalLevel.WEAK
         else -> SignalLevel.POOR
     }
 

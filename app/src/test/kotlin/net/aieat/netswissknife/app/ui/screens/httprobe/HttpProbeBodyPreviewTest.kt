@@ -63,21 +63,33 @@ class HttpProbeBodyPreviewTest {
 
     @Test
     fun `a complete read is exact whatever Content-Length says`() {
-        assertEquals(ResponseSizeKind.EXACT, responseSizeKind(truncated = false, declaredBytes = 10, contentEncoded = true))
+        assertEquals(
+            ResponseSizeKind.EXACT,
+            responseSizeKind(truncated = false, declaredBytes = 10, contentEncoded = true),
+        )
     }
 
     @Test
     fun `a truncated uncompressed read uses the declared length`() {
-        assertEquals(ResponseSizeKind.DECLARED, responseSizeKind(truncated = true, declaredBytes = 900, contentEncoded = false))
+        assertEquals(
+            ResponseSizeKind.DECLARED,
+            responseSizeKind(truncated = true, declaredBytes = 900, contentEncoded = false),
+        )
     }
 
     @Test
     fun `a truncated compressed read says at least because Content-Length counts wire bytes`() {
-        assertEquals(ResponseSizeKind.AT_LEAST, responseSizeKind(truncated = true, declaredBytes = 900, contentEncoded = true))
+        assertEquals(
+            ResponseSizeKind.AT_LEAST,
+            responseSizeKind(truncated = true, declaredBytes = 900, contentEncoded = true),
+        )
     }
 
     @Test
     fun `a truncated read with no declared length says at least`() {
-        assertEquals(ResponseSizeKind.AT_LEAST, responseSizeKind(truncated = true, declaredBytes = null, contentEncoded = false))
+        assertEquals(
+            ResponseSizeKind.AT_LEAST,
+            responseSizeKind(truncated = true, declaredBytes = null, contentEncoded = false),
+        )
     }
 }

@@ -313,7 +313,8 @@ class DnsViewModel
                         val result = dnsLookupUseCase(params, session)
                         if (requestGeneration != lookupGeneration) return@launch
 
-                        // NXDOMAIN and SERVFAIL arrive as Success with a non-NOERROR rcode; they are not worth recalling.
+                        // NXDOMAIN and SERVFAIL arrive as Success with a non-NOERROR rcode;
+                        // they are not worth recalling.
                         if (result is NetworkResult.Success && result.data.rcode == "NOERROR") {
                             try {
                                 addRecentIfInputWasValid(params)

@@ -263,7 +263,9 @@ class WhoisViewModelTest {
             coEvery { whoisLookupUseCase(any(), any()) } returns NetworkResult.Success(stubResult)
             viewModel.onQueryChange("example.com")
             viewModel.lookup()
-            coVerify(exactly = 1) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, "example.com") }
+            coVerify(exactly = 1) {
+                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, "example.com")
+            }
         }
 
     @Test

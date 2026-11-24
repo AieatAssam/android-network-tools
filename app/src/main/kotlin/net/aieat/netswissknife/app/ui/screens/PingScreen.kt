@@ -441,7 +441,13 @@ private fun PingInputCard(
                 isError = isHostInvalid,
                 supportingText =
                     if (isHostInvalid) {
-                        { Text(stringResource(HostValidator.problemOf(host)?.messageRes() ?: R.string.error_host_invalid)) }
+                        {
+                            Text(
+                                stringResource(
+                                    HostValidator.problemOf(host)?.messageRes() ?: R.string.error_host_invalid,
+                                ),
+                            )
+                        }
                     } else {
                         null
                     },
@@ -888,7 +894,11 @@ private fun PingFinishedPanel(
         Text(
             text =
                 stringResource(
-                    if (result.engine == PingEngineKind.ICMP) R.string.ping_engine_icmp else R.string.ping_engine_reachability,
+                    if (result.engine == PingEngineKind.ICMP) {
+                        R.string.ping_engine_icmp
+                    } else {
+                        R.string.ping_engine_reachability
+                    },
                 ),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

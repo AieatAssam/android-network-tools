@@ -60,10 +60,10 @@ class WolSavedDeviceEditor(
      * Nothing is saved while the MAC, broadcast address or port is invalid.
      */
     fun saveDevice() {
-        val canonical = WolMagicPacket.canonicalMacOrNull(currentMac()) ?: return
+        val canonical = WolMagicPacket.canonicalMacOrNull(currentMac())
         val broadcast = currentBroadcast()
-        val port = currentPort() ?: return
-        if (WolMagicPacket.broadcastProblem(broadcast) != null) return
+        val port = currentPort()
+        if (canonical == null || port == null || WolMagicPacket.broadcastProblem(broadcast) != null) return
         val name = _deviceName.value
         val original = _editingMac.value
         if (original != null) {

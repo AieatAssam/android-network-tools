@@ -425,7 +425,11 @@ class WakeOnLanViewModelTest {
 
             coVerify {
                 useCase(
-                    match { it.macAddress == "AA:BB:CC:DD:EE:FF" && it.broadcastAddress == "192.168.1.255" && it.port == 7 },
+                    match {
+                        it.macAddress == "AA:BB:CC:DD:EE:FF" &&
+                            it.broadcastAddress == "192.168.1.255" &&
+                            it.port == 7
+                    },
                     any(),
                 )
             }

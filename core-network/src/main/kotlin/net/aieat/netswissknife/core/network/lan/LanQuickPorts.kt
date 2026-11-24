@@ -1,6 +1,9 @@
 package net.aieat.netswissknife.core.network.lan
 
-/** TCP ports probed on every responsive host, in probe order. The app derives its port labels and actions from this list. */
+/**
+ * TCP ports probed on every responsive host, in probe order. The app derives its port labels and
+ * actions from this list.
+ */
 object LanQuickPorts {
     val ports: List<Int> =
         listOf(

@@ -1953,15 +1953,19 @@ private fun NeighbourRow(
  * Formats a link speed with one decimal place where it adds information, e.g. 2.5 Gbps or 1.5 Mbps.
  * Whole values drop the decimal. [locale] fixes the decimal separator.
  */
+private const val BITS_PER_GIGABIT = 1_000_000_000L
+private const val BITS_PER_MEGABIT = 1_000_000L
+private const val BITS_PER_KILOBIT = 1_000L
+
 internal fun formatSpeed(
     bps: Long,
     locale: Locale = Locale.getDefault(),
 ): String {
     val (scaled, unit) =
         when {
-            bps >= 1_000_000_000L -> bps / 1_000_000_000.0 to "Gbps"
-            bps >= 1_000_000L -> bps / 1_000_000.0 to "Mbps"
-            bps >= 1_000L -> bps / 1_000.0 to "Kbps"
+            bps >= BITS_PER_GIGABIT -> bps / BITS_PER_GIGABIT.toDouble() to "Gbps"
+            bps >= BITS_PER_MEGABIT -> bps / BITS_PER_MEGABIT.toDouble() to "Mbps"
+            bps >= BITS_PER_KILOBIT -> bps / BITS_PER_KILOBIT.toDouble() to "Kbps"
             else -> return "$bps bps"
         }
     val rounded = Math.round(scaled * 10) / 10.0

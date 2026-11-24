@@ -116,7 +116,13 @@ class TopologyCanvasGeometryTest {
         val root = "10.0.0.1"
         val ips = listOf(root, "10.0.0.2", "10.0.0.3", "10.0.0.4", "10.0.0.5")
         val forward = TopologyCanvasGeometry.layout(root, ips, edgesFromRoot(root, ips)).positions
-        val reversed = TopologyCanvasGeometry.layout(root, ips.reversed(), edgesFromRoot(root, ips).reversed()).positions
+        val reversed =
+            TopologyCanvasGeometry
+                .layout(
+                    root,
+                    ips.reversed(),
+                    edgesFromRoot(root, ips).reversed(),
+                ).positions
         assertEquals(forward, reversed)
     }
 

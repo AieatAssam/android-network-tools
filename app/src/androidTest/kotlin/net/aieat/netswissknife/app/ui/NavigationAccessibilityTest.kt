@@ -117,7 +117,7 @@ class NavigationAccessibilityTest {
     fun moreSheet_pinAndUnpinButtonsAreIndependentFromToolNavigation() {
         val toggledRoutes = mutableListOf<String>()
         val navigatedRoutes = mutableListOf<String>()
-        val ping = NavRoutes.allTools.first { it.route == NavRoutes.Ping.baseRoute }
+        val ping = NavRoutes.allTools.first { it.route == NavRoutes.Ping.BASE_ROUTE }
 
         composeRule.setContent {
             NetSwissKnifeTheme {

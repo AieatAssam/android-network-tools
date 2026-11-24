@@ -658,7 +658,8 @@ private fun WolSavedDeviceRow(
     val deleteDescription = stringResource(R.string.wol_delete_device_description, label)
     val wakeDescription = stringResource(R.string.wol_wake_device_description, label)
     val usesDefaultTarget =
-        device.broadcastAddress == WakeOnLanViewModel.DEFAULT_BROADCAST && device.port == WakeOnLanViewModel.DEFAULT_PORT
+        device.broadcastAddress == WakeOnLanViewModel.DEFAULT_BROADCAST &&
+            device.port == WakeOnLanViewModel.DEFAULT_PORT
     // The MAC gets the full row width (never wrapped mid-address); the actions sit on their own line.
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(

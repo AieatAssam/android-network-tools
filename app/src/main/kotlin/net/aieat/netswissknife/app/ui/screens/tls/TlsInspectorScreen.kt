@@ -261,11 +261,25 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
                     label = "tls_content_state",
                 ) { state ->
                     when (state) {
-                        is DisplayState.Idle -> TlsIdlePlaceholder()
-                        is DisplayState.Loading -> TlsLoadingContent()
-                        is DisplayState.Canceled -> TlsCanceledContent(onRetry = { viewModel.inspect() })
-                        is DisplayState.Error -> TlsErrorContent(state.message, state.descriptionKey, state.host) { viewModel.inspect() }
-                        is DisplayState.Success -> TlsSuccessContent(state.result)
+                        is DisplayState.Idle -> {
+                            TlsIdlePlaceholder()
+                        }
+
+                        is DisplayState.Loading -> {
+                            TlsLoadingContent()
+                        }
+
+                        is DisplayState.Canceled -> {
+                            TlsCanceledContent(onRetry = { viewModel.inspect() })
+                        }
+
+                        is DisplayState.Error -> {
+                            TlsErrorContent(state.message, state.descriptionKey, state.host) { viewModel.inspect() }
+                        }
+
+                        is DisplayState.Success -> {
+                            TlsSuccessContent(state.result)
+                        }
                     }
                 }
             }
@@ -369,7 +383,13 @@ private fun TlsInputSection(
                 isError = isHostInvalid,
                 supportingText =
                     if (isHostInvalid) {
-                        { Text(stringResource(HostValidator.problemOf(host)?.messageRes() ?: R.string.error_host_invalid)) }
+                        {
+                            Text(
+                                stringResource(
+                                    HostValidator.problemOf(host)?.messageRes() ?: R.string.error_host_invalid,
+                                ),
+                            )
+                        }
                     } else {
                         null
                     },
@@ -810,7 +830,12 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                             Icon(
                                 Icons.Default.Warning,
                                 contentDescription = null,
-                                tint = if (blocking) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint =
+                                    if (blocking) {
+                                        MaterialTheme.colorScheme.error
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                                 modifier = Modifier.size(18.dp),
                             )
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -825,7 +850,11 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                                 ) {
                                     Text(
                                         stringResource(
-                                            if (blocking) R.string.tls_finding_blocking else R.string.tls_finding_advisory,
+                                            if (blocking) {
+                                                R.string.tls_finding_blocking
+                                            } else {
+                                                R.string.tls_finding_advisory
+                                            },
                                         ),
                                         style = MaterialTheme.typography.labelSmall,
                                         color =
@@ -1027,7 +1056,10 @@ private fun CertificateDetails(cert: TlsCertificate) {
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
         // Issuer
-        LabeledValue(stringResource(R.string.tls_issuer_cn), cert.issuerCN.ifBlank { stringResource(R.string.tls_unknown_cn) })
+        LabeledValue(
+            stringResource(R.string.tls_issuer_cn),
+            cert.issuerCN.ifBlank { stringResource(R.string.tls_unknown_cn) },
+        )
         cert.issuerOrg?.let { LabeledValue(stringResource(R.string.tls_issuer_org), it) }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -1190,7 +1222,10 @@ internal fun buildTlsPemShareText(result: TlsInspectorResult): String =
         .mapNotNull { it.pemEncoded.takeIf(String::isNotBlank)?.trim() }
         .joinToString(separator = "\n", postfix = "\n")
 
-/** The role a certificate plays in the chain as served. Servers usually omit the root, so only a self-signed last entry is one. */
+/**
+ * The role a certificate plays in the chain as served. Servers usually omit the root, so only a
+ * self-signed last entry is one.
+ */
 internal enum class TlsCertificateRole { LEAF, INTERMEDIATE, ROOT }
 
 internal fun certificateRoleOf(

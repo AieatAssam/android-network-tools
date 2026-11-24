@@ -284,7 +284,10 @@ class PingViewModel
         private var pingOperationSession: OperationSession? = null
         private var lifecyclePingCleanupState: PingUiState.Running? = null
 
-        /** The latest detached lifecycle cleanup, which outlives viewModelScope; tests join it before resetting Main. */
+        /**
+         * The latest detached lifecycle cleanup, which outlives viewModelScope; tests join it
+         * before resetting Main.
+         */
         internal var lifecycleCleanupJob: Job? = null
             private set
         private var continuousSession: ContinuousPingSession? = null
@@ -559,7 +562,10 @@ class PingViewModel
                                 is PingFlowResult.Packet -> {
                                     if (!savedToRecents && shouldRememberPingHost(result.packet)) {
                                         savedToRecents = true
-                                        recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, trimmedHost)
+                                        recentHostsRepository.addRecent(
+                                            AppPreferenceKeys.RECENT_PING_HOSTS,
+                                            trimmedHost,
+                                        )
                                     }
                                     accumulated.add(result.packet)
                                     _uiState.value =
@@ -643,7 +649,11 @@ class PingViewModel
                     sessionLogFileFactory()
                 } catch (e: Exception) {
                     val developerMessage = "Could not create the continuous Ping session log: ${e.message}"
-                    val text = UiText.Res(R.string.ping_continuous_log_unavailable, developerFallback = developerMessage)
+                    val text =
+                        UiText.Res(
+                            R.string.ping_continuous_log_unavailable,
+                            developerFallback = developerMessage,
+                        )
                     _uiState.value = PingUiState.Error(text, developerMessage)
                     return
                 }
@@ -700,7 +710,10 @@ class PingViewModel
                                     seq++
                                     if (!savedToRecents && shouldRememberPingHost(result.packet)) {
                                         savedToRecents = true
-                                        recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_PING_HOSTS, trimmedHost)
+                                        recentHostsRepository.addRecent(
+                                            AppPreferenceKeys.RECENT_PING_HOSTS,
+                                            trimmedHost,
+                                        )
                                     }
                                     session.logWriter.append(seq, result.packet)
                                     stats.add(result.packet)
@@ -768,9 +781,17 @@ class PingViewModel
         private fun availabilityError(availability: OperationAvailability): PingUiState.Error {
             val text =
                 when (availability.reason) {
-                    AvailabilityReason.NO_ROUTE -> UiText.Res(R.string.ping_error_no_route)
-                    AvailabilityReason.LOCAL_NETWORK_PERMISSION_DENIED -> UiText.Res(R.string.ping_error_local_permission)
-                    else -> UiText.Res(R.string.ping_error_unavailable)
+                    AvailabilityReason.NO_ROUTE -> {
+                        UiText.Res(R.string.ping_error_no_route)
+                    }
+
+                    AvailabilityReason.LOCAL_NETWORK_PERMISSION_DENIED -> {
+                        UiText.Res(R.string.ping_error_local_permission)
+                    }
+
+                    else -> {
+                        UiText.Res(R.string.ping_error_unavailable)
+                    }
                 }
             return PingUiState.Error(text, availability.denialMessage())
         }

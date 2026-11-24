@@ -204,14 +204,14 @@ class TopologyDiscoveryViewModel
                     try {
                         useCase.invoke(normalizedParams, session).collect { event ->
                             val cancellationReason = session.cancellationReason
-                            if (operationSession !== session || terminalEventReceived ||
+                            val suppressEvent =
+                                cancellationReason != null && event !is TopologyDiscoveryEvent.Error &&
+                                    event !is TopologyDiscoveryEvent.TimeLimit
+                            val cancelledEvent =
                                 cancellationReason == CancellationReason.USER_STOP ||
-                                cancellationReason == CancellationReason.LIFECYCLE_PAUSE ||
-                                (
-                                    cancellationReason != null && event !is TopologyDiscoveryEvent.Error &&
-                                        event !is TopologyDiscoveryEvent.TimeLimit
-                                )
-                            ) {
+                                    cancellationReason == CancellationReason.LIFECYCLE_PAUSE ||
+                                    suppressEvent
+                            if (operationSession !== session || terminalEventReceived || cancelledEvent) {
                                 return@collect
                             }
                             when (event) {

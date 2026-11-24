@@ -6,12 +6,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.data.purgeInvalidHostRecents
@@ -25,6 +27,7 @@ import net.aieat.netswissknife.app.ui.navigation.ToolHost
 import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
 import net.aieat.netswissknife.app.ui.navigation.ToolPort
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
+import net.aieat.netswissknife.app.util.AppLogger
 import net.aieat.netswissknife.core.domain.TlsInspectorParams
 import net.aieat.netswissknife.core.domain.TlsInspectorUseCase
 import net.aieat.netswissknife.core.network.HostValidator
@@ -55,6 +58,8 @@ data class TlsInspectorUiState(
     val error: String? = null,
     val errorDescriptionKey: String? = null,
 )
+
+private const val TAG = "TlsInspectorViewModel"
 
 @HiltViewModel
 class TlsInspectorViewModel
@@ -114,7 +119,11 @@ class TlsInspectorViewModel
                             savedStateHandle.get<String>(EDITED_PORT_KEY) ?: "443"
                         } else {
                             savedStateHandle.get<String>(EDITED_PORT_KEY)
-                                ?: if (_hasInvalidHandoff.value) "443" else handoffTarget?.port?.value?.toString() ?: "443"
+                                ?: if (_hasInvalidHandoff.value) {
+                                    "443"
+                                } else {
+                                    handoffTarget?.port?.value?.toString() ?: "443"
+                                }
                         },
                     probeProtocols = savedStateHandle[PROBE_PROTOCOLS_KEY] ?: false,
                     expectedPinSha256 = savedStateHandle[EXPECTED_PIN_KEY] ?: "",
@@ -261,7 +270,12 @@ class TlsInspectorViewModel
                         isLoading = false,
                         result = null,
                         error = null,
-                        errorDescriptionKey = if (state.host.isBlank()) TlsInputErrorKeys.HOST_BLANK else TlsInputErrorKeys.HOST_INVALID,
+                        errorDescriptionKey =
+                            if (state.host.isBlank()) {
+                                TlsInputErrorKeys.HOST_BLANK
+                            } else {
+                                TlsInputErrorKeys.HOST_INVALID
+                            },
                     )
                 return
             }
@@ -360,6 +374,9 @@ class TlsInspectorViewModel
                             error = null,
                             errorDescriptionKey = TlsInputErrorKeys.INSPECTION_FAILED,
                         )
+                    withContext(Dispatchers.IO) {
+                        AppLogger.e(TAG, "TLS inspection failed", e)
+                    }
                 } finally {
                     if (operationSession === session) operationSession = null
                 }

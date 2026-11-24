@@ -15,11 +15,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 
+private const val MILLIS_PER_SECOND = 1_000L
+
 /** Number of TXT entries shown before the "Show all" control. */
 internal const val MDNS_TXT_VISIBLE_LIMIT = 5
 
 /** Whole seconds shown for the scan timer. Negative clocks read as zero. */
-internal fun mdnsElapsedSeconds(elapsedMs: Long): Long = elapsedMs.coerceAtLeast(0L) / 1_000L
+internal fun mdnsElapsedSeconds(elapsedMs: Long): Long = elapsedMs.coerceAtLeast(0L) / MILLIS_PER_SECOND
 
 /** Fraction of the scan window that has passed, clamped to 0..1. */
 internal fun mdnsScanProgress(

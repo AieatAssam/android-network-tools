@@ -38,34 +38,35 @@ sealed class NavRoutes(
     object Home : NavRoutes("home")
 
     object Ping : NavRoutes("ping?host={host}&intent={intent}") {
-        const val baseRoute = "ping"
+        const val BASE_ROUTE = "ping"
 
         /** Keep the established bare Ping route while allowing host-target handoffs. */
         fun createRoute(host: String?): String =
             host
                 ?.takeIf { it.isNotBlank() }
-                ?.let { "$baseRoute?host=${Uri.encode(it)}" }
-                ?: baseRoute
+                ?.let { "$BASE_ROUTE?host=${Uri.encode(it)}" }
+                ?: BASE_ROUTE
 
         fun createRoute(intent: ToolIntent): String {
             val target =
                 intent.destination as? ToolDestination.HostTarget
                     ?: throw IllegalArgumentException("Ping route requires a host destination")
             require(target.tool == HostTool.PING)
-            return "$baseRoute?host=${Uri.encode(target.host.value)}&intent=${Uri.encode(ToolIntentCodec.encode(intent))}"
+            return "$BASE_ROUTE?host=${Uri.encode(target.host.value)}" +
+                "&intent=${Uri.encode(ToolIntentCodec.encode(intent))}"
         }
     }
 
     object Traceroute : NavRoutes("traceroute")
 
     object Ports : NavRoutes("ports?host={host}&intent={intent}") {
-        const val baseRoute = "ports"
+        const val BASE_ROUTE = "ports"
 
         fun createRoute(host: String?): String =
             host
                 ?.takeIf { it.isNotBlank() }
-                ?.let { "$baseRoute?host=${Uri.encode(it)}" }
-                ?: baseRoute
+                ?.let { "$BASE_ROUTE?host=${Uri.encode(it)}" }
+                ?: BASE_ROUTE
 
         /** New typed handoffs use the versioned payload; the legacy host route remains supported. */
         fun createRoute(intent: ToolIntent): String {
@@ -73,7 +74,8 @@ sealed class NavRoutes(
                 intent.destination as? ToolDestination.HostTarget
                     ?: throw IllegalArgumentException("Ports route requires a host destination")
             require(target.tool == HostTool.PORTS)
-            return "$baseRoute?host=${Uri.encode(target.host.value)}&intent=${Uri.encode(ToolIntentCodec.encode(intent))}"
+            return "$BASE_ROUTE?host=${Uri.encode(target.host.value)}" +
+                "&intent=${Uri.encode(ToolIntentCodec.encode(intent))}"
         }
     }
 
@@ -88,14 +90,14 @@ sealed class NavRoutes(
     object TopologyDiscovery : NavRoutes("topology")
 
     object TlsInspector : NavRoutes("tls?intent={intent}&host={host}&port={port}") {
-        const val baseRoute = "tls"
+        const val BASE_ROUTE = "tls"
 
         fun createRoute(intent: ToolIntent): String {
             val target =
                 intent.destination as? ToolDestination.HostTarget
                     ?: throw IllegalArgumentException("TLS Inspector route requires a host destination")
             require(target.tool == HostTool.TLS && target.port != null)
-            return "$baseRoute?intent=${Uri.encode(ToolIntentCodec.encode(intent))}" +
+            return "$BASE_ROUTE?intent=${Uri.encode(ToolIntentCodec.encode(intent))}" +
                 "&host=${Uri.encode(target.host.value)}&port=${target.port.value}"
         }
     }
@@ -103,7 +105,7 @@ sealed class NavRoutes(
     object WhoisLookup : NavRoutes("whois")
 
     object HttpProbe : NavRoutes("httprobe?intent={intent}&host={host}") {
-        const val baseRoute = "httprobe"
+        const val BASE_ROUTE = "httprobe"
 
         /** Typed host handoffs keep HTTP inputs separate from arbitrary URL route arguments. */
         fun createRoute(intent: ToolIntent): String {
@@ -111,7 +113,8 @@ sealed class NavRoutes(
                 intent.destination as? ToolDestination.HostTarget
                     ?: throw IllegalArgumentException("HTTP Probe route requires a host destination")
             require(target.tool == HostTool.HTTP && target.port != null)
-            return "$baseRoute?intent=${Uri.encode(ToolIntentCodec.encode(intent))}&host=${Uri.encode(target.host.value)}"
+            return "$BASE_ROUTE?intent=${Uri.encode(ToolIntentCodec.encode(intent))}" +
+                "&host=${Uri.encode(target.host.value)}"
         }
     }
 
@@ -122,14 +125,14 @@ sealed class NavRoutes(
     object SpeedTest : NavRoutes("speedtest")
 
     object WakeOnLan : NavRoutes("wol?intent={intent}&mac={mac}") {
-        const val baseRoute = "wol"
+        const val BASE_ROUTE = "wol"
 
         fun createRoute(intent: ToolIntent): String {
             val destination =
                 intent.destination as? ToolDestination.WakeOnLan
                     ?: throw IllegalArgumentException("Wake-on-LAN route requires a WOL destination")
             require(intent.source == ToolSource.LAN)
-            return "$baseRoute?intent=${Uri.encode(ToolIntentCodec.encode(intent))}" +
+            return "$BASE_ROUTE?intent=${Uri.encode(ToolIntentCodec.encode(intent))}" +
                 "&mac=${Uri.encode(destination.mac.value)}"
         }
     }

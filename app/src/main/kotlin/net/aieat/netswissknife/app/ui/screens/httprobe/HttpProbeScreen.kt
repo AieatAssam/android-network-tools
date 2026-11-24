@@ -1433,7 +1433,11 @@ private fun SecurityTabContent(checks: List<SecurityHeaderCheck>) {
             SecuritySummaryChip(count = passCount, label = stringResource(R.string.security_rating_pass), color = StatusGoodDeep)
             SecuritySummaryChip(count = warnCount, label = stringResource(R.string.security_rating_warn), color = StatusWarnDeep)
             SecuritySummaryChip(count = failCount, label = stringResource(R.string.security_rating_fail), color = MaterialTheme.colorScheme.error)
-            SecuritySummaryChip(count = infoCount, label = stringResource(R.string.security_rating_info), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            SecuritySummaryChip(
+                count = infoCount,
+                label = stringResource(R.string.security_rating_info),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         HorizontalDivider()
@@ -1537,27 +1541,89 @@ private fun redirectPlaceholders(): RedirectPlaceholders =
 @Composable
 private fun securityDescription(check: SecurityHeaderCheck): String =
     when (check.descriptionKey) {
-        "httprobe_sec_hsts_pass_strong" -> stringResource(R.string.httprobe_sec_hsts_pass_strong)
-        "httprobe_sec_hsts_short" -> stringResource(R.string.httprobe_sec_hsts_short)
-        "httprobe_sec_hsts_invalid" -> stringResource(R.string.httprobe_sec_hsts_invalid)
-        "httprobe_sec_hsts_ignored_http" -> stringResource(R.string.httprobe_sec_hsts_ignored_http)
-        "httprobe_sec_csp_unsafe_inline" -> stringResource(R.string.httprobe_sec_csp_unsafe_inline)
-        "httprobe_sec_csp_ambiguous" -> stringResource(R.string.httprobe_sec_csp_ambiguous)
-        "httprobe_sec_csp_report_only" -> stringResource(R.string.httprobe_sec_csp_report_only)
-        "httprobe_sec_xfo_via_csp" -> stringResource(R.string.httprobe_sec_xfo_via_csp)
-        "httprobe_sec_xss_protection_absent" -> stringResource(R.string.httprobe_sec_xss_protection_absent)
-        "httprobe_sec_xss_protection_deprecated" -> stringResource(R.string.httprobe_sec_xss_protection_deprecated)
-        "httprobe_sec_document_header_not_applicable" -> stringResource(R.string.httprobe_sec_document_header_not_applicable)
-        "httprobe_sec_cookie_flags_complete" -> stringResource(R.string.httprobe_sec_cookie_flags_complete)
-        "httprobe_sec_cookie_missing_secure" -> stringResource(R.string.httprobe_sec_cookie_missing_secure)
-        "httprobe_sec_cookie_missing_httponly" -> stringResource(R.string.httprobe_sec_cookie_missing_httponly)
-        "httprobe_sec_cookie_missing_secure_httponly" -> stringResource(R.string.httprobe_sec_cookie_missing_secure_httponly)
-        "httprobe_sec_cookie_missing_samesite" -> stringResource(R.string.httprobe_sec_cookie_missing_samesite)
-        "httprobe_sec_cookie_samesite_none_requires_secure" -> stringResource(R.string.httprobe_sec_cookie_samesite_none_requires_secure)
-        "httprobe_sec_cookie_secure_from_http" -> stringResource(R.string.httprobe_sec_cookie_secure_from_http)
-        "httprobe_sec_cookie_secure_not_applicable" -> stringResource(R.string.httprobe_sec_cookie_secure_not_applicable)
-        "httprobe_sec_cookie_malformed" -> stringResource(R.string.httprobe_sec_cookie_malformed)
-        else -> check.description
+        "httprobe_sec_hsts_pass_strong" -> {
+            stringResource(R.string.httprobe_sec_hsts_pass_strong)
+        }
+
+        "httprobe_sec_hsts_short" -> {
+            stringResource(R.string.httprobe_sec_hsts_short)
+        }
+
+        "httprobe_sec_hsts_invalid" -> {
+            stringResource(R.string.httprobe_sec_hsts_invalid)
+        }
+
+        "httprobe_sec_hsts_ignored_http" -> {
+            stringResource(R.string.httprobe_sec_hsts_ignored_http)
+        }
+
+        "httprobe_sec_csp_unsafe_inline" -> {
+            stringResource(R.string.httprobe_sec_csp_unsafe_inline)
+        }
+
+        "httprobe_sec_csp_ambiguous" -> {
+            stringResource(R.string.httprobe_sec_csp_ambiguous)
+        }
+
+        "httprobe_sec_csp_report_only" -> {
+            stringResource(R.string.httprobe_sec_csp_report_only)
+        }
+
+        "httprobe_sec_xfo_via_csp" -> {
+            stringResource(R.string.httprobe_sec_xfo_via_csp)
+        }
+
+        "httprobe_sec_xss_protection_absent" -> {
+            stringResource(R.string.httprobe_sec_xss_protection_absent)
+        }
+
+        "httprobe_sec_xss_protection_deprecated" -> {
+            stringResource(R.string.httprobe_sec_xss_protection_deprecated)
+        }
+
+        "httprobe_sec_document_header_not_applicable" -> {
+            stringResource(R.string.httprobe_sec_document_header_not_applicable)
+        }
+
+        "httprobe_sec_cookie_flags_complete" -> {
+            stringResource(R.string.httprobe_sec_cookie_flags_complete)
+        }
+
+        "httprobe_sec_cookie_missing_secure" -> {
+            stringResource(R.string.httprobe_sec_cookie_missing_secure)
+        }
+
+        "httprobe_sec_cookie_missing_httponly" -> {
+            stringResource(R.string.httprobe_sec_cookie_missing_httponly)
+        }
+
+        "httprobe_sec_cookie_missing_secure_httponly" -> {
+            stringResource(R.string.httprobe_sec_cookie_missing_secure_httponly)
+        }
+
+        "httprobe_sec_cookie_missing_samesite" -> {
+            stringResource(R.string.httprobe_sec_cookie_missing_samesite)
+        }
+
+        "httprobe_sec_cookie_samesite_none_requires_secure" -> {
+            stringResource(R.string.httprobe_sec_cookie_samesite_none_requires_secure)
+        }
+
+        "httprobe_sec_cookie_secure_from_http" -> {
+            stringResource(R.string.httprobe_sec_cookie_secure_from_http)
+        }
+
+        "httprobe_sec_cookie_secure_not_applicable" -> {
+            stringResource(R.string.httprobe_sec_cookie_secure_not_applicable)
+        }
+
+        "httprobe_sec_cookie_malformed" -> {
+            stringResource(R.string.httprobe_sec_cookie_malformed)
+        }
+
+        else -> {
+            check.description
+        }
     }
 
 @Composable

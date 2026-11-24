@@ -2,22 +2,6 @@ package net.aieat.netswissknife.app.ui.screens.httprobe
 
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
 
-/** Text standing in for the parts of a redirect address that shared output leaves out. */
-internal data class RedirectPlaceholders(
-    val address: String,
-    val path: String,
-    val query: String,
-) {
-    companion object {
-        val English =
-            RedirectPlaceholders(
-                address = "[redirect address omitted]",
-                path = "[path omitted]",
-                query = "[query omitted]",
-            )
-    }
-}
-
 /**
  * Keep visible redirect evidence useful without exposing credentials or token-bearing paths.
  * A root address shows "/" because there is no path to hide. Only an existing path or query is

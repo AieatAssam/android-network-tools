@@ -54,7 +54,15 @@ class HttpProbeFinalHopTimingTest {
     @Test
     fun `phases come from the final hop and total time covers the whole chain`() =
         runTest {
-            val firstHop = HttpTimings(dnsMs = 40, connectMs = 30, tlsMs = 20, ttfbMs = 90, transferMs = null, totalMs = 100)
+            val firstHop =
+                HttpTimings(
+                    dnsMs = 40,
+                    connectMs = 30,
+                    tlsMs = 20,
+                    ttfbMs = 90,
+                    transferMs = null,
+                    totalMs = 100,
+                )
             val finalHop = HttpTimings(dnsMs = 3, connectMs = 4, tlsMs = 5, ttfbMs = 12, transferMs = 2, totalMs = 25)
             val engine =
                 ScriptedEngine(

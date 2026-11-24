@@ -108,7 +108,10 @@ class WhoisViewModel
                             WhoisProtocol.entries,
                         ) ?: WhoisProtocol.AUTO,
                     hopStates = restoredSession?.takeIf { it.result != null }?.hopStates.orEmpty(),
-                    result = restoredSession?.result?.takeIf { lookupIdentity(initialQuery) == lookupIdentity(it.query) },
+                    result =
+                        restoredSession?.result?.takeIf {
+                            lookupIdentity(initialQuery) == lookupIdentity(it.query)
+                        },
                 ),
             )
         val uiState: StateFlow<WhoisUiState> = _uiState.asStateFlow()
@@ -131,9 +134,11 @@ class WhoisViewModel
             _uiState.update { state ->
                 val effectiveQueryChanged = lookupIdentity(value) != lookupIdentity(state.query)
                 val invalid = isWhoisQueryInvalid(value)
-                if ((state.isCanceled || state.result != null || state.error != null) && effectiveQueryChanged) {
-                    // The canceled card and its partial relay chain belong to the query that produced it. Once the user changes the input, Retry must not appear to
-                    // retry that old operation while actually submitting a different query.
+                val hasTerminalCard = state.isCanceled || state.result != null || state.error != null
+                if (hasTerminalCard && effectiveQueryChanged) {
+                    // The canceled card and its partial relay chain belong to the query that produced
+                    // it. Once the user changes the input, Retry must not appear to retry that old
+                    // operation while actually submitting a different query.
                     state.copy(
                         query = value,
                         queryInvalid = invalid,
@@ -165,7 +170,13 @@ class WhoisViewModel
             }
         }
 
-        private fun lookupIdentity(query: String): String = WhoisQueryTypeDetector.normalize(query)?.let { "${it.type}:${it.value}" } ?: query.trim()
+        private fun lookupIdentity(query: String): String =
+            WhoisQueryTypeDetector
+                .normalize(query)
+                ?.let {
+                    "${it.type}:${it.value}"
+                }
+                ?: query.trim()
 
         override fun onCleared() {
             // A lookup still running (or being stopped) is not kept; only a finished result for the current query is.
@@ -242,7 +253,12 @@ class WhoisViewModel
             progressJob =
                 viewModelScope.launch {
                     whoisLookupUseCase.hopProgress.collect { hop ->
-                        if (operationSession !== session || hop.operationId != session.budget.operationId) return@collect
+                        if (
+                            operationSession !== session ||
+                            hop.operationId != session.budget.operationId
+                        ) {
+                            return@collect
+                        }
                         _uiState.update { state ->
                             val existing = state.hopStates
                             val updated =

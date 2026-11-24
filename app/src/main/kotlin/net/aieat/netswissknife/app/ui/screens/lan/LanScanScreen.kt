@@ -936,7 +936,10 @@ internal fun sortLanHosts(
     }
 
 /** Sort key for ascending numeric IPv4 order (dotted-decimal string sort puts .2 after .10). */
-private fun ipSortKey(ip: String): Long = ip.split('.').fold(0L) { acc, part -> acc * 256L + (part.toLongOrNull() ?: 0L) }
+private fun ipSortKey(ip: String): Long =
+    ip
+        .split('.')
+        .fold(0L) { acc, part -> acc * 256L + (part.toLongOrNull() ?: 0L) }
 
 @Composable
 private fun HostFilterChips(
@@ -1563,7 +1566,10 @@ private fun NetworkTopologyCard(
                                         }
 
                                         is LanMapCell.More -> {
-                                            MoreDevicesNode(count = cell.count, onClick = { nodeLimit = lanMapExpandedLimit(nodeLimit) })
+                                            MoreDevicesNode(
+                                                count = cell.count,
+                                                onClick = { nodeLimit = lanMapExpandedLimit(nodeLimit) },
+                                            )
                                         }
                                     }
                                 }
@@ -2028,16 +2034,27 @@ private fun HostDetailPanel(
 
 internal fun isLikelyTlsPort(port: Int): Boolean = port in likelyTlsPorts
 
+private const val TIMEOUT_STEP_MS = 100
+private const val MIN_SCAN_TIMEOUT_MS = 100
+private const val MAX_SCAN_TIMEOUT_MS = 10_000
+
 /** Timeout slider positions: 100 ms steps across the scanner's supported range. */
-internal fun snapTimeoutMs(value: Float): Int = ((value / 100f).roundToInt() * 100).coerceIn(100, 10_000)
+internal fun snapTimeoutMs(value: Float): Int =
+    ((value / TIMEOUT_STEP_MS).roundToInt() * TIMEOUT_STEP_MS)
+        .coerceIn(MIN_SCAN_TIMEOUT_MS, MAX_SCAN_TIMEOUT_MS)
+
+private const val CONCURRENCY_LINEAR_LIMIT = 16
+private const val CONCURRENCY_STEP = 8
+private const val CONCURRENCY_MAX = 496
 
 /** Concurrency slider positions: every value up to 16, then multiples of 8 up to 496. */
 internal fun snapConcurrency(value: Float): Int {
     val rounded = value.roundToInt()
-    return if (rounded <= 16) {
+    return if (rounded <= CONCURRENCY_LINEAR_LIMIT) {
         rounded.coerceAtLeast(1)
     } else {
-        (((rounded + 4) / 8) * 8).coerceIn(16, 496)
+        (((rounded + CONCURRENCY_STEP / 2) / CONCURRENCY_STEP) * CONCURRENCY_STEP)
+            .coerceIn(CONCURRENCY_LINEAR_LIMIT, CONCURRENCY_MAX)
     }
 }
 
@@ -2153,10 +2170,12 @@ private fun LanErrorContent(
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/**
+ * Only the gateway is identified by role. Other devices get one neutral icon, since the scan
+ * cannot tell their type.
+ */
 @Composable
-/** Only the gateway is identified by role. Other devices get one neutral icon, since the scan cannot tell their type. */
-private fun hostIcon(host: LanHost): ImageVector =
-    if (host.isGateway) Icons.Default.Router else Icons.Default.DeviceHub
+private fun hostIcon(host: LanHost): ImageVector = if (host.isGateway) Icons.Default.Router else Icons.Default.DeviceHub
 
 private fun portServiceName(port: Int): String =
     when (port) {

@@ -126,7 +126,8 @@ class MdnsDiscoveryViewModel
             timerJob =
                 viewModelScope.launch {
                     while (true) {
-                        // The screen shows whole seconds, so a 1 s tick is enough and avoids recomposing 10 times a second.
+                        // The screen shows whole seconds, so a 1 s tick is enough and avoids
+                        // recomposing 10 times a second.
                         delay(ELAPSED_TICK_MS)
                         val elapsedMs = ((SystemMonotonicClock.nowNanos() - startTime).coerceAtLeast(0L) / 1_000_000L)
                         if (activeScanGeneration == generation) {

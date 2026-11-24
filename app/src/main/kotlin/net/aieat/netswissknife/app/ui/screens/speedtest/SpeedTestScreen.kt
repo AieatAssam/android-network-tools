@@ -117,7 +117,9 @@ private val GAUGE_SCALE_STEPS_MBPS = intArrayOf(10, 25, 50, 100, 250, 500, 1_000
  * The round maximum shown on the gauge: the smallest step that fits [valueMbps]. Values above the
  * top step use the top step, and the arc stays full.
  */
-internal fun gaugeScaleMaxMbps(valueMbps: Double): Int = GAUGE_SCALE_STEPS_MBPS.firstOrNull { valueMbps <= it } ?: GAUGE_SCALE_STEPS_MBPS.last()
+internal fun gaugeScaleMaxMbps(valueMbps: Double): Int =
+    GAUGE_SCALE_STEPS_MBPS.firstOrNull { valueMbps <= it }
+        ?: GAUGE_SCALE_STEPS_MBPS.last()
 
 @Composable
 fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
@@ -1130,8 +1132,20 @@ internal fun buildSpeedTestShareText(result: SpeedTestResult): String =
         if (result.loadedLatencyUp.samples.isNotEmpty()) {
             appendLine("Latency under upload load: %.1f ms avg / %d samples".format(result.loadedLatencyUp.avgMs, result.loadedLatencyUp.samples.size))
         }
-        appendLine("Download: avg %.1f Mbps / peak %.1f Mbps / %s".format(result.download.avgMbps, result.download.peakMbps, formatBytesSi(result.download.bytesTransferred)))
-        appendLine("Upload: avg %.1f Mbps / peak %.1f Mbps / %s".format(result.upload.avgMbps, result.upload.peakMbps, formatBytesSi(result.upload.bytesTransferred)))
+        appendLine(
+            "Download: avg %.1f Mbps / peak %.1f Mbps / %s".format(
+                result.download.avgMbps,
+                result.download.peakMbps,
+                formatBytesSi(result.download.bytesTransferred),
+            ),
+        )
+        appendLine(
+            "Upload: avg %.1f Mbps / peak %.1f Mbps / %s".format(
+                result.upload.avgMbps,
+                result.upload.peakMbps,
+                formatBytesSi(result.upload.bytesTransferred),
+            ),
+        )
         appendLine()
         appendLine("Measured against $CLOUDFLARE_SPEED_URL")
     }

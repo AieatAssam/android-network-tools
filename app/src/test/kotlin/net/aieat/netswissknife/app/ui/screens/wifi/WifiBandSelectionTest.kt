@@ -63,7 +63,10 @@ class WifiBandSelectionTest {
         val only5 = ap("Only5", WifiBand.BAND_5GHZ, -40)
         val networks = listOf(network("Only2", only2), network("Only5", only5))
 
-        assertEquals(listOf("Only5"), sortedAccessPoints(listOf(only2, only5), WifiBand.BAND_5GHZ, ApSortOrder.SSID).map { it.ssid })
+        assertEquals(
+            listOf("Only5"),
+            sortedAccessPoints(listOf(only2, only5), WifiBand.BAND_5GHZ, ApSortOrder.SSID).map { it.ssid },
+        )
         assertEquals(
             listOf("Only5"),
             sortedNetworks(networks, WifiBand.BAND_5GHZ, ApSortOrder.SSID, frozenOrder = null).map { it.displaySsid },

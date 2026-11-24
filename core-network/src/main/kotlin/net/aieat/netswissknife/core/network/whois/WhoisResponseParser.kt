@@ -10,7 +10,9 @@ object WhoisResponseParser {
 
     fun parseReferral(response: String): String? = findFirstValue(response, "refer")?.takeIf { it.isNotBlank() }
 
-    fun parseRegistrarWhoisServer(response: String): String? = findFirstValue(response, "Registrar WHOIS Server")?.takeIf { it.isNotBlank() }
+    fun parseRegistrarWhoisServer(response: String): String? =
+        findFirstValue(response, "Registrar WHOIS Server")
+            ?.takeIf { it.isNotBlank() }
 
     fun parseRirReferral(response: String): String? {
         val raw =
@@ -31,11 +33,19 @@ object WhoisResponseParser {
 
     fun parseRegistrar(response: String): String? = findFirstValue(response, "Registrar", "registrar")
 
-    fun parseRegistrarUrl(response: String): String? = findFirstValue(response, "Registrar URL")?.takeIf(SafeWebUrl::isSafe)
+    fun parseRegistrarUrl(response: String): String? =
+        findFirstValue(response, "Registrar URL")
+            ?.takeIf(SafeWebUrl::isSafe)
 
-    fun parseRegisteredOn(response: String): Long? = parseDate(findFirstValue(response, "Creation Date", "created", "Registered On"))
+    fun parseRegisteredOn(response: String): Long? =
+        parseDate(
+            findFirstValue(response, "Creation Date", "created", "Registered On"),
+        )
 
-    fun parseExpiresOn(response: String): Long? = parseDate(findFirstValue(response, "Registry Expiry Date", "Expiry Date", "expires"))
+    fun parseExpiresOn(response: String): Long? =
+        parseDate(
+            findFirstValue(response, "Registry Expiry Date", "Expiry Date", "expires"),
+        )
 
     fun parseUpdatedOn(response: String): Long? = parseDate(findFirstValue(response, "Updated Date", "last-modified"))
 
@@ -50,7 +60,13 @@ object WhoisResponseParser {
             .map { it.substringBefore("http").trim() }
             .filter { it.isNotBlank() }
 
-    fun parseRegistrantOrg(response: String): String? = findFirstValue(response, "Registrant Organization", "org-name", "Organization")
+    fun parseRegistrantOrg(response: String): String? =
+        findFirstValue(
+            response,
+            "Registrant Organization",
+            "org-name",
+            "Organization",
+        )
 
     fun parseRegistrantCountry(response: String): String? = findFirstValue(response, "Registrant Country", "country")
 

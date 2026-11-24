@@ -5,8 +5,12 @@ import androidx.lifecycle.ViewModelStore
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.Runs
 import io.mockk.slot
+import io.mockk.unmockkObject
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -29,6 +33,7 @@ import net.aieat.netswissknife.app.ui.navigation.ToolIntentCodec
 import net.aieat.netswissknife.app.ui.navigation.ToolPort
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.TlsInspectorErrorKeys
+import net.aieat.netswissknife.app.util.AppLogger
 import net.aieat.netswissknife.core.domain.TlsInspectorUseCase
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.operation.CancellationReason
@@ -91,6 +96,9 @@ class TlsInspectorViewModelTest {
     @BeforeEach
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        // AppLogger writes to android.util.Log, which is not available in plain JVM unit tests.
+        mockkObject(AppLogger)
+        every { AppLogger.e(any(), any(), any()) } just Runs
         useCase = mockk()
         recentHostsRepository =
             mockk(relaxed = true) {
@@ -101,6 +109,7 @@ class TlsInspectorViewModelTest {
 
     @AfterEach
     fun tearDown() {
+        unmockkObject(AppLogger)
         Dispatchers.resetMain()
     }
 

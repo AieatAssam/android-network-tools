@@ -151,7 +151,11 @@ class WakeOnLanViewModel
         val broadcastProblem: StateFlow<WolBroadcastProblem?> =
             _broadcastAddress
                 .map { WolMagicPacket.broadcastProblem(it) }
-                .stateIn(viewModelScope, SharingStarted.Eagerly, WolMagicPacket.broadcastProblem(_broadcastAddress.value))
+                .stateIn(
+                    viewModelScope,
+                    SharingStarted.Eagerly,
+                    WolMagicPacket.broadcastProblem(_broadcastAddress.value),
+                )
 
         val portInvalid: StateFlow<Boolean> =
             _port

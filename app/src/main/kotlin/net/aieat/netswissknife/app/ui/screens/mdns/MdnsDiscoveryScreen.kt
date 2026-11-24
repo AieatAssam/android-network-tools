@@ -158,7 +158,15 @@ fun MdnsDiscoveryScreen(
     val resources = LocalContext.current.resources
     // Copy and Share export exactly what the list shows, so the filter is part of the report.
     val report =
-        remember(filteredByType, uiState.isScanning, uiState.isCanceling, uiState.scanCanceled, truncationNote, searchQuery, resources) {
+        remember(
+            filteredByType,
+            uiState.isScanning,
+            uiState.isCanceling,
+            uiState.scanCanceled,
+            truncationNote,
+            searchQuery,
+            resources,
+        ) {
             buildMdnsShareText(
                 services = filteredByType.values.flatten(),
                 isScanning = uiState.isScanning,

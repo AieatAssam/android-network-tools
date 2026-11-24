@@ -67,12 +67,15 @@ private val HTTP_PROBE_CANDIDATES = listOf(80, 8080)
 
 /** Cadence of live list updates while hosts are being found. Final states are never throttled. */
 private const val LIVE_PUBLISH_INTERVAL_MS = 100L
+private const val NANOS_PER_MILLI = 1_000_000L
 
 /**
  * The cleartext HTTP port the HTTP action should probe: the first candidate that was open,
  * or null when no web port answered, so the action is not offered.
  */
-internal fun preferredHttpProbePort(openPorts: Collection<Int>): Int? = HTTP_PROBE_CANDIDATES.firstOrNull { it in LanQuickPorts.ports && it in openPorts }
+internal fun preferredHttpProbePort(openPorts: Collection<Int>): Int? =
+    HTTP_PROBE_CANDIDATES
+        .firstOrNull { it in LanQuickPorts.ports && it in openPorts }
 
 /** Compatibility facade for the budget shared with the repository's no-session path. */
 internal object LanScanTimeBudget {
@@ -247,7 +250,10 @@ class LanScanViewModel
         private val _subnet = MutableStateFlow(restoredSubnet.orEmpty())
         val subnet: StateFlow<String> = _subnet.asStateFlow()
 
-        private val _timeoutMs = MutableStateFlow((restoredTimeoutMs ?: AppPreferenceDefaults.TIMEOUT_MS).coerceIn(100, 10_000))
+        private val _timeoutMs =
+            MutableStateFlow(
+                (restoredTimeoutMs ?: AppPreferenceDefaults.TIMEOUT_MS).coerceIn(100, 10_000),
+            )
         val timeoutMs: StateFlow<Int> = _timeoutMs.asStateFlow()
 
         private val _concurrency = MutableStateFlow(restoredConcurrency ?: 50)
@@ -340,7 +346,9 @@ class LanScanViewModel
                     val prefs = dataStore.data.first()
                     // A restored input keeps its value; the DataStore default applies only to a fresh form.
                     if (restoredTimeoutMs == null) {
-                        _timeoutMs.value = (prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: AppPreferenceDefaults.TIMEOUT_MS).coerceIn(100, 10_000)
+                        _timeoutMs.value =
+                            (prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: AppPreferenceDefaults.TIMEOUT_MS)
+                                .coerceIn(100, 10_000)
                     }
                     if (restoredConcurrency == null) {
                         _concurrency.value = prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50
@@ -671,7 +679,7 @@ class LanScanViewModel
             immediate: Boolean = false,
         ) {
             liveScanning = next
-            val intervalNanos = LIVE_PUBLISH_INTERVAL_MS * 1_000_000L
+            val intervalNanos = LIVE_PUBLISH_INTERVAL_MS * NANOS_PER_MILLI
             val sinceLastNanos = SystemMonotonicClock.nowNanos() - lastLivePublishNanos
             when {
                 immediate || sinceLastNanos >= intervalNanos -> {
@@ -681,7 +689,7 @@ class LanScanViewModel
                 livePublishJob == null -> {
                     livePublishJob =
                         viewModelScope.launch {
-                            delay(((intervalNanos - sinceLastNanos) / 1_000_000L).coerceAtLeast(1L))
+                            delay(((intervalNanos - sinceLastNanos) / NANOS_PER_MILLI).coerceAtLeast(1L))
                             livePublishJob = null
                             flushLive()
                         }

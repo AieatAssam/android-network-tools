@@ -280,8 +280,9 @@ class OkHttpEngineTest {
             )
 
             val result =
-                HttpProbeRepositoryImpl(OkHttpEngine(OkHttpClient.Builder().protocols(listOf(Protocol.H2_PRIOR_KNOWLEDGE)).build()))
-                    .probe(HttpProbeRequest(url = server.url("/").toString()))
+                HttpProbeRepositoryImpl(
+                    OkHttpEngine(OkHttpClient.Builder().protocols(listOf(Protocol.H2_PRIOR_KNOWLEDGE)).build()),
+                ).probe(HttpProbeRequest(url = server.url("/").toString()))
 
             assertTrue(result is net.aieat.netswissknife.core.network.NetworkResult.Success<*>)
             val data = (result as net.aieat.netswissknife.core.network.NetworkResult.Success<*>).data as HttpProbeResult

@@ -393,7 +393,11 @@ class PingViewModelTest {
                 coEvery { pingUseCase(any(), any()) } returns
                     flowOf(
                         PingFlowResult.ValidationError(
-                            ErrorInfo(ErrorCode.HOST_INVALID, args = listOf("bad host"), developerMessage = "invalid host"),
+                            ErrorInfo(
+                                ErrorCode.HOST_INVALID,
+                                args = listOf("bad host"),
+                                developerMessage = "invalid host",
+                            ),
                         ),
                     )
                 viewModel.onHostChange("")

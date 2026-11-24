@@ -534,7 +534,14 @@ fun WifiScanScreen(viewModel: WifiScanViewModel = hiltViewModel()) {
 
 @Composable private fun WifiCancelledScreen(onRetry: () -> Unit) {
     WifiStatusCard(
-        icon = { Icon(Icons.Default.Stop, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        icon = {
+            Icon(
+                Icons.Default.Stop,
+                null,
+                Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
         title = stringResource(R.string.wifi_scan_cancelled_title),
         body = stringResource(R.string.wifi_scan_cancelled_body),
         action = { ToolRetryButton(text = stringResource(R.string.wifi_retry), onClick = onRetry) },
@@ -543,7 +550,14 @@ fun WifiScanScreen(viewModel: WifiScanViewModel = hiltViewModel()) {
 
 @Composable private fun WifiPausedScreen(onRetry: () -> Unit) {
     WifiStatusCard(
-        icon = { Icon(Icons.Default.Pause, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        icon = {
+            Icon(
+                Icons.Default.Pause,
+                null,
+                Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
         title = stringResource(R.string.wifi_scan_paused_title),
         body = stringResource(R.string.wifi_scan_paused_body),
         action = { ToolRetryButton(text = stringResource(R.string.wifi_retry), onClick = onRetry) },
@@ -595,7 +609,9 @@ internal fun wifiShareLabels(resources: Resources): WifiShareLabels =
         wifiDisabled = resources.getString(R.string.wifi_share_wifi_disabled),
         locationDisabled = resources.getString(R.string.wifi_share_location_disabled),
         rssi = { dbm -> resources.getString(R.string.wifi_rssi_dbm, dbm) },
-        bandChannel = { band, channel -> resources.getString(R.string.wifi_band_channel_value, band.ghzLabel, channel) },
+        bandChannel = { band, channel ->
+            resources.getString(R.string.wifi_band_channel_value, band.ghzLabel, channel)
+        },
     )
 
 @StringRes
@@ -661,7 +677,12 @@ internal fun buildWifiShareText(
         } else {
             pluralStringResource(R.plurals.wifi_aps_of_total, totalApCount, shownApCount, totalApCount)
         }
-    val spectrumBand = spectrumBandFor(state.bandFilter, state.result.connectedNetwork?.band, state.result.detectedBands)
+    val spectrumBand =
+        spectrumBandFor(
+            state.bandFilter,
+            state.result.connectedNetwork?.band,
+            state.result.detectedBands,
+        )
     val spectrumAps = state.filteredAccessPoints.filter { it.bssid in visibleBssids && it.band == spectrumBand }
     val spectrumAvailable = spectrumBand != null && bandFreqRange(spectrumBand) != null && spectrumAps.isNotEmpty()
     val context = LocalContext.current
@@ -719,7 +740,10 @@ internal fun buildWifiShareText(
                         Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
                     }) { Text(stringResource(R.string.action_copy)) }
                     TextButton(onClick = {
-                        context.shareText(buildWifiShareText(state.result, wifiShareLabels(context.resources)), shareSubject)
+                        context.shareText(
+                            buildWifiShareText(state.result, wifiShareLabels(context.resources)),
+                            shareSubject,
+                        )
                     }) { Text(stringResource(R.string.action_share)) }
                 }
 

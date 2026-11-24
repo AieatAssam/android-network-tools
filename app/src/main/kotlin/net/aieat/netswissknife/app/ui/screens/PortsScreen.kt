@@ -911,7 +911,12 @@ private fun PortScanProgressCard(state: PortScanUiState.Scanning) {
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = pluralStringResource(R.plurals.ports_open_found_so_far, state.openCount, state.openCount),
+                        text =
+                            pluralStringResource(
+                                R.plurals.ports_open_found_so_far,
+                                state.openCount,
+                                state.openCount,
+                            ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Medium,
@@ -1258,4 +1263,10 @@ internal fun buildScanReport(
     }
 
 /** Timeout slider positions snap to 100 ms steps between 200 and 10 000 ms. */
-internal fun roundTimeoutMs(value: Float): Int = ((value / 100f).roundToInt() * 100).coerceIn(200, 10_000)
+private const val PORT_TIMEOUT_STEP_MS = 100
+private const val PORT_MIN_TIMEOUT_MS = 200
+private const val PORT_MAX_TIMEOUT_MS = 10_000
+
+internal fun roundTimeoutMs(value: Float): Int =
+    ((value / PORT_TIMEOUT_STEP_MS).roundToInt() * PORT_TIMEOUT_STEP_MS)
+        .coerceIn(PORT_MIN_TIMEOUT_MS, PORT_MAX_TIMEOUT_MS)

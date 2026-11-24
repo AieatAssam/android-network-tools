@@ -542,7 +542,11 @@ private val ATTRIBUTION_SOURCES =
         AttributionSource(
             titleRes = R.string.settings_attribution_ipify_title,
             bodyRes = R.string.settings_attribution_ipify_body,
-            linkRes = listOf(R.string.settings_attribution_ipify_ipv4_url, R.string.settings_attribution_ipify_ipv6_url),
+            linkRes =
+                listOf(
+                    R.string.settings_attribution_ipify_ipv4_url,
+                    R.string.settings_attribution_ipify_ipv6_url,
+                ),
         ),
         AttributionSource(
             titleRes = R.string.settings_attribution_geoip_title,
