@@ -176,13 +176,13 @@
     <string name="dns_server_system_name">System DNS</string>
     <string name="dns_server_system_description">Uses the DNS server configured on your device</string>
     <string name="dns_server_google_name">Google DNS</string>
-    <string name="dns_server_google_description">8.8.8.8 - Google\'s fast &amp; reliable public resolver</string>
+    <string name="dns_server_google_description">Google Public DNS at 8.8.8.8</string>
     <string name="dns_server_cloudflare_name">Cloudflare DNS</string>
-    <string name="dns_server_cloudflare_description">1.1.1.1 - Cloudflare\'s privacy-focused public resolver</string>
+    <string name="dns_server_cloudflare_description">Cloudflare public resolver at 1.1.1.1</string>
     <string name="dns_server_opendns_name">OpenDNS</string>
-    <string name="dns_server_opendns_description">208.67.222.222 - Cisco OpenDNS with optional content filtering</string>
+    <string name="dns_server_opendns_description">Cisco OpenDNS at 208.67.222.222</string>
     <string name="dns_server_quad9_name">Quad9</string>
-    <string name="dns_server_quad9_description">9.9.9.9 - Security-focused resolver that blocks malicious domains</string>
+    <string name="dns_server_quad9_description">Quad9 public resolver at 9.9.9.9</string>
     <string name="dns_server_custom_name">Custom</string>
     <string name="dns_share_server">Server: %1$s</string>
     <string name="dns_custom_server_placeholder">e.g. 192.168.1.1</string>
@@ -193,7 +193,7 @@
 
     <!-- DNS States -->
     <string name="dns_idle_title">Enter a domain to look up</string>
-    <string name="dns_idle_subtitle">Supports A, AAAA, MX, TXT, CNAME, NS, SOA, PTR and more</string>
+    <string name="dns_ttl_badge">TTL %1$s</string>
     <string name="dns_querying">Querying DNS…</string>
     <string name="dns_querying_subtitle">Sending query to DNS server</string>
     <string name="dns_canceling">Stopping DNS lookup…</string>
@@ -240,7 +240,7 @@
     <string name="ping_host_label">Host or IP address</string>
     <string name="ping_host_placeholder">e.g. google.com or 8.8.8.8</string>
     <string name="ping_count_label">Count</string>
-    <string name="ping_timeout_label">Timeout (s)</string>
+    <string name="ping_timeout_label">Timeout</string>
     <string name="ping_advanced_options">Advanced options</string>
     <string name="ping_payload_label">Payload size: %1$d bytes</string>
     <string name="ping_ttl_label">TTL: %1$d</string>
@@ -263,6 +263,12 @@
     <string name="ping_idle_ready_subtitle">Press Start Ping to run it</string>
     <string name="ping_running_title">Pinging…</string>
     <string name="ping_error_title">Ping failed</string>
+    <string name="ping_error_generic">Ping could not complete. Try again.</string>
+    <string name="ping_error_no_response">No response from %1$s. Check the host and your network, then try again.</string>
+    <string name="ping_error_no_route">No network connection. Connect to a network, then try again.</string>
+    <string name="ping_error_local_permission">Local network permission is denied. Allow it in system settings, then try again.</string>
+    <string name="ping_error_unavailable">Network operation is unavailable right now.</string>
+    <string name="ping_error_connectivity_unvalidated">Continuous ping needs a network with validated connectivity.</string>
 
     <!-- Ping Results -->
     <string name="ping_result_header">Ping Results</string>
@@ -273,6 +279,8 @@
     <string name="ping_unresolved_message">Could not find an address for %1$s. Check the name, then try again.</string>
     <string name="ping_reset_advanced">Reset to defaults</string>
     <string name="ping_stats_header">Statistics</string>
+    <string name="ping_engine_icmp">Measured with ICMP echo requests.</string>
+    <string name="ping_engine_reachability">Measured with reachability checks (ICMP or TCP fallback). Payload size and TTL were not applied.</string>
     <string name="ping_packets_sent">Sent</string>
     <string name="ping_packets_received">Received</string>
     <string name="ping_packet_loss">Loss</string>
@@ -286,7 +294,9 @@
     <string name="ping_error_label_result">Error</string>
     <string name="ping_raw_output">Raw Output</string>
     <string name="ping_copy_raw">Copy raw output</string>
+    <string name="ping_export_csv_label">Export as CSV</string>
     <string name="ping_chart_title">RTT Chart</string>
+    <string name="ping_chart_window">Last %1$d packets</string>
     <string name="ping_chart_a11y">RTT chart: successful sample count %1$d; axis from %2$d to %3$d ms; %4$s %5$d ms, %6$s %7$.1f ms, %8$s %9$d ms; %10$s</string>
     <plurals name="ping_chart_failed_markers">
         <item quantity="one">%1$d failed probe marker at the 0 ms baseline</item>
@@ -1513,6 +1523,7 @@
     <string name="help_dns_what_body">Queries a DNS server for records associated with a domain or IP address. Supports A, AAAA, MX, TXT, CNAME, NS, SOA, PTR, SRV, and more.</string>
     <string name="help_dns_params_heading">Key parameters</string>
     <string name="help_dns_results_heading">Reading the results</string>
+    <string name="help_dns_record_types_heading">Record types</string>
     <string-array name="help_dns_params_bullets">
         <item>Domain - the hostname or IP to query.</item>
         <item>Record type - A/AAAA return the IP address; MX returns the mail server that handles email for the domain; TXT holds arbitrary text, often used to prove domain ownership; CNAME is an alias pointing to another name; NS lists the servers authoritative for the domain; SOA holds zone administration info; PTR reverse-resolves an IP back to a hostname; SRV points to the host/port for a specific service.</item>
@@ -1524,6 +1535,18 @@
         <item>RCODE, flags, Authority, Additional, and the actual server used explain negative answers and resolver behaviour.</item>
         <item>Private DNS is reported when Android exposes it; System DNS is never silently replaced by another resolver.</item>
         <item>Use PTR lookups to reverse-resolve an IP address to a hostname.</item>
+    </string-array>
+    <string-array name="help_dns_record_types_bullets">
+        <item>A: maps a hostname to an IPv4 address (32-bit).</item>
+        <item>AAAA: maps a hostname to an IPv6 address (128-bit).</item>
+        <item>MX: mail servers that accept email for the domain, with a priority value where lower is preferred.</item>
+        <item>TXT: arbitrary text, used for SPF, DKIM, DMARC and domain verification.</item>
+        <item>CNAME: an alias from one hostname to another; resolvers follow it to an A or AAAA record.</item>
+        <item>NS: the authoritative name servers for a DNS zone.</item>
+        <item>SOA: zone administration data, including the primary name server, contact, serial number and timers.</item>
+        <item>PTR: maps an IP address back to a hostname for reverse lookups.</item>
+        <item>SRV: the host and port for a service, with priority and weight.</item>
+        <item>CAA: which certificate authorities may issue certificates for the domain.</item>
     </string-array>
 
     <!-- Wi-Fi Scanner help -->

@@ -19,7 +19,7 @@ ICMP echo and reachability round-trip latency measurement with real-time streami
 - Advanced payload size (0–1,472 bytes), TTL (1–255), and interval (100–10,000 ms, in 100 ms steps) controls, with a Reset to defaults action. The count, timeout, payload, TTL and interval sliders keep their values when you leave and return (in memory for the app session, and through saved state across rotation and process death); ping results are not kept
 - Rotating the device keeps a run going. A run stopped early (Stop, or the app going to the background) is labelled as stopped early, and its statistics cover only the probes that were sent
 - When the host field changes after a run, the previous result is labelled as the previous result for its own host
-- Per-probe RTT reporting with sequence numbers and status (SUCCESS / TIMEOUT / UNREACHABLE / ERROR), including reply IP, TTL, and bytes when available
+- Per-probe RTT reporting with sequence numbers and status (SUCCESS / TIMEOUT / UNREACHABLE / ERROR), including reply IP, TTL, and bytes when available The finished result names the measuring engine; reachability-fallback runs do not apply the payload size or TTL, and the raw output says so.
 - Live stats panel during active ping: packet loss %, min, avg, and max RTT updating after every packet
 - RTT chart with Y-axis ms labels and fill gradient, rendered as results arrive
 - **Continuous mode** — toggle replaces the count slider; pings indefinitely while the app is on screen, screen kept on automatically, stops when backgrounded or screen locked
@@ -95,7 +95,8 @@ Full DNS record resolution with multiple resolver options and protocol-level res
 - Answer records are listed first under an **Answer** label. The Authority and Additional sections follow them, and the Additional section starts collapsed, since it usually holds EDNS OPT pseudo-records (labelled `OPT`); an MX record of `0 .` is annotated as a null MX
 - System DNS is never silently replaced with Cloudflare; when Android reports no resolver, the UI explains the failure and offers an explicit Cloudflare fallback. Private DNS status is shown when available.
 - IDN hostnames and trailing-dot FQDNs are normalized consistently across network tools.
-- Copy and Share at the foot of the result card send a plain-text summary: type, domain, server, query time, and every record with its TTL. Copy confirms with "Copied to clipboard". The result header names the server used once; each record shows its type once, in its badge. Per-record and raw-response copies are unchanged
+- Copy and Share at the foot of the result card send a plain-text summary: type, domain, server, query time, response code, and every record with its TTL. Copy confirms with "Copied to clipboard". The result header names the server used once; each record shows its type once, in its badge. Per-record and raw-response copies confirm the same way
+- Answer owner names are shown only when they differ from the queried name. Record type descriptions are listed in the help sheet rather than on the screen.
 
 ### Wi-Fi Scanner
 Wi-Fi environment analysis with SSID grouping and spectrum visualisation.

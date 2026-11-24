@@ -25,6 +25,7 @@ import net.aieat.netswissknife.app.util.SystemDnsAddressProvider
 import net.aieat.netswissknife.app.util.enumFromSavedName
 import net.aieat.netswissknife.core.domain.DnsLookupParams
 import net.aieat.netswissknife.core.domain.DnsLookupUseCase
+import net.aieat.netswissknife.core.network.ErrorInfo
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.dns.DnsLookupOperation
 import net.aieat.netswissknife.core.network.dns.DnsNameValidator
@@ -43,7 +44,8 @@ sealed interface DnsUiState {
     data class Success(val result: DnsResult, val showRaw: Boolean = false) : DnsUiState
     data class Error(
         val message: String,
-        val canFallbackToCloudflare: Boolean = false
+        val canFallbackToCloudflare: Boolean = false,
+        val errorInfo: ErrorInfo? = null,
     ) : DnsUiState
 }
 
@@ -284,7 +286,8 @@ class DnsViewModel @Inject constructor(
                 val result = dnsLookupUseCase(params, session)
                 if (requestGeneration != lookupGeneration) return@launch
 
-                if (result is NetworkResult.Success) {
+                // NXDOMAIN and SERVFAIL arrive as Success with a non-NOERROR rcode; they are not worth recalling.
+                if (result is NetworkResult.Success && result.data.rcode == "NOERROR") {
                     try {
                         addRecentIfInputWasValid(params)
                     } catch (e: CancellationException) {
@@ -301,7 +304,8 @@ class DnsViewModel @Inject constructor(
                     is NetworkResult.Success -> DnsUiState.Success(result.data)
                     is NetworkResult.Error -> DnsUiState.Error(
                         message = result.message,
-                        canFallbackToCloudflare = canFallbackToCloudflare
+                        canFallbackToCloudflare = canFallbackToCloudflare,
+                        errorInfo = result.info,
                     )
                 }
             } catch (e: CancellationException) {

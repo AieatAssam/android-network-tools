@@ -19,4 +19,10 @@ class DnsRecordIconLabelTest {
         val opt = DnsRecord(type = null, name = "", value = "", ttl = 0, rawLine = "", rrTypeName = "OPT")
         assertEquals("OPT", dnsRecordIconLabel(opt))
     }
+
+    @Test
+    fun `longer type names are not truncated`() {
+        val cname = DnsRecord(DnsRecordType.CNAME, "www.example.com", "example.com", 300, "")
+        assertEquals("CNAME", dnsRecordIconLabel(cname))
+    }
 }

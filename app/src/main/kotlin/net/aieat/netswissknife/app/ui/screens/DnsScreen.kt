@@ -2,7 +2,6 @@ package net.aieat.netswissknife.app.ui.screens
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -38,8 +37,6 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -72,7 +69,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,11 +79,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
-import android.content.ClipData
 import androidx.annotation.StringRes
-import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -101,7 +94,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.ui.draw.clipToBounds
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
@@ -110,6 +102,7 @@ import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
+import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.hapticAction
@@ -124,24 +117,28 @@ import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.screens.dns.DnsUiState
 import net.aieat.netswissknife.app.ui.screens.dns.DnsViewModel
 import net.aieat.netswissknife.app.ui.screens.dns.dnsRecordIconLabel
+import net.aieat.netswissknife.app.ui.screens.dns.dnsTtlLabel
 import net.aieat.netswissknife.app.ui.components.messageRes
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.scrollEdgeFade
+import net.aieat.netswissknife.core.network.ErrorInfo
 import net.aieat.netswissknife.core.network.HostProblem
 import net.aieat.netswissknife.core.network.dns.DnsNameValidator
+import net.aieat.netswissknife.app.ui.screens.dns.dnsPullRefreshActive
+import net.aieat.netswissknife.app.ui.screens.dns.dnsShowsOwner
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.dns.DnsRecord
 import net.aieat.netswissknife.core.network.dns.DnsRecordType
 import net.aieat.netswissknife.core.network.dns.DnsResult
 import net.aieat.netswissknife.core.network.dns.DnsServer
+import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
 import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.app.ui.i18n.uiDescription
 import net.aieat.netswissknife.app.ui.i18n.uiLabel
 import net.aieat.netswissknife.app.ui.screens.dns.DnsResponseTone
 import net.aieat.netswissknife.app.ui.screens.dns.dnsResponseTone
 
-// ── Entry point ───────────────────────────────────────────────────────────────
 
 /**
  * Handles for instrumentation tests. The result panel is the third item of a
@@ -193,12 +190,21 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
         label         = "screen-alpha"
     )
     var showHelp by remember { mutableStateOf(false) }
-    val isRefreshing = uiState is DnsUiState.Loading
+    var pullRequested by remember { mutableStateOf(false) }
+    val isRefreshing = dnsPullRefreshActive(pullRequested, uiState)
+    LaunchedEffect(uiState) {
+        if (uiState !is DnsUiState.Loading) pullRequested = false
+    }
     val canRefresh = uiState is DnsUiState.Success || uiState is DnsUiState.Error
 
     PullToRefreshBox(
         isRefreshing = isRefreshing,
-        onRefresh = { if (canRefresh) viewModel.onRetry() },
+        onRefresh = {
+            if (canRefresh) {
+                pullRequested = true
+                viewModel.onRetry()
+            }
+        },
         modifier = Modifier.fillMaxSize()
     ) {
     LazyColumn(
@@ -270,6 +276,7 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                         )
                         is DnsUiState.Error -> DnsErrorPanel(
                             message = state.message,
+                            errorInfo = state.errorInfo,
                             onRetry = viewModel::onRetry,
                             canFallbackToCloudflare = state.canFallbackToCloudflare,
                             onUseCloudflare = viewModel::onUseCloudflare
@@ -302,6 +309,11 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                     heading = stringResource(R.string.help_dns_results_heading),
                     body = "",
                     bullets = stringArrayResource(R.array.help_dns_results_bullets).toList()
+                ),
+                HelpSection(
+                    heading = stringResource(R.string.help_dns_record_types_heading),
+                    body = "",
+                    bullets = stringArrayResource(R.array.help_dns_record_types_bullets).toList()
                 )
             ),
             onDismiss = { showHelp = false }
@@ -309,7 +321,6 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
     }
 }
 
-// ── Hero header ───────────────────────────────────────────────────────────────
 
 @Composable
 private fun DnsHeroHeader(onHelpClick: () -> Unit) {
@@ -350,7 +361,6 @@ private fun DnsHeroHeader(onHelpClick: () -> Unit) {
     )
 }
 
-// ── Input card ────────────────────────────────────────────────────────────────
 
 @Composable
 private fun DnsInputCard(
@@ -441,8 +451,6 @@ private fun DnsInputCard(
                     onSelect = onRecordTypeChange,
                     enabled = !isBusy
                 )
-                // Description of selected record type
-                RecordTypeDescription(recordType = recordType)
             }
 
             // DNS server selector
@@ -520,7 +528,6 @@ private fun dnsInvalidNameRes(input: String): Int =
         else -> R.string.dns_name_invalid
     }
 
-// ── Record type chips ─────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -588,39 +595,6 @@ private fun RecordTypeChips(
     }
 }
 
-@Composable
-private fun RecordTypeDescription(recordType: DnsRecordType) {
-    Crossfade(
-        targetState = recordType,
-        animationSpec = AppMotion.effect(200),
-        label = "record-type-desc"
-    ) { type ->
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            Icon(
-                imageVector = Icons.Default.Info,
-                contentDescription = null,
-                modifier = Modifier.size(14.dp).padding(top = 1.dp),
-                tint = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-            Text(
-                text = type.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-        }
-    }
-}
-
-// ── DNS server selector (combo box) ──────────────────────────────────────────
-
 /**
  * An editable combo box for DNS server selection.
  * - Preset servers (System, Google, Cloudflare, OpenDNS, Quad9) are offered in the dropdown.
@@ -655,6 +629,7 @@ private fun DnsServerSelector(
     ) {
         OutlinedTextField(
             value = fieldValue,
+            readOnly = selectedServer !is DnsServer.Custom,
             onValueChange = { text ->
                 // Any manual edit → treat as a custom DNS address.
                 onCustomAddressChange(text)
@@ -744,7 +719,6 @@ private fun DnsServerSelector(
     }
 }
 
-// ── Idle hint ─────────────────────────────────────────────────────────────────
 
 @Composable
 private fun DnsIdleHint(modifier: Modifier = Modifier) {
@@ -772,15 +746,9 @@ private fun DnsIdleHint(modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface
         )
-        Text(
-            text = stringResource(R.string.dns_idle_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
 
-// ── Loading panel ─────────────────────────────────────────────────────────────
 
 @Composable
 private fun DnsLoadingPanel(modifier: Modifier = Modifier) {
@@ -848,7 +816,6 @@ private fun DnsCanceledPanel(onClear: () -> Unit, modifier: Modifier = Modifier)
     }
 }
 
-// ── Error panel ───────────────────────────────────────────────────────────────
 
 @Composable
 private fun DnsErrorPanel(
@@ -857,11 +824,12 @@ private fun DnsErrorPanel(
     modifier: Modifier = Modifier,
     canFallbackToCloudflare: Boolean = false,
     onUseCloudflare: () -> Unit = {},
+    errorInfo: ErrorInfo? = null,
 ) {
     ToolErrorCard(
         modifier = modifier,
         title = stringResource(R.string.dns_error_title),
-        message = message,
+        message = ErrorTextMapper.map(errorInfo, message).asString(),
     ) {
             ToolRetryButton(text = stringResource(R.string.dns_retry), onClick = onRetry)
             if (canFallbackToCloudflare) {
@@ -883,7 +851,6 @@ private fun DnsErrorPanel(
     }
 }
 
-// ── Result panel ──────────────────────────────────────────────────────────────
 
 @Composable
 private fun DnsResultPanel(
@@ -910,20 +877,22 @@ private fun DnsResultPanel(
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(start = 4.dp),
             )
-            result.records.forEachIndexed { index, record ->
-                DnsRecordCard(record = record, index = index)
+            result.records.forEach { record ->
+                DnsRecordCard(record = record, queriedName = result.domain)
             }
         }
         if (result.authority.isNotEmpty()) {
             DnsSectionCard(
                 title = stringResource(R.string.dns_authority_section),
-                records = result.authority
+                records = result.authority,
+                queriedName = result.domain,
             )
         }
         if (result.additional.isNotEmpty()) {
             DnsSectionCard(
                 title = stringResource(R.string.dns_additional_section),
                 records = result.additional,
+                queriedName = result.domain,
                 initiallyExpanded = false,
             )
         }
@@ -1063,6 +1032,7 @@ private fun DnsResultSummaryCard(
 private fun DnsSectionCard(
     title: String,
     records: List<DnsRecord>,
+    queriedName: String,
     initiallyExpanded: Boolean = true,
 ) {
     var expanded by remember { mutableStateOf(initiallyExpanded) }
@@ -1081,8 +1051,8 @@ private fun DnsSectionCard(
                 )
             }
             if (expanded) {
-                records.forEachIndexed { index, record ->
-                    DnsRecordCard(record = record, index = index)
+                records.forEach { record ->
+                    DnsRecordCard(record = record, queriedName = queriedName)
                 }
             }
         }
@@ -1118,20 +1088,18 @@ private fun SummaryMetric(
     }
 }
 
-// ── Individual record card ────────────────────────────────────────────────────
 
 @Composable
-private fun DnsRecordCard(record: DnsRecord, index: Int) {
-    val clipboard = LocalClipboard.current
-    val scope = rememberCoroutineScope()
+private fun DnsRecordCard(record: DnsRecord, queriedName: String) {
+    val copyValue = rememberCopyWithFeedback()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
 
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = AppMotion.enter(200 + index * 40),
-        label = "record-alpha-$index"
+        animationSpec = AppMotion.enter(200),
+        label = "record-alpha"
     )
 
     ElevatedCard(
@@ -1152,19 +1120,21 @@ private fun DnsRecordCard(record: DnsRecord, index: Int) {
                 ) {
                     // The type badge is the one place the record type is shown.
                     RecordTypeIcon(type = record.type, label = dnsRecordIconLabel(record))
-                    Text(
-                        text = record.name,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    if (dnsShowsOwner(record.name, queriedName)) {
+                        Text(
+                            text = record.name,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TtlBadge(ttl = record.ttl)
                     IconButton(
                         onClick = {
-                            scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", record.value))) }
+                            copyValue(record.value)
                         },
                         modifier = Modifier.minimumInteractiveComponentSize()
                     ) {
@@ -1222,17 +1192,12 @@ private fun RecordTypeIcon(
 
 @Composable
 private fun TtlBadge(ttl: Long) {
-    val ttlText = when {
-        ttl < 60    -> "${ttl}s"
-        ttl < 3600  -> "${ttl / 60}m"
-        else        -> "${ttl / 3600}h"
-    }
     Surface(
         shape = RoundedCornerShape(6.dp),
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Text(
-            text = "TTL $ttlText",
+            text = stringResource(R.string.dns_ttl_badge, dnsTtlLabel(ttl)),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -1377,7 +1342,6 @@ private fun PlainValueDisplay(value: String) {
     }
 }
 
-// ── No records state ──────────────────────────────────────────────────────────
 
 @Composable
 private fun DnsNoRecordsCard(result: DnsResult) {
@@ -1421,7 +1385,6 @@ private fun DnsNoRecordsCard(result: DnsResult) {
     }
 }
 
-// ── Raw response toggle ───────────────────────────────────────────────────────
 
 @Composable
 private fun DnsRawToggleCard(
@@ -1468,8 +1431,7 @@ private fun DnsRawToggleCard(
             AnimatedVisibility(visible = showRaw) {
                 Column {
                     HorizontalDivider()
-                    val clipboard2 = LocalClipboard.current
-                    val scope2 = rememberCoroutineScope()
+                    val copyRaw = rememberCopyWithFeedback()
                     Box(modifier = Modifier.fillMaxWidth()) {
                         SelectionContainer {
                             Text(
@@ -1485,7 +1447,7 @@ private fun DnsRawToggleCard(
                             )
                         }
                         IconButton(
-                            onClick = { scope2.launch { clipboard2.setClipEntry(ClipEntry(ClipData.newPlainText("", rawResponse))) } },
+                            onClick = { copyRaw(rawResponse) },
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
                                 .padding(4.dp)
@@ -1505,9 +1467,10 @@ private fun DnsRawToggleCard(
 }
 
 internal fun buildDnsShareText(result: DnsResult, serverLine: String): String = buildString {
-    appendLine("DNS ${result.recordType.name} – ${result.domain}")
+    appendLine("DNS ${result.recordType.name}: ${result.domain}")
     appendLine(serverLine)
     appendLine("Query time: ${result.queryTimeMs}ms")
+    appendLine("Response code: ${result.rcode}")
     appendLine()
     if (result.records.isEmpty()) {
         appendLine("No records found.")

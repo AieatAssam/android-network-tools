@@ -334,6 +334,34 @@ class DnsViewModelTest {
         }
 
         @Test
+        fun `NXDOMAIN and other non-NOERROR responses are not saved to recents`() = runTest {
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult.copy(rcode = "NXDOMAIN"))
+            viewModel.onDomainChange("missing.example")
+            viewModel.performLookup()
+
+            assertTrue(viewModel.uiState.value is DnsUiState.Success)
+            coVerify(exactly = 0) {
+                recentHostsRepository.addRecent(
+                    net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
+                    any()
+                )
+            }
+        }
+
+        @Test
+        fun `error keeps the typed error info for the UI to map`() = runTest {
+            val info = net.aieat.netswissknife.core.network.ErrorInfo(
+                code = net.aieat.netswissknife.core.network.ErrorCode.NETWORK_TIMEOUT,
+            )
+            coEvery { useCase(any(), any()) } returns NetworkResult.Error(message = "timed out", info = info)
+            viewModel.onDomainChange("example.com")
+            viewModel.performLookup()
+
+            val state = viewModel.uiState.value as DnsUiState.Error
+            assertEquals(info, state.errorInfo)
+        }
+
+        @Test
         fun `recent persistence failure does not replace successful DNS result`() = runTest {
             coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
             coEvery {
