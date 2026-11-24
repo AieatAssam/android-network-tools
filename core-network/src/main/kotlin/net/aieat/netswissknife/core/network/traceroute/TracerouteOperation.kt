@@ -13,7 +13,7 @@ object TracerouteOperation {
     const val MAX_CONCURRENT_PROBES = 5
     const val MAX_REVERSE_DNS_WAIT_MILLIS = 1_000L
     const val MAX_GEO_IP_WAIT_MILLIS = 5_000L
-    const val MAX_HOST_RESOLUTION_WAIT_MILLIS = 5_000L
+    const val MAX_HOST_RESOLUTION_WAIT_MILLIS = 10_000L
 
     /** Includes probe waves, bounded name resolution, reverse DNS, and optional GeoIP enrichment. */
     fun requestedTimeoutMillis(

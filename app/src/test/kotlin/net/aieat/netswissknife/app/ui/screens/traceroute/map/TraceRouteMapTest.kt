@@ -121,7 +121,7 @@ class TraceRouteMapTest {
     @DisplayName("segments")
     inner class Segments {
         @Test
-        fun `a segment carries the arriving hop's RTT, probe results and distance`() {
+        fun `a segment carries the arriving hop's median RTT, probe results and distance`() {
             val map =
                 TraceRouteMap.from(
                     listOf(hop(3, london, listOf(10L, 11L, 12L)), hop(4, newYork, listOf(80L, null, 85L))),
@@ -131,31 +131,34 @@ class TraceRouteMapTest {
             assertEquals(0, segment.fromStop)
             assertEquals(1, segment.toStop)
             assertEquals(SegmentKey(fromHop = 3, toHop = 4), segment.key)
-            assertEquals(80L, segment.rttMs)
-            assertEquals(ProbeStats(sent = 3, answered = 2, fastestMs = 80L, jitterMs = 5L), segment.probes)
+            // Median of 80 and 85, rounded half up.
+            assertEquals(83L, segment.rttMs)
+            assertEquals(ProbeStats(sent = 3, answered = 2, medianMs = 83L, jitterMs = 5L), segment.probes)
             assertEquals(GeoPlausibility.distanceKm(london, newYork), segment.distanceKm, 1e-6)
             assertEquals(0, segment.skippedHops)
+            // Median 11 at London to median 83 at New York.
+            assertEquals(72L, segment.addedRttMs)
             assertFalse(segment.isUnknown)
         }
 
         @Test
         fun `jitter needs two answered probes`() {
             assertEquals(
-                ProbeStats(sent = 2, answered = 1, fastestMs = 40L, jitterMs = null),
+                ProbeStats(sent = 2, answered = 1, medianMs = 40L, jitterMs = null),
                 ProbeStats.of(hop(1, probes = listOf(40L, null))),
             )
             assertEquals(
-                ProbeStats(sent = 1, answered = 1, fastestMs = 40L, jitterMs = null),
+                ProbeStats(sent = 1, answered = 1, medianMs = 40L, jitterMs = null),
                 ProbeStats.of(hop(1, probes = listOf(40L))),
             )
-            assertEquals(0.5, ProbeStats(sent = 2, answered = 1, fastestMs = 40L, jitterMs = null).lossFraction, 1e-9)
+            assertEquals(0.5, ProbeStats(sent = 2, answered = 1, medianMs = 40L, jitterMs = null).lossFraction, 1e-9)
         }
 
         @Test
         fun `a hop without per-probe results counts as one probe`() {
             val bare = HopResult(1, "198.51.100.1", null, 12L, HopStatus.SUCCESS)
 
-            assertEquals(ProbeStats(sent = 1, answered = 1, fastestMs = 12L, jitterMs = null), ProbeStats.of(bare))
+            assertEquals(ProbeStats(sent = 1, answered = 1, medianMs = 12L, jitterMs = null), ProbeStats.of(bare))
         }
 
         @Test
@@ -255,8 +258,10 @@ class TraceRouteMapTest {
             assertEquals(Stability.STABLE, stabilityOf(listOf(200L, 225L)))
             // 15 ms spread on a 20 ms hop: under the absolute floor.
             assertEquals(Stability.STABLE, stabilityOf(listOf(20L, 35L)))
-            // Exactly at both thresholds counts as high.
-            assertEquals(Stability.UNSTABLE, stabilityOf(listOf(80L, 100L)))
+            // Exactly at both thresholds counts as high: 20 ms is a quarter of the 80 ms median.
+            assertEquals(Stability.UNSTABLE, stabilityOf(listOf(70L, 90L)))
+            // The floor is a quarter of the median, not of the fastest probe: 20 ms on a 90 ms median is low.
+            assertEquals(Stability.STABLE, stabilityOf(listOf(80L, 100L)))
         }
 
         @Test
@@ -344,13 +349,21 @@ class TraceRouteMapTest {
         }
 
         @Test
-        fun `the fastest probe is used on both ends`() {
-            val map = TraceRouteMap.from(listOf(hop(3, london, listOf(14L, 10L)), hop(5, newYork, listOf(90L, 80L))))
+        fun `the median is used on both ends, the same figure as colour and the hop list`() {
+            val map =
+                TraceRouteMap.from(
+                    listOf(hop(3, london, listOf(14L, 10L, 12L)), hop(5, newYork, listOf(90L, 70L, 85L))),
+                )
 
-            val expected = GeoPlausibility.distanceKm(london, newYork) / 35.0 / GeoPlausibility.FIBRE_KM_PER_MS
-            assertEquals(expected, map.segments.single().speedFraction!!, 1e-9)
-            // The colour still uses the RTT the hop list shows.
-            assertEquals(90L, map.segments.single().rttMs)
+            val segment = map.segments.single()
+            // Medians 12 and 85: the first probe (14, 90) and the fastest (10, 70) are both ignored.
+            assertEquals(73L, segment.addedRttMs)
+            // Speed uses the one-way time, half the added RTT.
+            val expected = GeoPlausibility.distanceKm(london, newYork) / 36.5 / GeoPlausibility.FIBRE_KM_PER_MS
+            assertEquals(expected, segment.speedFraction!!, 1e-9)
+            assertEquals(85L, segment.rttMs)
+            assertEquals(85L, map.stops.last().rttMs)
+            assertEquals(12L, map.stops.first().rttMs)
         }
 
         @Test
@@ -382,7 +395,7 @@ class TraceRouteMapTest {
 
             assertEquals(3, map.firstLocatedHop)
             assertFalse(map.segments.single().isUnknown)
-            assertNull(map.trailing)
+            assertTrue(map.offRoute.isEmpty)
         }
 
         @Test
@@ -396,37 +409,51 @@ class TraceRouteMapTest {
             assertTrue(bridge.isUnknown)
             assertEquals(Stability.UNKNOWN, bridge.stability)
             assertEquals(2, bridge.skippedHops)
+            assertEquals(listOf(4, 5), bridge.skippedHopNumbers)
             assertNull(bridge.rttMs)
+            assertNull(bridge.addedRttMs)
             assertNull(bridge.speedFraction)
             assertEquals(SpeedBand.UNKNOWN, bridge.speed)
             assertEquals(SegmentKey(fromHop = 3, toHop = 6), bridge.key)
-            // The stop itself still carries its measured RTT.
-            assertEquals(
-                80L,
-                map.stops
-                    .last()
-                    .hops
-                    .first()
-                    .rtTimeMs,
-            )
+            // The stop itself still carries its measured median RTT, 80.5 rounded half up.
+            assertEquals(81L, map.stops.last().rttMs)
+            val expected = OffRouteHops(noReply = listOf(4), notLocated = listOf(5), disputed = emptyList())
+            assertEquals(expected, map.offRoute)
         }
 
         @Test
-        fun `unknown hops at the end are counted, not drawn`() {
+        fun `unknown hops at the end are listed by reason, not drawn`() {
             val map =
                 TraceRouteMap.from(
                     listOf(hop(3, london), hop(4, paris), hop(5), hop(6), timeout(7), timeout(8)),
                 )
 
             assertEquals(1, map.segments.size)
-            assertEquals(TrailingHops(firstHop = 5, lastHop = 8, notLocated = 2, noReply = 2), map.trailing)
+            val expected = OffRouteHops(noReply = listOf(7, 8), notLocated = listOf(5, 6), disputed = emptyList())
+            assertEquals(expected, map.offRoute)
         }
 
         @Test
-        fun `a disputed hop after the last stop is drawn, so it is not counted as unlocated`() {
+        fun `a disputed hop is listed as disputed, never as located or unlocated`() {
             val map = TraceRouteMap.from(listOf(hop(3, london, listOf(10L)), hop(4, sydney, listOf(12L)), timeout(5)))
 
-            assertEquals(TrailingHops(firstHop = 4, lastHop = 5, notLocated = 0, noReply = 1), map.trailing)
+            val expected = OffRouteHops(noReply = listOf(5), notLocated = emptyList(), disputed = listOf(4))
+            assertEquals(expected, map.offRoute)
+        }
+
+        @Test
+        fun `the off-route facts of a long silent tail count every hop after a disputed one`() {
+            // Hops 13 and 14 are disputed, and 15 to 30 sent no reply: none of them follow the last route stop.
+            val hops =
+                listOf(hop(11, london, listOf(10L)), hop(12, paris, listOf(14L))) +
+                    listOf(hop(13, sydney, listOf(15L)), hop(14, tokyo, listOf(16L))) +
+                    (15..30).map { timeout(it) }
+
+            val map = TraceRouteMap.from(hops)
+
+            assertEquals((15..30).toList(), map.offRoute.noReply)
+            assertEquals(listOf(13, 14), map.offRoute.disputed)
+            assertTrue(map.offRoute.notLocated.isEmpty())
         }
 
         @Test
@@ -436,16 +463,16 @@ class TraceRouteMapTest {
             assertTrue(map.isEmpty)
             assertTrue(map.segments.isEmpty())
             assertNull(map.head)
-            assertNull(map.trailing)
+            assertTrue(map.offRoute.isEmpty)
         }
 
         @Test
-        fun `a single located hop is the head of the route, with the hops after it counted`() {
+        fun `a single located hop is the head of the route, with the hops after it listed`() {
             val map = TraceRouteMap.from(listOf(hop(1), hop(2, frankfurt), hop(3)))
 
             assertEquals(listOf(2), map.head?.hopNumbers)
             assertTrue(map.segments.isEmpty())
-            assertEquals(TrailingHops(firstHop = 3, lastHop = 3, notLocated = 1, noReply = 0), map.trailing)
+            assertEquals(listOf(3), map.offRoute.notLocated)
         }
 
         @Test
@@ -492,13 +519,14 @@ class TraceRouteMapTest {
         }
 
         @Test
-        fun `a hop whose location has not arrived yet is counted as not located`() {
+        fun `a hop whose location has not arrived yet is listed as not located`() {
             val pending = route.take(3) + route[3].copy(geoLocation = null)
 
             val map = TraceRouteMap.from(pending)
 
             assertEquals(listOf(SegmentKey(2, 3)), map.segments.map { it.key })
-            assertEquals(TrailingHops(firstHop = 4, lastHop = 4, notLocated = 1, noReply = 0), map.trailing)
+            val expected = OffRouteHops(noReply = emptyList(), notLocated = listOf(4), disputed = emptyList())
+            assertEquals(expected, map.offRoute)
         }
 
         @Test
@@ -512,7 +540,7 @@ class TraceRouteMapTest {
 
             assertEquals(listOf(SegmentKey(2, 3), SegmentKey(3, 4), SegmentKey(4, 5)), after.segments.map { it.key })
             assertFalse(after.segments.any { it.isUnknown })
-            assertNull(after.trailing)
+            assertTrue(after.offRoute.isEmpty)
         }
 
         @Test

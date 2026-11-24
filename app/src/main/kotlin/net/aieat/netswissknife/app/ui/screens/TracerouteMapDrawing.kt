@@ -20,14 +20,19 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.ArcCurve
+import net.aieat.netswissknife.app.ui.screens.traceroute.map.ArcWidth
+import net.aieat.netswissknife.app.ui.screens.traceroute.map.LabelSize
+import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapLegendContent
+import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapSelection
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapViewport
+import net.aieat.netswissknife.app.ui.screens.traceroute.map.PlacedLabel
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.RouteSegment
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.RouteStop
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.ScreenPoint
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.SegmentKey
-import net.aieat.netswissknife.app.ui.screens.traceroute.map.SpeedBand
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.Stability
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.TraceRouteMap
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.WorldLand
@@ -44,13 +49,14 @@ private val ArcCasingExtra = 2.dp
 private val DashOn = 10.dp
 private val DashOff = 6.dp
 private val DotGap = 6.dp
-private val MarkerRadius = 6.dp
+internal val MarkerRadius = 6.dp
 private val MarkerRingWidth = 1.5.dp
 private val DestinationRingRadius = 10.dp
 private val SelectedRingRadius = 13.dp
 private val SelectedRingWidth = 2.dp
 private val HeadRingGrowth = 10.dp
-private val LabelOffset = 8.dp
+private val SelectedArcHalo = 6.dp
+internal val LabelOffset = 8.dp
 private val LabelPadding = 3.dp
 
 /** Theme colours of the map, read once per composition so the draw pass reads no theme. */
@@ -69,15 +75,29 @@ internal class ArcStyle(
     val casing: Stroke,
 )
 
-/** Per-route drawing inputs, prepared once per route so drawing allocates almost nothing. */
+/**
+ * Per-route drawing inputs, prepared once per route so drawing allocates almost nothing. Label text is
+ * laid out on first use and kept, since the clusters, and so the labels, change with the zoom.
+ */
 internal class RouteDrawing(
     val map: TraceRouteMap,
     val styles: List<ArcStyle>,
-    val labels: List<TextLayoutResult>,
+    /** One colour per stop, in [TraceRouteMap.allStops] order. */
     val stopColors: List<Color>,
     val colors: MapColors,
+    private val layoutLabel: (String) -> TextLayoutResult,
+    private val labelPaddingPx: Float,
 ) {
     val arcPath = Path()
+    private val labelCache = HashMap<String, TextLayoutResult>()
+
+    fun label(text: String): TextLayoutResult = labelCache.getOrPut(text) { layoutLabel(text) }
+
+    /** The box a label needs, background padding included. */
+    val labelSize: (String) -> LabelSize = { text ->
+        val size = label(text).size
+        LabelSize(size.width + 2 * labelPaddingPx, size.height + 2 * labelPaddingPx)
+    }
 }
 
 @Composable
@@ -102,10 +122,10 @@ internal fun rememberRouteDrawing(
         RouteDrawing(
             map = map,
             styles = map.segments.map { arcStyle(density, it, colorFor(it.rttMs)) },
-            labels = (map.stops + map.disputedStops).map { textMeasurer.measure(it.label, labelStyle) },
-            stopColors =
-                map.stops.map { colorFor(it.hops.first().rtTimeMs) } + map.disputedStops.map { colors.disputed },
+            stopColors = map.stops.map { colorFor(it.rttMs) } + map.disputedStops.map { colors.disputed },
             colors = colors,
+            layoutLabel = { textMeasurer.measure(it, labelStyle) },
+            labelPaddingPx = with(density) { LabelPadding.toPx() },
         )
     }
 }
@@ -120,16 +140,17 @@ internal fun landPath(land: WorldLand): Path =
         }
     }
 
-internal fun arcWidth(speed: SpeedBand) =
-    when (speed) {
-        SpeedBand.FAST -> ArcWidthFast
-        SpeedBand.MEDIUM, SpeedBand.UNKNOWN -> ArcWidthMedium
-        SpeedBand.SLOW -> ArcWidthSlow
+/** Stroke width of [width]; arcs get theirs from [MapLegendContent.widthOf], as the legend does. */
+internal fun arcWidthDp(width: ArcWidth): Dp =
+    when (width) {
+        ArcWidth.THICK -> ArcWidthFast
+        ArcWidth.MEDIUM -> ArcWidthMedium
+        ArcWidth.THIN -> ArcWidthSlow
     }
 
 /**
  * The line pattern of [stability], one meaning each: solid for stable, dotted for unstable, dash-dot for
- * a single probe, dashed for an unknown path. [patternWidthPx] sets the gaps, so an arc's casing, drawn
+ * stability not measured, dashed for an unknown path. [patternWidthPx] sets the gaps, so an arc's casing, drawn
  * wider underneath it, keeps the same rhythm.
  */
 internal fun arcStroke(
@@ -160,7 +181,7 @@ private fun arcStyle(
     segment: RouteSegment,
     color: Color,
 ): ArcStyle {
-    val width = with(density) { arcWidth(segment.speed).toPx() }
+    val width = with(density) { arcWidthDp(MapLegendContent.widthOf(segment.speed)).toPx() }
     val casingWidth = width + with(density) { ArcCasingExtra.toPx() }
     return ArcStyle(
         color = color,
@@ -189,28 +210,33 @@ internal fun DrawScope.drawLand(
 }
 
 /**
- * Each arc as far as [shown] has drawn it, then the stops the arcs have reached. [headPulse] is the
- * phase of the ring around the newest stop while the trace runs, or null once it has finished.
+ * Each arc as far as [shown] has drawn it, then the stops the arcs have reached and their labels.
+ * [headPulse] is the phase of the ring around the newest stop while the trace runs, or null once it
+ * has finished.
  */
 internal fun DrawScope.drawRoute(
     drawing: RouteDrawing,
     geometry: MapGeometry,
     shown: (SegmentKey) -> Float,
-    selectedHop: Int?,
+    selection: MapSelection?,
     headPulse: Float?,
 ) {
     val map = drawing.map
     // The drawing and geometry of one map are replaced together; skip a frame that pairs them across maps.
-    if (geometry.arcs.size != map.segments.size || geometry.stopPoints.size != map.stops.size) return
-    drawArcs(drawing, geometry.arcs, shown)
-    map.stops.forEachIndexed { index, stop ->
-        // A stop appears once the arc arriving at it has been drawn.
-        val arriving = map.segments.getOrNull(index - 1)
-        if (arriving != null && shown(arriving.key) < 1f) return@forEachIndexed
-        drawStop(stop, geometry.stopPoints[index], index, drawing, selectedHop)
+    if (geometry.arcs.size != map.segments.size || geometry.stopPoints.size != map.allStops.size) return
+    drawArcs(drawing, geometry.arcs, shown, (selection as? MapSelection.Segment)?.key)
+    // A route stop appears once the arc arriving at it has been drawn; disputed stops are off the route.
+    val visible =
+        map.allStops.indices.map { index ->
+            val arriving = map.segments.getOrNull(index - 1)
+            index >= map.stops.size || arriving == null || shown(arriving.key) >= 1f
+        }
+    val selectedHops = (selection as? MapSelection.Stops)?.hopNumbers.orEmpty()
+    map.allStops.forEachIndexed { index, stop ->
+        if (visible[index]) drawStop(stop, geometry.stopPoints[index], drawing.stopColors[index], drawing, selectedHops)
     }
-    map.disputedStops.forEachIndexed { index, stop ->
-        drawStop(stop, geometry.disputedPoints[index], map.stops.size + index, drawing, selectedHop)
+    geometry.labels.forEach { label ->
+        if (geometry.clusters[label.cluster].members.any { visible[it] }) drawLabel(label, drawing)
     }
     val head = map.stops.lastIndex
     val headDrawn = map.segments.getOrNull(head - 1)?.let { shown(it.key) >= 1f } ?: true
@@ -237,17 +263,23 @@ private fun DrawScope.drawArcs(
     drawing: RouteDrawing,
     arcs: List<ArcCurve>,
     shown: (SegmentKey) -> Float,
+    selected: SegmentKey?,
 ) {
     val path = drawing.arcPath
     val casingColor = drawing.colors.surface.copy(alpha = CASING_ALPHA)
     arcs.forEachIndexed { index, arc ->
-        val fraction = shown(drawing.map.segments[index].key).coerceIn(0f, 1f)
+        val key = drawing.map.segments[index].key
+        val fraction = shown(key).coerceIn(0f, 1f)
         if (fraction <= 0f) return@forEachIndexed
         val curve = if (fraction < 1f) arc.truncated(fraction) else arc
         path.reset()
         path.moveTo(curve.startX, curve.startY)
         path.quadraticTo(curve.controlX, curve.controlY, curve.endX, curve.endY)
         val style = drawing.styles[index]
+        if (key == selected) {
+            val halo = style.stroke.width + SelectedArcHalo.toPx()
+            drawPath(path, drawing.colors.selected, style = Stroke(halo, cap = StrokeCap.Round))
+        }
         drawPath(path, casingColor, style = style.casing)
         drawPath(path, style.color, style = style.stroke)
     }
@@ -256,16 +288,15 @@ private fun DrawScope.drawArcs(
 private fun DrawScope.drawStop(
     stop: RouteStop,
     point: ScreenPoint,
-    index: Int,
+    fill: Color,
     drawing: RouteDrawing,
-    selectedHop: Int?,
+    selectedHops: List<Int>,
 ) {
     val colors = drawing.colors
-    val fill = drawing.stopColors[index]
     val center = Offset(point.x, point.y)
     val radius = MarkerRadius.toPx()
     val ringWidth = MarkerRingWidth.toPx()
-    if (stop.hops.any { it.hopNumber == selectedHop }) {
+    if (stop.hops.any { it.hopNumber in selectedHops }) {
         drawCircle(colors.selected, SelectedRingRadius.toPx(), center, style = Stroke(SelectedRingWidth.toPx()))
     }
     if (stop.isDestination) drawCircle(colors.outline, DestinationRingRadius.toPx(), center, style = Stroke(ringWidth))
@@ -276,14 +307,19 @@ private fun DrawScope.drawStop(
         drawCircle(fill, radius, center)
         drawCircle(colors.surface, radius, center, style = Stroke(ringWidth))
     }
-    val label = drawing.labels[index]
+}
+
+private fun DrawScope.drawLabel(
+    label: PlacedLabel,
+    drawing: RouteDrawing,
+) {
     val pad = LabelPadding.toPx()
-    val topLeft = Offset(point.x + LabelOffset.toPx(), point.y - LabelOffset.toPx() - label.size.height)
+    val box = label.box
     drawRoundRect(
-        color = colors.surface.copy(alpha = LABEL_BACKGROUND_ALPHA),
-        topLeft = Offset(topLeft.x - pad, topLeft.y - pad),
-        size = Size(label.size.width + 2 * pad, label.size.height + 2 * pad),
+        color = drawing.colors.surface.copy(alpha = LABEL_BACKGROUND_ALPHA),
+        topLeft = Offset(box.left, box.top),
+        size = Size(box.right - box.left, box.bottom - box.top),
         cornerRadius = CornerRadius(pad * 2),
     )
-    drawText(label, topLeft = topLeft)
+    drawText(drawing.label(label.text), topLeft = Offset(box.left + pad, box.top + pad))
 }

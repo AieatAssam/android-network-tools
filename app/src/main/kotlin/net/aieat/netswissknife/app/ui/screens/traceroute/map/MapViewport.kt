@@ -163,6 +163,9 @@ data class MapViewport(
         private const val MAX_LAT = 90.0
         private const val ZOOMED_IN_TOLERANCE = 1.01
 
+        /** Zoom factor of the zoom in and zoom out buttons and of a double tap. */
+        const val ZOOM_STEP = 2f
+
         /** Widest zoom: the whole world fits the canvas. */
         fun minPxPerDegree(
             widthPx: Float,

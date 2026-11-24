@@ -16,5 +16,6 @@ fun HostProblem.messageRes(): Int =
         HostProblem.INVALID_LABEL -> R.string.error_host_invalid_label
         HostProblem.INVALID_CHARACTERS -> R.string.error_host_invalid_characters
         HostProblem.TOO_LONG -> R.string.error_host_too_long
+        HostProblem.URL_NOT_HOST -> R.string.error_host_url
         HostProblem.INVALID -> R.string.error_host_invalid
     }

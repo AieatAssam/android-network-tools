@@ -89,4 +89,25 @@ class GeoPlausibilityTest {
 
         assertTrue(km in 16_400.0..16_700.0, "was $km")
     }
+
+    @Test
+    fun `flags an anycast destination placed in Brisbane right after London hops`() {
+        // The device trace to 1.1.1.1: London hops at 20 to 30 ms, then the destination reply at 25/57/21 ms
+        // with GeoIP placing it in Brisbane, which needs a round trip of at least 165 ms from London.
+        fun probed(
+            number: Int,
+            location: HopGeoLocation,
+            vararg rtts: Long?,
+            destination: Boolean = false,
+        ) = hop(number, rtts.first(), location).copy(probeRttsMs = rtts.toList(), destinationReached = destination)
+
+        val hops =
+            listOf(
+                probed(9, london, 21L, 77L, 22L),
+                probed(10, london, 58L, 31L, 81L),
+                probed(11, brisbane, 25L, 57L, 21L, destination = true),
+            )
+
+        assertEquals(setOf(11), GeoPlausibility.implausibleHops(hops))
+    }
 }

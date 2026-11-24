@@ -232,4 +232,37 @@ class MapViewportTest {
             assertEquals(4.0, halfway.pxPerDegree, eps)
         }
     }
+
+    @Nested
+    @DisplayName("telling views apart")
+    inner class SameView {
+        private val fitted = MapViewport(centerLon = 10.0, centerLat = 20.0, pxPerDegree = 4.0)
+
+        @Test
+        fun `a view looks like itself and like one under a pixel and a percent away`() {
+            assertTrue(fitted.looksLike(fitted))
+            // 0.2 degree at 4 px per degree is 0.8 px.
+            assertTrue(fitted.looksLike(fitted.copy(centerLon = 10.2, pxPerDegree = 4.03)))
+        }
+
+        @Test
+        fun `a view moved a pixel or more, or zoomed, does not look like the fitted one`() {
+            assertFalse(fitted.looksLike(fitted.copy(centerLon = 10.3)))
+            assertFalse(fitted.looksLike(fitted.copy(centerLat = 19.7)))
+            assertFalse(fitted.looksLike(fitted.copy(pxPerDegree = 8.0)))
+        }
+
+        @Test
+        fun `zooming in and back out by the button step returns to a view that looks fitted`() {
+            val width = 600f
+            val height = 375f
+            val view = MapViewport(centerLon = 10.0, centerLat = 20.0, pxPerDegree = 4.0)
+
+            val zoomedIn = view.zoomedBy(MapViewport.ZOOM_STEP, width / 2f, height / 2f, width, height, 10.0)
+            val back = zoomedIn.zoomedBy(1f / MapViewport.ZOOM_STEP, width / 2f, height / 2f, width, height, 10.0)
+
+            assertFalse(view.looksLike(zoomedIn))
+            assertTrue(view.looksLike(back))
+        }
+    }
 }

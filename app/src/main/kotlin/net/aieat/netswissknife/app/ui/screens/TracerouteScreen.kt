@@ -626,6 +626,7 @@ private fun TracerouteInputCard(
             } else {
                 TracerouteStartAction(
                     canStart = canStart,
+                    hostBlank = host.isBlank(),
                     isBusy = isBusy,
                     onStart = {
                         dismissKeyboard()
@@ -638,9 +639,9 @@ private fun TracerouteInputCard(
 }
 
 @Composable
-@Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun TracerouteStartAction(
     canStart: Boolean,
+    hostBlank: Boolean,
     isBusy: Boolean,
     onStart: () -> Unit,
 ) {
@@ -653,8 +654,9 @@ private fun TracerouteStartAction(
         Spacer(Modifier.width(8.dp))
         Text(stringResource(R.string.traceroute_start_button))
     }
-    // A disabled button needs its reason next to it (V6A-12).
-    if (!canStart && !isBusy) {
+    // A disabled button needs its reason next to it (V6A-12). An invalid host already shows its reason
+    // under the field, so the hint is only for an empty one.
+    if (!canStart && !isBusy && hostBlank) {
         DisabledActionHint(stringResource(R.string.traceroute_start_disabled_hint))
     }
 }
@@ -746,7 +748,10 @@ private data class TraceSession(
     val canceled: Boolean = false,
     val stoppedWhenLeft: Boolean = false,
     val timeLimitReached: Boolean = false,
-)
+) {
+    /** Stopped before its end, by the user, by leaving the screen or by the time limit. */
+    val stopped: Boolean get() = canceling || canceled || stoppedWhenLeft || timeLimitReached
+}
 
 private fun TracerouteUiState.session(): TraceSession? =
     when (this) {
@@ -817,9 +822,22 @@ private fun TraceSessionPanel(
         // subcomposition reads a disposed State<T> and throws IllegalStateException.
         // A plain when-branch with no animation avoids the nesting entirely.
         when (session.viewMode) {
-            TracerouteViewMode.Visual -> HopDetailList(session.hops, finished = !session.live)
-            TracerouteViewMode.Map -> TracerouteMapCard(hops = session.hops, live = session.live, colorFor = ::rttColor)
-            TracerouteViewMode.Raw -> RawOutputCard(session.rawOutput)
+            TracerouteViewMode.Visual -> {
+                HopDetailList(session.hops, finished = !session.live)
+            }
+
+            TracerouteViewMode.Map -> {
+                TracerouteMapCard(
+                    hops = session.hops,
+                    live = session.live,
+                    stopped = session.stopped,
+                    colorFor = ::rttColor,
+                )
+            }
+
+            TracerouteViewMode.Raw -> {
+                RawOutputCard(session.rawOutput)
+            }
         }
         // Route geography comes after the hops, which are the answer (PHA-16).
         result?.let { RouteGeographyCard(it) }
@@ -1019,11 +1037,14 @@ private fun TraceSummaryLines(summary: TraceSummary) {
     val lastReply = summary.lastReply
     val rttLine =
         summary.destination?.let { destination ->
-            destination.rtTimeMs?.let {
-                stringResource(R.string.traceroute_summary_destination_rtt, it, destination.hopNumber)
+            destination.rttMedianMs?.let {
+                val basis = rttBasis(destination.answeredProbes)
+                stringResource(R.string.traceroute_summary_destination_rtt, it, basis, destination.hopNumber)
             }
         } ?: lastReply?.let { hop ->
-            hop.rtTimeMs?.let { stringResource(R.string.traceroute_summary_last_reply, hop.hopNumber, it) }
+            hop.rttMedianMs?.let {
+                stringResource(R.string.traceroute_summary_last_reply, hop.hopNumber, it, rttBasis(hop.answeredProbes))
+            }
         }
     val silence =
         summary.silentAfterLastReply?.let { range ->
@@ -1370,7 +1391,7 @@ private fun HopCard(
     hop: HopResult,
     index: Int,
 ) {
-    val hopColor = rttColor(hop.rtTimeMs)
+    val hopColor = rttColor(hop.rttMedianMs)
     var expanded by remember(hop.hopNumber) { mutableStateOf(false) }
     // animateFloatAsState + animateContentSize replace AnimatedVisibility(expandVertically/shrinkVertically).
     // AnimatedVisibility with size enter/exit specs uses SubcomposeLayout internally; nested inside
@@ -1546,13 +1567,13 @@ private fun HopCard(
 
                 // RTT badge + expand chevron
                 Column(horizontalAlignment = Alignment.End) {
-                    if (hop.rtTimeMs != null) {
+                    hop.rttMedianMs?.let { median ->
                         Surface(
                             color = hopColor.copy(alpha = 0.15f),
                             shape = RoundedCornerShape(6.dp),
                         ) {
                             Text(
-                                text = "${hop.rtTimeMs}ms",
+                                text = "${median}ms",
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                 style =
                                     MaterialTheme.typography.labelSmall.copy(
@@ -1561,6 +1582,11 @@ private fun HopCard(
                                     ),
                             )
                         }
+                        Text(
+                            text = rttBasis(hop.answeredProbes),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                         Spacer(Modifier.height(4.dp))
                     }
                     Icon(
@@ -1589,8 +1615,9 @@ private fun HopCard(
                     hop.hostname?.let {
                         HopDetailRow(stringResource(R.string.traceroute_hop_detail_hostname), it)
                     }
-                    hop.rtTimeMs?.let {
-                        HopDetailRow(stringResource(R.string.traceroute_hop_detail_rtt), "${it}ms")
+                    hop.rttMedianMs?.let {
+                        val rtt = "${it}ms (${rttBasis(hop.answeredProbes)})"
+                        HopDetailRow(stringResource(R.string.traceroute_hop_detail_rtt), rtt)
                     }
                     HopDetailRow(
                         label = stringResource(R.string.traceroute_hop_detail_status),

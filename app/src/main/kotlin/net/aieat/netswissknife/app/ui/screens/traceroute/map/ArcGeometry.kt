@@ -74,6 +74,45 @@ object ArcGeometry {
     }
 }
 
+/** Points each arc is cut into for hit testing; plenty for a tap target a finger wide. */
+private const val ARC_HIT_SAMPLES = 32
+
+/**
+ * Index of the arc that passes nearest to ([x], [y]) within [radiusPx], or null when none is that close.
+ * Each arc is checked as a polyline of [ARC_HIT_SAMPLES] straight pieces.
+ */
+fun nearestArcIndex(
+    arcs: List<ArcCurve>,
+    x: Float,
+    y: Float,
+    radiusPx: Float,
+): Int? {
+    var best: Int? = null
+    var bestDistance = radiusPx
+    arcs.forEachIndexed { index, arc ->
+        val points = (0..ARC_HIT_SAMPLES).map { arc.pointAt(it.toFloat() / ARC_HIT_SAMPLES) }
+        val distance = points.zipWithNext().minOf { (a, b) -> distanceToSegment(x, y, a, b) }
+        if (distance <= bestDistance) {
+            best = index
+            bestDistance = distance
+        }
+    }
+    return best
+}
+
+private fun distanceToSegment(
+    x: Float,
+    y: Float,
+    a: ScreenPoint,
+    b: ScreenPoint,
+): Float {
+    val dx = b.x - a.x
+    val dy = b.y - a.y
+    val lengthSquared = dx * dx + dy * dy
+    val t = if (lengthSquared == 0f) 0f else (((x - a.x) * dx + (y - a.y) * dy) / lengthSquared).coerceIn(0f, 1f)
+    return hypot(a.x + t * dx - x, a.y + t * dy - y)
+}
+
 /** Index of the point nearest to ([x], [y]) within [radiusPx], or null when none is that close. */
 fun nearestPointIndex(
     points: List<ScreenPoint>,

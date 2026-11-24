@@ -1,6 +1,7 @@
 
 package net.aieat.netswissknife.app.ui.screens
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,167 +10,188 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import net.aieat.netswissknife.app.R
-import net.aieat.netswissknife.app.ui.screens.traceroute.map.ProbeStats
+import net.aieat.netswissknife.app.ui.screens.traceroute.map.ArcWidth
+import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapLegendContent
+import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapSizing
+import net.aieat.netswissknife.app.ui.screens.traceroute.map.MarkerNote
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.RouteClassification
-import net.aieat.netswissknife.app.ui.screens.traceroute.map.RouteStop
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.Stability
-import net.aieat.netswissknife.app.ui.screens.traceroute.map.TraceRouteMap
-import net.aieat.netswissknife.core.network.traceroute.HopResult
 import kotlin.math.roundToInt
 
 private const val PERCENT = 100
 private val LegendSampleWidth = 28.dp
 private val LegendSampleHeight = 14.dp
 
-/** Details of a tapped stop, with the same RTT text and colour as the hop list. */
-@Composable
-internal fun StopCallout(
-    stop: RouteStop,
-    colorFor: (Long?) -> Color,
-) {
-    OutlinedCard(modifier = Modifier.fillMaxWidth().testTag("traceroute_map_callout")) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (stop.disputed) {
-                Text(
-                    stringResource(R.string.traceroute_map_callout_disputed),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            stop.hops.forEach { hop -> CalloutHopRow(hop, colorFor) }
-        }
-    }
-}
-
-@Composable
-private fun CalloutHopRow(
-    hop: HopResult,
-    colorFor: (Long?) -> Color,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                stringResource(R.string.traceroute_map_callout_hop, hop.hopNumber),
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-            )
-            Text(
-                hop.ip.orEmpty(),
-                style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                rttText(hop.rtTimeMs),
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                color = colorFor(hop.rtTimeMs),
-            )
-        }
-        hop.geoLocation?.let {
-            Text(
-                hopLocationLabel(it),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.tertiary,
-            )
-        }
-        val probes = ProbeStats.of(hop)
-        val replies = stringResource(R.string.traceroute_map_callout_replies, probes.answered, probes.sent)
-        val jitter = probes.jitterMs?.let { stringResource(R.string.traceroute_map_callout_jitter, it) }
-        Text(
-            listOfNotNull(replies, jitter).joinToString(stringResource(R.string.traceroute_list_separator)),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
 /**
- * Text legend for every visual channel the map draws, and only those; colour is never the only signal.
- * While [live], the ring marking the newest stop is explained too.
+ * Text legend for exactly the colours, widths, line patterns and markers the map draws, all read from
+ * [content]; colour is never the only signal. Two columns on a wide card; it can be collapsed.
  */
 @Composable
 internal fun MapLegend(
-    map: TraceRouteMap,
-    live: Boolean,
+    content: MapLegendContent,
     colorFor: (Long?) -> Color,
 ) {
-    Column(modifier = Modifier.testTag("traceroute_map_legend"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (map.segments.any { !it.isUnknown }) {
-            LegendHeading(stringResource(R.string.traceroute_map_legend_colour))
-            TraceLatencyBand.entries.filter { it != TraceLatencyBand.UNKNOWN }.forEach { band ->
-                LegendRow(bandLabel(band), colorFor(band.lowerBoundMs), ArcWidthMedium, Stability.STABLE)
+    if (content.isEmpty) return
+    var expanded by rememberSaveable { mutableStateOf(true) }
+    // Width read after layout rather than with BoxWithConstraints, which nests a subcomposition in AnimatedContent.
+    var widthDp by remember { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .animateContentSize()
+                .onSizeChanged { widthDp = with(density) { it.width.toDp().value } }
+                .testTag("traceroute_map_legend"),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.traceroute_map_legend_title),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            val toggle = if (expanded) R.string.traceroute_map_legend_hide else R.string.traceroute_map_legend_show
+            IconButton(
+                onClick = { expanded = !expanded },
+                modifier = Modifier.testTag("traceroute_map_legend_toggle"),
+            ) {
+                Icon(
+                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = stringResource(toggle),
+                )
             }
-            WidthLegend()
         }
-        if (map.segments.isNotEmpty()) {
-            LineLegend(map.linePatterns, map.stabilityMeasurable, colorFor(null))
+        if (expanded) {
+            if (MapSizing.legendColumns(widthDp) == 2) {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    LegendColumn(Modifier.weight(1f)) { RouteLegend(content, colorFor) }
+                    LegendColumn(Modifier.weight(1f)) { MarkingLegend(content, colorFor) }
+                }
+            } else {
+                LegendColumn(Modifier.fillMaxWidth()) {
+                    RouteLegend(content, colorFor)
+                    MarkingLegend(content, colorFor)
+                }
+            }
         }
-        if (live && map.head != null) LegendNote(stringResource(R.string.traceroute_map_marker_head))
-        if ((map.stops + map.disputedStops).any { it.isDestination }) {
-            LegendNote(stringResource(R.string.traceroute_map_marker_destination))
-        }
-        if (map.disputedStops.isNotEmpty()) LegendNote(stringResource(R.string.traceroute_map_marker_disputed))
     }
 }
 
 @Composable
-private fun WidthLegend() {
+private fun LegendColumn(
+    modifier: Modifier,
+    body: @Composable () -> Unit,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) { body() }
+}
+
+@Composable
+private fun RouteLegend(
+    content: MapLegendContent,
+    colorFor: (Long?) -> Color,
+) {
+    if (content.latencyBands.isNotEmpty()) {
+        LegendHeading(stringResource(R.string.traceroute_map_legend_colour))
+        content.latencyBands.forEach { band ->
+            LegendRow(bandLabel(band), colorFor(band.lowerBoundMs), ArcWidthMedium, Stability.STABLE)
+        }
+    }
+    if (content.widths.isNotEmpty()) WidthLegend(content.widths)
+}
+
+@Composable
+private fun MarkingLegend(
+    content: MapLegendContent,
+    colorFor: (Long?) -> Color,
+) {
+    if (content.linePatterns.isNotEmpty()) {
+        LineLegend(content.linePatterns, content.singleProbeTrace, colorFor(null))
+    }
+    content.markers.forEach { marker ->
+        val text =
+            when (marker) {
+                MarkerNote.HEAD -> R.string.traceroute_map_marker_head
+                MarkerNote.DESTINATION -> R.string.traceroute_map_marker_destination
+                MarkerNote.DISPUTED -> R.string.traceroute_map_marker_disputed
+            }
+        LegendNote(stringResource(text))
+    }
+}
+
+@Composable
+private fun WidthLegend(widths: List<ArcWidth>) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val fast = (RouteClassification.FAST_FROM_FRACTION * PERCENT).roundToInt()
     val slow = (RouteClassification.SLOW_BELOW_FRACTION * PERCENT).roundToInt()
     val minKm = RouteClassification.MIN_SPEED_DISTANCE_KM.roundToInt()
     LegendHeading(stringResource(R.string.traceroute_map_legend_width))
-    LegendRow(stringResource(R.string.traceroute_map_width_fast, fast), muted, ArcWidthFast, Stability.STABLE)
-    LegendRow(
-        stringResource(R.string.traceroute_map_width_medium, slow, fast - 1, minKm),
-        muted,
-        ArcWidthMedium,
-        Stability.STABLE,
-    )
-    LegendRow(stringResource(R.string.traceroute_map_width_slow, slow), muted, ArcWidthSlow, Stability.STABLE)
+    widths.forEach { width ->
+        val text =
+            when (width) {
+                ArcWidth.THICK -> stringResource(R.string.traceroute_map_width_fast, fast)
+                ArcWidth.MEDIUM -> stringResource(R.string.traceroute_map_width_medium, slow, fast - 1, minKm)
+                ArcWidth.THIN -> stringResource(R.string.traceroute_map_width_slow, slow)
+            }
+        LegendRow(text, muted, arcWidthDp(width), Stability.STABLE)
+    }
 }
 
 @Composable
 private fun LineLegend(
-    patterns: Set<Stability>,
-    stabilityMeasurable: Boolean,
+    patterns: List<Stability>,
+    singleProbeTrace: Boolean,
     unknownColor: Color,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     LegendHeading(stringResource(R.string.traceroute_map_legend_line))
-    if (Stability.STABLE in patterns) {
-        LegendRow(stringResource(R.string.traceroute_map_line_solid), muted, ArcWidthMedium, Stability.STABLE)
-    }
-    if (Stability.UNSTABLE in patterns) {
-        val jitterPct = (RouteClassification.HIGH_JITTER_MIN_FRACTION * PERCENT).roundToInt()
-        LegendRow(
-            stringResource(R.string.traceroute_map_line_dotted, RouteClassification.HIGH_JITTER_MIN_MS, jitterPct),
-            muted,
-            ArcWidthMedium,
-            Stability.UNSTABLE,
-        )
-    }
-    if (Stability.NOT_MEASURED in patterns) {
-        LegendRow(stringResource(R.string.traceroute_map_line_dash_dot), muted, ArcWidthMedium, Stability.NOT_MEASURED)
-        if (!stabilityMeasurable) LegendNote(stringResource(R.string.traceroute_map_stability_needs_probes))
-    }
-    if (Stability.UNKNOWN in patterns) {
-        LegendRow(stringResource(R.string.traceroute_map_line_dashed), unknownColor, ArcWidthMedium, Stability.UNKNOWN)
+    patterns.forEach { pattern ->
+        when (pattern) {
+            Stability.STABLE -> {
+                LegendRow(stringResource(R.string.traceroute_map_line_solid), muted, ArcWidthMedium, pattern)
+            }
+
+            Stability.UNSTABLE -> {
+                val jitterPct = (RouteClassification.HIGH_JITTER_MIN_FRACTION * PERCENT).roundToInt()
+                val minMs = RouteClassification.HIGH_JITTER_MIN_MS
+                val text = stringResource(R.string.traceroute_map_line_dotted, minMs, jitterPct)
+                LegendRow(text, muted, ArcWidthMedium, pattern)
+            }
+
+            Stability.NOT_MEASURED -> {
+                LegendRow(stringResource(R.string.traceroute_map_line_dash_dot), muted, ArcWidthMedium, pattern)
+                if (singleProbeTrace) LegendNote(stringResource(R.string.traceroute_map_stability_needs_probes))
+            }
+
+            Stability.UNKNOWN -> {
+                LegendRow(stringResource(R.string.traceroute_map_line_dashed), unknownColor, ArcWidthMedium, pattern)
+            }
+        }
     }
 }
 
