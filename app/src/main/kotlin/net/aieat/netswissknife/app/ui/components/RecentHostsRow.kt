@@ -92,7 +92,6 @@ fun RecentHostsRow(
                             IconButton(
                                 onClick = { onRemoveHost(host) },
                                 enabled = actionsEnabled,
-                                modifier = Modifier.size(24.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,

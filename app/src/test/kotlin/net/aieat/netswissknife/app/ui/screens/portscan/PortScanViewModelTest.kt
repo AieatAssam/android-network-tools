@@ -604,6 +604,8 @@ class PortScanViewModelTest {
             viewModel.startScan()
             withContext(Dispatchers.Default) { kotlinx.coroutines.withTimeout(2_000) { oldStarted.await() } }
 
+            // Host edits are locked while a scan runs, so the user stops the old scan first.
+            viewModel.onStopScan()
             viewModel.onHostChange("new.example")
             viewModel.startScan()
             withContext(Dispatchers.Default) {
@@ -687,7 +689,10 @@ class PortScanViewModelTest {
                 viewModel.startScan()
 
                 assertEquals(
-                    PortScanUiState.Error("Local network permission denied"),
+                    PortScanUiState.Error(
+                        message = "Local network permission denied",
+                        info = ErrorInfo(ErrorCode.LOCAL_NETWORK_PERMISSION_DENIED),
+                    ),
                     viewModel.uiState.value,
                 )
                 verify(exactly = 0) { portScanUseCase.newSession(any()) }
@@ -1309,6 +1314,7 @@ class PortScanViewModelTest {
                 backgroundScope.launch { viewModel.uiState.collect { emitted += it } }
                 viewModel.onHostChange("example.com")
                 viewModel.startScan()
+                runCurrent()
                 val beforeFlush = emitted.size
 
                 advanceTimeBy(SCAN_UI_INTERVAL_MS)

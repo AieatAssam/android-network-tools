@@ -428,7 +428,10 @@ class PingViewModelTest {
 
                 viewModel.startPing()
 
-                assertEquals(PingUiState.Error("No network connection"), viewModel.uiState.value)
+                assertEquals(
+                    PingUiState.Error(UiText.Res(R.string.ping_error_no_route), "No network connection"),
+                    viewModel.uiState.value,
+                )
                 coVerify(exactly = 0) { pingUseCase(any(), any()) }
             }
 
@@ -489,7 +492,13 @@ class PingViewModelTest {
 
                 viewModel.startPing()
 
-                assertEquals(PingUiState.Error("Local network permission denied"), viewModel.uiState.value)
+                assertEquals(
+                    PingUiState.Error(
+                        UiText.Res(R.string.ping_error_local_permission),
+                        "Local network permission denied",
+                    ),
+                    viewModel.uiState.value,
+                )
                 coVerify(exactly = 0) { pingUseCase(any(), any()) }
             }
 
@@ -501,7 +510,10 @@ class PingViewModelTest {
 
                 viewModel.startPing()
 
-                assertEquals(PingUiState.Error("No network connection"), viewModel.uiState.value)
+                assertEquals(
+                    PingUiState.Error(UiText.Res(R.string.ping_error_no_route), "No network connection"),
+                    viewModel.uiState.value,
+                )
                 coVerify(exactly = 0) { pingUseCase(any(), any()) }
             }
 
@@ -513,7 +525,10 @@ class PingViewModelTest {
 
                 viewModel.startPing()
 
-                assertEquals(PingUiState.Error("socket closed"), viewModel.uiState.value)
+                assertEquals(
+                    PingUiState.Error(UiText.Res(R.string.ping_error_generic), "socket closed"),
+                    viewModel.uiState.value,
+                )
             }
     }
 
@@ -1044,7 +1059,10 @@ class PingViewModelTest {
 
                 viewModel.startPing()
 
-                assertEquals(PingUiState.Error("No network connection"), viewModel.uiState.value)
+                assertEquals(
+                    PingUiState.Error(UiText.Res(R.string.ping_error_no_route), "No network connection"),
+                    viewModel.uiState.value,
+                )
                 coVerify(exactly = 0) { continuousPingUseCase(any(), any()) }
             }
 
@@ -1058,7 +1076,10 @@ class PingViewModelTest {
                 viewModel.startPing()
 
                 assertEquals(
-                    PingUiState.Error("Continuous ping requires validated connectivity"),
+                    PingUiState.Error(
+                        UiText.Res(R.string.ping_error_connectivity_unvalidated),
+                        "Continuous ping requires validated connectivity",
+                    ),
                     viewModel.uiState.value,
                 )
                 coVerify(exactly = 0) { continuousPingUseCase(any(), any()) }

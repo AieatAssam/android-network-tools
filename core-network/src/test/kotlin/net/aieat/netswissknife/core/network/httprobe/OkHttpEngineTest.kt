@@ -549,7 +549,7 @@ class OkHttpEngineTest {
     }
 
     @Test
-    fun `manual redirect timing sums per-call values and limits each call to request timeout`() = runTest {
+    fun `manual redirect timing reports the final hop phases and limits each call to request timeout`() = runTest {
         val now = AtomicLong(0L)
         val fake = SequenceEngine(
             listOf(
@@ -563,11 +563,13 @@ class OkHttpEngineTest {
         assertTrue(result is NetworkResult.Success<*>)
         val data = (result as NetworkResult.Success<*>).data as HttpProbeResult
         val timings = data.timings
-        assertEquals(6L, timings.dnsMs)
-        assertEquals(8L, timings.connectMs)
+        // Phases describe the final hop only; totalMs covers the whole redirect chain.
+        assertEquals(5L, timings.dnsMs)
+        assertEquals(6L, timings.connectMs)
         assertEquals(7L, timings.tlsMs)
-        assertEquals(11L, timings.ttfbMs)
+        assertEquals(8L, timings.ttfbMs)
         assertEquals(9L, timings.transferMs)
+        assertEquals(200L, timings.totalMs)
         assertEquals(listOf(700, 500), fake.requests.map { it.timeoutMs })
         assertEquals("h2", data.protocol)
     }

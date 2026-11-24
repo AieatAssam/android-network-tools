@@ -57,7 +57,8 @@ class HttpProbeDisplayTest {
 
         val shared = visibleHttpResponseHeaders(headers, localized)
 
-        assertEquals(listOf("https://example.com/[requête masquée]"), shared["location"])
+        // An existing path is hidden with the path placeholder; the query is not shown separately.
+        assertEquals(listOf("https://example.com/[chemin masqué]"), shared["location"])
     }
 
     @Test

@@ -54,9 +54,10 @@ class DnsShareTextTest {
             )
         val expected =
             listOf(
-                "DNS AAAA – missing.example",
+                "DNS AAAA: missing.example",
                 "Server: System resolver",
                 "Query time: 4ms",
+                "Response code: NOERROR",
                 "",
                 "No records found.",
             ).joinToString(separator = "\n", postfix = "\n")
