@@ -812,6 +812,7 @@
     <string name="tls_expected_pin_placeholder">64 hexadecimal characters</string>
     <string name="tls_expected_pin_help">Compare against the leaf certificate fingerprint. Colons are optional.</string>
     <string name="tls_pin_invalid">Enter a valid 64-character SHA-256 certificate pin.</string>
+    <string name="tls_port_invalid">Enter a port number from 1 to 65535.</string>
     <string name="tls_share_pem">Share PEM</string>
     <string name="tls_share_pem_subject">TLS certificate PEM for %1$s:%2$d</string>
     <string name="error_invalid_port">Port must be a number from 1 to 65535</string>
@@ -847,6 +848,11 @@
     <string name="tls_probe_unknown">Could not determine</string>
     <string name="tls_probe_not_testable">Not testable on this device</string>
     <string name="tls_findings">Certificate findings</string>
+    <string name="tls_hostname_label">Hostname</string>
+    <string name="tls_hostname_matches">Matches the certificate</string>
+    <string name="tls_hostname_does_not_match">Does not match the certificate</string>
+    <string name="tls_finding_blocking">Fails check</string>
+    <string name="tls_finding_advisory">Advisory</string>
     <string name="tls_issue_expired">A certificate has expired</string>
     <string name="tls_issue_not_yet_valid">A certificate is not yet valid</string>
     <string name="tls_issue_expires_soon">A certificate expires soon</string>
@@ -870,7 +876,7 @@
     <string name="tls_collapse">Collapse certificate</string>
 
     <!-- TLS Expiry Badges -->
-    <string name="tls_expired">EXPIRED</string>
+    <string name="tls_expired">Expired</string>
     <plurals name="tls_days_left">
         <item quantity="one">%1$d day left</item>
         <item quantity="other">%1$d days left</item>
@@ -882,7 +888,7 @@
     <string name="tls_issuer_org">Issuer Org</string>
     <string name="tls_valid_from">Valid From</string>
     <string name="tls_valid_to">Valid To</string>
-    <string name="tls_not_yet_valid">NOT YET VALID</string>
+    <string name="tls_not_yet_valid">Not yet valid</string>
     <string name="tls_ca_certificate">Certificate Authority</string>
     <string name="tls_key_usage">Key Usage</string>
     <string name="tls_self_signed">Self-Signed</string>
@@ -1019,6 +1025,12 @@
     <string name="httprobe_json_valid">Valid JSON</string>
     <string name="httprobe_json_invalid">Not valid JSON</string>
     <string name="httprobe_json_incomplete">JSON validity unavailable because the response was truncated.</string>
+    <string name="httprobe_json_checking">Checking JSON…</string>
+    <string name="httprobe_request_details_not_kept">Request details are not kept after leaving this screen. Send again to see them.</string>
+    <string name="httprobe_redirect_address_omitted">[redirect address omitted]</string>
+    <string name="httprobe_path_omitted">[path omitted]</string>
+    <string name="httprobe_query_omitted">[query omitted]</string>
+    <string name="httprobe_sec_document_header_not_applicable">Browsers apply this header to HTML documents, so it has no effect on this response.</string>
     <string name="httprobe_timing_breakdown">Timing breakdown</string>
     <string name="httprobe_timing_dns">DNS</string>
     <string name="httprobe_timing_connect">Connect</string>
@@ -1227,10 +1239,10 @@
     <string name="share_file_unavailable">Unable to share this file.</string>
     <string name="share_subject_traceroute">Traceroute – %1$s</string>
     <string name="share_subject_ports">Port scan – %1$s</string>
-    <string name="share_subject_tls">TLS – %1$s:%2$d</string>
+    <string name="share_subject_tls">TLS: %1$s:%2$d</string>
     <string name="share_subject_whois">WHOIS – %1$s</string>
     <string name="share_subject_lan">LAN scan – %1$s</string>
-    <string name="share_subject_http">HTTP – %1$s</string>
+    <string name="share_subject_http">HTTP: %1$s</string>
     <string name="share_subject_dns">DNS %1$s – %2$s</string>
     <string name="share_subject_speedtest">Speed Test – %1$s</string>
     <string name="share_subject_wol">Wake-on-LAN – %1$s</string>
@@ -1483,15 +1495,15 @@
     <!-- TLS Inspector help -->
     <string name="help_tls_title">TLS Inspector</string>
     <string name="help_tls_concept_heading">What is TLS, and why does the certificate chain matter?</string>
-    <string name="help_tls_concept_body">TLS (the "S" in HTTPS) scrambles traffic between your device and a server so anyone else on the network can\'t read it. But encryption alone doesn\'t prove who you\'re talking to - that\'s what certificates are for: a certificate is like an ID card proving "this server really is example.com," signed by a trusted authority. The chain (leaf → intermediate → root) is the paper trail of who vouched for whom, ending at a small set of root authorities your device already trusts by default.</string>
+    <string name="help_tls_concept_body">TLS (the "S" in HTTPS) scrambles traffic between your device and a server so anyone else on the network can\'t read it. But encryption alone doesn\'t prove who you\'re talking to: that\'s what certificates are for: a certificate is like an ID card proving "this server really is example.com," signed by a trusted authority. The chain (leaf → intermediate → root) is the paper trail of who vouched for whom, ending at a small set of root authorities your device already trusts by default.</string>
     <string name="help_tls_what_heading">What it does</string>
     <string name="help_tls_what_body">Opens a TLS connection to a host and retrieves the full certificate chain, including expired, self-signed, or untrusted certificates that a browser would normally hide.</string>
     <string name="help_tls_params_heading">Key parameters</string>
     <string name="help_tls_results_heading">Reading the results</string>
     <string-array name="help_tls_params_bullets">
-        <item>Host - the domain name or IP to connect to.</item>
-        <item>Port - the TLS port (default 443 for HTTPS; 8443, 993, 465 are common alternatives).</item>
-        <item>Optional checks - probe older TLS versions or compare the leaf certificate with an expected SHA-256 pin.</item>
+        <item>Host: the domain name or IP to connect to.</item>
+        <item>Port: the TLS port (default 443 for HTTPS; 8443, 993, 465 are common alternatives).</item>
+        <item>Optional checks: probe older TLS versions or compare the leaf certificate with an expected SHA-256 pin.</item>
     </string-array>
     <string-array name="help_tls_results_bullets">
         <item>The connection card shows trust, hostname match, TLS version, ALPN, cipher suite, connect time, and handshake time.</item>

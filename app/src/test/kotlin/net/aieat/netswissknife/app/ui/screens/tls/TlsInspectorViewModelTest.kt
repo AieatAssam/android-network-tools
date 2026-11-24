@@ -337,7 +337,8 @@ class TlsInspectorViewModelTest {
             val state = viewModel.uiState.value
             assertTrue(!state.isLoading)
             assertNull(state.result)
-            assertEquals("TLS inspection failed: handshake failed", state.error)
+            assertNull(state.error)
+            assertEquals(TlsInputErrorKeys.INSPECTION_FAILED, state.errorDescriptionKey)
         }
 
         @Test
@@ -427,6 +428,9 @@ class TlsInspectorViewModelTest {
             assertNull(canceledState.error)
             assertEquals(CancellationReason.USER_STOP, capturedSession.cancellationReason)
 
+            cancelViewModel.onHostChange("example.org")
+            assertFalse(cancelViewModel.uiState.value.isCanceled)
+
             cancelViewModel.inspect()
             val retriedState = withContext(Dispatchers.Default.limitedParallelism(1)) {
                 withTimeout(5_000) {
@@ -480,12 +484,24 @@ class TlsInspectorViewModelTest {
     }
 
     @Test
+    fun `inspect reports a blank host with the blank key`() = runTest {
+        viewModel.onHostChange("   ")
+
+        viewModel.inspect()
+
+        assertNull(viewModel.uiState.value.error)
+        assertEquals(TlsInputErrorKeys.HOST_BLANK, viewModel.uiState.value.errorDescriptionKey)
+        coVerify(exactly = 0) { useCase(any(), any()) }
+    }
+
+    @Test
     fun `inspect rejects internal whitespace without saving or probing`() = runTest {
         viewModel.onHostChange("bad host")
 
         viewModel.inspect()
 
-        assertEquals("Invalid hostname or IP address", viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.error)
+        assertEquals(TlsInputErrorKeys.HOST_INVALID, viewModel.uiState.value.errorDescriptionKey)
         coVerify(exactly = 0) { useCase(any(), any()) }
         coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
     }
@@ -497,7 +513,8 @@ class TlsInspectorViewModelTest {
 
         viewModel.inspect()
 
-        assertEquals("Port must be a number from 1 to 65535", viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.error)
+        assertEquals(TlsInputErrorKeys.PORT_INVALID, viewModel.uiState.value.errorDescriptionKey)
         assertTrue(!viewModel.uiState.value.isLoading)
         assertNull(viewModel.uiState.value.result)
         coVerify(exactly = 0) { useCase(any(), any()) }
@@ -511,7 +528,8 @@ class TlsInspectorViewModelTest {
 
         viewModel.inspect()
 
-        assertEquals("Port must be a number from 1 to 65535", viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.error)
+        assertEquals(TlsInputErrorKeys.PORT_INVALID, viewModel.uiState.value.errorDescriptionKey)
         coVerify(exactly = 0) { useCase(any(), any()) }
         coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
     }
@@ -523,7 +541,8 @@ class TlsInspectorViewModelTest {
 
         viewModel.inspect()
 
-        assertEquals("Port must be a number from 1 to 65535", viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.error)
+        assertEquals(TlsInputErrorKeys.PORT_INVALID, viewModel.uiState.value.errorDescriptionKey)
         coVerify(exactly = 0) { useCase(any(), any()) }
         coVerify(exactly = 0) { recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_TLS_HOSTS, any()) }
     }

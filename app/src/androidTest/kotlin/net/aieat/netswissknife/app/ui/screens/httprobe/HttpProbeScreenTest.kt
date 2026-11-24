@@ -213,9 +213,9 @@ class HttpProbeScreenTest {
         composeRule.mainClock.advanceTimeBy(2_000L)
         composeRule.onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
             .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
-        composeRule.onAllNodesWithText("https://target.example/[path omitted]")
+        composeRule.onAllNodesWithText("https://target.example/final?final-token=private")
             .onFirst().performScrollTo().assertIsDisplayed()
-        listOf("source-secret", "destination-secret", "source-token", "final-token", "cookie-secret", "auth-secret").forEach {
+        listOf("source-secret", "destination-secret", "final-fragment", "cookie-secret", "auth-secret").forEach {
             composeRule.onAllNodesWithText(it, substring = true).assertCountEquals(0)
         }
     }

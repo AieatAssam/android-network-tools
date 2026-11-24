@@ -35,6 +35,14 @@ import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import javax.inject.Inject
 
+/** Input and failure keys the screen maps to localized text. Raw messages never reach the UI. */
+internal object TlsInputErrorKeys {
+    const val HOST_BLANK = "input_host_blank"
+    const val HOST_INVALID = "input_host_invalid"
+    const val PORT_INVALID = "input_port_invalid"
+    const val INSPECTION_FAILED = "inspection_failed"
+}
+
 data class TlsInspectorUiState(
     val host: String = "",
     val port: String = "443",
@@ -138,14 +146,26 @@ class TlsInspectorViewModel @Inject constructor(
     fun onHostChange(value: String) {
         if (_uiState.value.isLoading) return
         savedStateHandle[EDITED_HOST_KEY] = value
-        _uiState.value = _uiState.value.copy(host = value, error = null, errorDescriptionKey = null, result = null)
+        _uiState.value = _uiState.value.copy(
+            host = value,
+            error = null,
+            errorDescriptionKey = null,
+            result = null,
+            isCanceled = false,
+        )
         recoverInvalidHandoffIfReady()
     }
 
     fun onPortChange(value: String) {
         if (_uiState.value.isLoading) return
         savedStateHandle[EDITED_PORT_KEY] = value
-        _uiState.value = _uiState.value.copy(port = value, error = null, errorDescriptionKey = null, result = null)
+        _uiState.value = _uiState.value.copy(
+            port = value,
+            error = null,
+            errorDescriptionKey = null,
+            result = null,
+            isCanceled = false,
+        )
         recoverInvalidHandoffIfReady()
     }
 
@@ -157,6 +177,7 @@ class TlsInspectorViewModel @Inject constructor(
             error = null,
             errorDescriptionKey = null,
             result = null,
+            isCanceled = false,
         )
     }
 
@@ -168,6 +189,7 @@ class TlsInspectorViewModel @Inject constructor(
             error = null,
             errorDescriptionKey = null,
             result = null,
+            isCanceled = false,
         )
     }
 
@@ -219,8 +241,8 @@ class TlsInspectorViewModel @Inject constructor(
             _uiState.value = state.copy(
                 isLoading = false,
                 result = null,
-                error = if (state.host.isBlank()) "Host must not be blank" else "Invalid hostname or IP address",
-                errorDescriptionKey = null,
+                error = null,
+                errorDescriptionKey = if (state.host.isBlank()) TlsInputErrorKeys.HOST_BLANK else TlsInputErrorKeys.HOST_INVALID,
             )
             return
         }
@@ -229,8 +251,8 @@ class TlsInspectorViewModel @Inject constructor(
             _uiState.value = state.copy(
                 isLoading = false,
                 result = null,
-                error = "Port must be a number from 1 to 65535",
-                errorDescriptionKey = null,
+                error = null,
+                errorDescriptionKey = TlsInputErrorKeys.PORT_INVALID,
             )
             return
         }
@@ -292,16 +314,13 @@ class TlsInspectorViewModel @Inject constructor(
                 }
                 throw e
             } catch (e: Exception) {
-                val detail = e.message?.trim().takeUnless { it.isNullOrEmpty() }
-                    ?: e::class.simpleName
-                    ?: "Unknown TLS inspection error"
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isCanceling = false,
                     isCanceled = false,
                     result = null,
-                    error = "TLS inspection failed: $detail",
-                    errorDescriptionKey = null,
+                    error = null,
+                    errorDescriptionKey = TlsInputErrorKeys.INSPECTION_FAILED,
                 )
             } finally {
                 if (operationSession === session) operationSession = null

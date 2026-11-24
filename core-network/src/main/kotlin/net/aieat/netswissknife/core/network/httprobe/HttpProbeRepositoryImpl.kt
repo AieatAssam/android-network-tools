@@ -291,8 +291,10 @@ class HttpProbeRepositoryImpl internal constructor(
                         finalUrl = currentUrl.toString(),
                         redirectChain = redirectHops.map { it.url },
                         securityChecks = HttpSecurityAnalyzer.analyze(response.headers, isHttps),
+                        // Phases describe the final hop only; summing them across redirects would
+                        // misstate DNS, connect, TLS and TTFB. totalMs covers the whole chain.
                         timings =
-                            timingTotals.copy(
+                            finalCallTimings.copy(
                                 transferMs = transferTotal,
                                 totalMs = elapsed,
                             ),
