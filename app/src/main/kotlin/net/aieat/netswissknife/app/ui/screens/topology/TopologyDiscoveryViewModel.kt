@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.topology
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.data.ToolSessionMemory
@@ -66,10 +68,15 @@ sealed class TopologyUiState {
         val graph: TopologyGraph,
         val selectedNodeIp: String?
     ) : TopologyUiState()
+    /**
+     * [message] carries text from the domain layer as-is. [messageRes] is used for failures the
+     * ViewModel itself raises, so the screen can show a localized string instead.
+     */
     data class Failure(
         val message: String,
         val networkErrorKind: NetworkErrorKind = NetworkErrorKind.GENERAL,
         val isBudgetLimit: Boolean = false,
+        @StringRes val messageRes: Int? = null,
     ) : TopologyUiState()
 }
 
@@ -170,7 +177,7 @@ class TopologyDiscoveryViewModel @Inject constructor(
         val normalizedTargetIp = HostValidator.normalize(params.targetIp)
         val normalizedParams = params.copy(targetIp = normalizedTargetIp ?: params.targetIp)
         val currentOperationId = ++operationId
-        _uiState.value = TopologyUiState.Discovering(emptyList(), emptyList(), "Starting...", 0)
+        _uiState.value = TopologyUiState.Discovering(emptyList(), emptyList(), "", 0)
         discoveryJob = viewModelScope.launch {
             val nodes = mutableListOf<TopologyNode>()
             val links = mutableListOf<TopologyLink>()
@@ -265,8 +272,9 @@ class TopologyDiscoveryViewModel @Inject constructor(
                 if (operationSession === session && session.cancellationReason == null) {
                     terminalEventReceived = true
                     terminalState = TopologyUiState.Failure(
-                        e.message ?: "Topology discovery failed",
-                        e.toNetworkErrorKind(),
+                        message = e.message.orEmpty(),
+                        networkErrorKind = e.toNetworkErrorKind(),
+                        messageRes = if (e.message == null) R.string.topology_failure_generic else null,
                     )
                 }
             } finally {
@@ -289,7 +297,8 @@ class TopologyDiscoveryViewModel @Inject constructor(
                     )
                 } else if (cancellationReason == null) {
                     _uiState.value = terminalState ?: TopologyUiState.Failure(
-                        "Topology discovery ended without a result",
+                        message = "",
+                        messageRes = R.string.topology_failure_no_result,
                     )
                 } else if (cancellationReason != CancellationReason.USER_STOP &&
                     cancellationReason != CancellationReason.LIFECYCLE_PAUSE
@@ -303,7 +312,10 @@ class TopologyDiscoveryViewModel @Inject constructor(
                             nodesDone = nodes.size,
                         )
                     } else {
-                        TopologyUiState.Failure("Topology discovery was interrupted")
+                        TopologyUiState.Failure(
+                            message = "",
+                            messageRes = R.string.topology_failure_interrupted,
+                        )
                     }
                 }
             }
