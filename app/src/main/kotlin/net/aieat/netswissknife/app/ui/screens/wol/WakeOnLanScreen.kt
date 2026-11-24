@@ -60,6 +60,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -93,7 +94,6 @@ import net.aieat.netswissknife.app.ui.theme.AppSpacing
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.wol.WolBroadcastProblem
 import net.aieat.netswissknife.core.network.wol.WolMacProblem
-import net.aieat.netswissknife.core.network.wol.WolSendReport
 import java.time.Instant
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -499,7 +499,7 @@ private fun WolStateCard(
             }
 
             is WolUiState.Success -> {
-                WolSuccessCard(state.report, onSendAgain = onSendAgain)
+                WolSuccessCard(state, onSendAgain = onSendAgain)
             }
 
             is WolUiState.Error -> {
@@ -550,9 +550,10 @@ private fun WolSendingCard(onCancel: () -> Unit) {
 
 @Composable
 private fun WolSuccessCard(
-    report: WolSendReport,
+    state: WolUiState.Success,
     onSendAgain: () -> Unit,
 ) {
+    val report = state.report
     var iconReady by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { iconReady = true }
     val iconScale by animateFloatAsState(
@@ -601,7 +602,9 @@ private fun WolSuccessCard(
             }
 
             Text(
-                text = stringResource(R.string.wol_success_title),
+                text =
+                    state.deviceName?.let { stringResource(R.string.wol_success_title_device, it) }
+                        ?: stringResource(R.string.wol_success_title),
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
@@ -616,6 +619,13 @@ private fun WolSuccessCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (state.sendNumber > 1) {
+                Text(
+                    text = pluralStringResource(R.plurals.wol_send_count, state.sendNumber, state.sendNumber),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             HorizontalDivider(Modifier.padding(vertical = AppSpacing.xs))
 

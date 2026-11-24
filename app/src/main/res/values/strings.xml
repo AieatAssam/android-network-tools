@@ -72,6 +72,7 @@
     <string name="err_subnet_blank">Enter a subnet.</string>
     <string name="err_subnet_invalid">The subnet is invalid.</string>
     <string name="err_subnet_range_invalid">The subnet range is invalid.</string>
+    <string name="err_subnet_range_inverted">The minimum IP must be lower than or equal to the maximum IP.</string>
     <string name="err_subnet_address_invalid">%1$s is not a valid IPv4 address. Use four numbers from 0 to 255, such as 192.168.1.0.</string>
     <string name="err_subnet_prefix_missing">Enter a prefix length after the slash, for example /24.</string>
     <string name="err_subnet_prefix_invalid">/%1$s is not a valid prefix. Use a number from 0 to 32, such as /24.</string>
@@ -310,9 +311,10 @@
     <!-- Port Scanner Input -->
     <string name="ports_host_label">Host or IP address</string>
     <string name="ports_host_placeholder">e.g. example.com or 192.168.1.1</string>
+    <string name="ports_host_url_error">Enter a host name or IP address without http:// or a path</string>
     <string name="ports_preset_label">Port preset</string>
     <string name="ports_preset_common_services">Common services</string>
-    <string name="ports_preset_well_known">Well-known (1–1024)</string>
+    <string name="ports_preset_well_known">Well-known (1 to 1024)</string>
     <string name="ports_preset_web_services">Web services</string>
     <string name="ports_preset_databases">Databases</string>
     <string name="ports_preset_mail_services">Mail services</string>
@@ -320,13 +322,19 @@
     <string name="ports_preset_custom_range">Custom range</string>
     <string name="ports_start_port_label">Start port</string>
     <string name="ports_end_port_label">End port</string>
-    <string name="ports_range_error">1–65535</string>
+    <string name="ports_range_error">Enter a port from 1 to 65535</string>
     <string name="ports_range_order_error">Start port must be ≤ end port</string>
     <string name="ports_range_too_large_error">Custom range must not exceed 10,000 ports</string>
-    <plurals name="ports_range_count">
-        <item quantity="one">%1$d port selected</item>
-        <item quantity="other">%1$d ports selected</item>
+    <plurals name="ports_selection_preset">
+        <item quantity="one">Scans %1$d port</item>
+        <item quantity="other">Scans %1$d ports</item>
     </plurals>
+    <plurals name="ports_selection_custom">
+        <item quantity="one">Scans %1$d port, port %2$d</item>
+        <item quantity="other">Scans %1$d ports, ports %2$d to %3$d</item>
+    </plurals>
+    <string name="ports_plan_within_limit">Worst case %1$d min, within the 15 minute limit.</string>
+    <string name="ports_plan_over_limit">Scan is disabled. Worst case %1$d min is over the 15 minute limit. Raise concurrency, or shorten the timeout or port range.</string>
     <string name="ports_timeout_label">Timeout: %1$d ms</string>
     <string name="ports_concurrency_label">Concurrency</string>
     <string name="ports_concurrency_high_warning">High concurrency may overwhelm devices on the local network</string>
@@ -1603,21 +1611,21 @@
     <!-- Port Scanner help -->
     <string name="help_portscan_title">Port Scanner</string>
     <string name="help_portscan_concept_heading">What is a "port"?</string>
-    <string name="help_portscan_concept_body">An IP address gets your data to the right device - like a street address gets mail to the right building. A port number then gets it to the right service running on that device - like an apartment number inside the building. A web server usually listens on port 80 or 443, a mail server on 25, and so on; scanning a range of ports tells you which of these "apartments" have someone answering.</string>
+    <string name="help_portscan_concept_body">An IP address gets your data to the right device, the way a street address gets mail to the right building. A port number then gets it to the right service on that device, the way an apartment number identifies a unit inside the building. A web server usually listens on port 80 or 443, a mail server on 25, and so on; scanning a range of ports tells you which of these "apartments" have someone answering.</string>
     <string name="help_portscan_what_heading">What it does</string>
     <string name="help_portscan_what_body">Attempts TCP connections to a range of ports on a host to determine which are open, closed, or filtered. Useful for auditing what services are exposed.</string>
     <string name="help_portscan_params_heading">Key parameters</string>
     <string name="help_portscan_results_heading">Reading the results</string>
     <string-array name="help_portscan_params_bullets">
-        <item>Port range - use a preset (Common services, Well-known 1–1024, Web, Databases, Mail, Remote access) or enter a custom range of up to 10,000 ports.</item>
-        <item>Timeout - how long to wait for each port before giving up.</item>
-        <item>Concurrency - how many ports to check at the same time.</item>
+        <item>Port range: use a preset (Common services, Well-known 1 to 1024, Web, Databases, Mail, Remote access) or enter a custom range of up to 10,000 ports.</item>
+        <item>Timeout: how long to wait for each port before giving up.</item>
+        <item>Concurrency: how many ports to check at the same time. Scan stays disabled when its worst case would exceed 15 minutes.</item>
     </string-array>
     <string-array name="help_portscan_results_bullets">
-        <item>Open - something answered; a service is listening on that port.</item>
-        <item>Closed - the port actively refused the connection; nothing is listening there.</item>
-        <item>Filtered - no response at all within the timeout, typically because a firewall is silently blocking it.</item>
-        <item>Banners - when available, the service\'s own self-identification text (e.g. server name/version).</item>
+        <item>Open: something answered; a service is listening on that port.</item>
+        <item>Closed: the port actively refused the connection; nothing is listening there.</item>
+        <item>Filtered: no response at all within the timeout, typically because a firewall is silently blocking it.</item>
+        <item>Banners: when available, the service\'s own self-identification text (e.g. server name/version).</item>
     </string-array>
 
     <!-- LAN Scanner help -->
@@ -1839,22 +1847,24 @@
 
     <!-- Speed Test help -->
     <string name="help_speedtest_title">Speed Test</string>
-    <string name="help_speedtest_concept_heading">Latency vs. bandwidth - what\'s actually being measured?</string>
-    <string name="help_speedtest_concept_body">Latency is how long it takes a single small message to get a reply - it matters for anything interactive, like gaming or video calls. Bandwidth (or throughput) is how much data can flow per second once a connection gets going - it matters for downloads and streaming quality. Most home internet plans are asymmetric, provisioned for much faster downloads than uploads, since most everyday usage is downloading or streaming rather than sending large amounts of data out.</string>
+    <string name="help_speedtest_concept_heading">Latency vs. bandwidth: what\'s actually being measured?</string>
+    <string name="help_speedtest_concept_body">Latency is how long it takes a single small message to get a reply. It matters for anything interactive, like gaming or video calls. Bandwidth (or throughput) is how much data can flow per second once a connection gets going. It matters for downloads and streaming quality. Most home internet plans are asymmetric, provisioned for much faster downloads than uploads, since most everyday usage is downloading or streaming rather than sending large amounts of data out.</string>
     <string name="help_speedtest_what_heading">What it does</string>
     <string name="help_speedtest_what_body">Measures your connection\'s latency, download speed, and upload speed by exchanging data with Cloudflare\'s speed test service (speed.cloudflare.com).</string>
     <string name="help_speedtest_phases_heading">Test phases</string>
     <string name="help_speedtest_phases_body">The test runs each phase in sequence automatically.</string>
     <string name="help_speedtest_results_heading">Reading the results</string>
     <string-array name="help_speedtest_phases_bullets">
-        <item>Latency - sends small requests to measure round-trip time and jitter.</item>
-        <item>Download - downloads progressively larger payloads and records throughput.</item>
-        <item>Upload - uploads data to measure upload speed.</item>
+        <item>Latency: sends small requests to measure round-trip time and jitter.</item>
+        <item>Latency under load: round-trip time measured while the download and upload phases run.</item>
+        <item>Download: downloads progressively larger payloads and records throughput.</item>
+        <item>Upload: uploads data to measure upload speed.</item>
     </string-array>
     <string-array name="help_speedtest_results_bullets">
-        <item>Average speed - the sustained throughput across the full phase.</item>
-        <item>Peak speed - the highest burst observed.</item>
-        <item>The throughput chart shows speed over time - a flat line suggests a bandwidth cap; a jagged line suggests network instability.</item>
+        <item>Average speed: the sustained throughput across the full phase.</item>
+        <item>Connect: the time to open the connection to the test server (TCP handshake), before any latency probes are sent.</item>
+        <item>Peak speed: the highest burst observed.</item>
+        <item>The throughput chart shows speed over time - a flat line suggests a bandwidth cap, and a jagged line suggests network instability.</item>
     </string-array>
 
     <!-- Speed Test -->
@@ -1944,6 +1954,11 @@
     <string name="wol_sending">Sending magic packet…</string>
     <string name="wol_success_title">Magic packet sent</string>
     <string name="wol_success_detail">Sent to %1$s via %2$s port %3$d (%4$d packets)</string>
+    <string name="wol_success_title_device">Magic packet sent to %1$s</string>
+    <plurals name="wol_send_count">
+        <item quantity="one">Sent %1$d time in this session</item>
+        <item quantity="other">Sent %1$d times in this session</item>
+    </plurals>
     <string name="wol_success_note">Sent. Wake-on-LAN is fire-and-forget: no delivery confirmation is returned. The target needs Wake-on-LAN enabled in firmware and OS and must be on this network.</string>
     <string name="wol_send_again">Send again</string>
     <string name="wol_saved_title">Saved devices</string>
@@ -2112,9 +2127,14 @@
     <string name="oui_input_label">MAC addresses or OUI prefixes</string>
     <string name="oui_input_placeholder">B8:27:EB:11:22:33 or B8-27-EB</string>
     <string name="oui_input_hint">Paste one or many, one per line or separated by commas or spaces. Colon, hyphen, Cisco dotted and bare hex all work, in any case.</string>
+    <string name="oui_invalid_one">%1$s is not a MAC address or OUI prefix.</string>
     <plurals name="oui_invalid_entries">
-        <item quantity="one">%1$d entry is not a MAC address or OUI prefix</item>
-        <item quantity="other">%1$d entries are not MAC addresses or OUI prefixes</item>
+        <item quantity="one">%1$d entry is not a MAC address or OUI prefix: %2$s.</item>
+        <item quantity="other">%1$d entries are not MAC addresses or OUI prefixes: %2$s.</item>
+    </plurals>
+    <plurals name="oui_rejected_count">
+        <item quantity="one">%1$d entry not recognised</item>
+        <item quantity="other">%1$d entries not recognised</item>
     </plurals>
     <string name="oui_action_paste">Paste from clipboard</string>
     <string name="oui_action_lookup">Look up</string>
@@ -2166,7 +2186,7 @@
     <string name="oui_clear_results">Clear results</string>
     <string name="oui_edit_input">Edit input</string>
     <string name="oui_share_subject">MAC Lookup results</string>
-    <string name="oui_copied">Copied</string>
+    <string name="oui_copied">Copied to clipboard</string>
     <string name="help_oui_concept_heading">What a MAC address tells you</string>
     <string name="help_oui_concept_body">The first three octets are the OUI, which the IEEE assigns to a manufacturer. Looking it up names the vendor of the network hardware. The last three octets are chosen by that vendor.</string>
     <string name="help_oui_vendor_heading">Notations</string>

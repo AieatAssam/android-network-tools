@@ -107,7 +107,8 @@ private fun OuiResultsHeader(
     onClear: () -> Unit,
     onEditInput: () -> Unit,
 ) {
-    val count = results.entries.size
+    val rejected = results.entries.count { it is MacLookupEntry.Rejected }
+    val count = results.entries.size - rejected
     ElevatedCard(shape = AppShapes.large, modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(CARD_PADDING_DP.dp),
@@ -124,6 +125,13 @@ private fun OuiResultsHeader(
                 TextButton(onClick = hapticAction(onClear), modifier = Modifier.heightIn(min = ToolTouchTargetSize)) {
                     Text(stringResource(R.string.oui_clear_results))
                 }
+            }
+            if (rejected > 0) {
+                Text(
+                    text = pluralStringResource(R.plurals.oui_rejected_count, rejected, rejected),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
             if (results.truncated) {
                 Text(

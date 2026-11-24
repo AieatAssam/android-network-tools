@@ -2,6 +2,19 @@ package net.aieat.netswissknife.core.domain
 
 import net.aieat.netswissknife.core.network.portscan.PortScanOperationBudget
 
+private const val MILLIS_PER_MINUTE = 60_000L
+
+/** Worst-case plan for one scan: the ports it probes and the longest it may run. */
+data class PortScanPlan(
+    val portCount: Int,
+    val worstCaseMillis: Long,
+) {
+    val exceedsLimit: Boolean get() = worstCaseMillis > PortScanDeadlineBudget.MAX_OPERATION_TIMEOUT_MILLIS
+
+    /** Worst case rounded up to whole minutes, so a limit breach is never shown as 15 minutes. */
+    val worstCaseMinutes: Long get() = (worstCaseMillis + MILLIS_PER_MINUTE - 1) / MILLIS_PER_MINUTE
+}
+
 /**
  * Derives a finite caller-owned deadline from the amount of work a port scan can perform.
  *
@@ -19,18 +32,58 @@ object PortScanDeadlineBudget {
         timeoutMs: Int,
         requestedConcurrency: Int,
         sessionConcurrency: Int = PortScanOperationBudget.MAX_CONCURRENCY,
-    ): PortScanOperationBudget.Estimate = PortScanOperationBudget.estimate(
-        portCount, timeoutMs, requestedConcurrency, sessionConcurrency,
-    )
+    ): PortScanOperationBudget.Estimate =
+        PortScanOperationBudget.estimate(
+            portCount,
+            timeoutMs,
+            requestedConcurrency,
+            sessionConcurrency,
+        )
 
-    fun portCount(params: PortScanParams): Int = when (params.preset) {
-        PortScanPreset.CUSTOM -> {
-            if (params.startPort in 1..65_535 && params.endPort in params.startPort..65_535) {
-                params.endPort - params.startPort + 1
-            } else 0
+    fun portCount(params: PortScanParams): Int =
+        when (params.preset) {
+            PortScanPreset.CUSTOM -> {
+                if (params.startPort in 1..65_535 && params.endPort in params.startPort..65_535) {
+                    params.endPort - params.startPort + 1
+                } else {
+                    0
+                }
+            }
+
+            else -> {
+                params.preset.ports.size
+            }
         }
-        else -> params.preset.ports.size
+
+    /**
+     * Plan for the scan a form describes, using the same estimate the use case enforces. Returns
+     * null while the ports cannot be counted (a custom range that fails [PortScanRange.problemOf]
+     * or a non-positive timeout or concurrency); the form's own fields explain those.
+     */
+    fun plan(
+        preset: PortScanPreset,
+        startPort: Int?,
+        endPort: Int?,
+        timeoutMs: Int,
+        concurrency: Int,
+    ): PortScanPlan? {
+        val portCount = countPorts(preset, startPort, endPort)
+        if (portCount == null || timeoutMs < 1 || concurrency < 1) return null
+        return PortScanPlan(portCount, estimate(portCount, timeoutMs, concurrency).timeoutMillis)
     }
+
+    private fun countPorts(
+        preset: PortScanPreset,
+        startPort: Int?,
+        endPort: Int?,
+    ): Int? =
+        if (preset != PortScanPreset.CUSTOM) {
+            preset.ports.size
+        } else if (startPort == null || endPort == null || PortScanRange.problemOf(startPort, endPort) != null) {
+            null
+        } else {
+            endPort - startPort + 1
+        }
 
     /** The session is still bounded for malformed input; validation rejects it before probes. */
     fun sessionTimeoutMillis(params: PortScanParams): Long {

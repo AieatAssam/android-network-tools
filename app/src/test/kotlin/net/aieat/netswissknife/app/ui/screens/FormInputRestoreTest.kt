@@ -171,6 +171,7 @@ class FormInputRestoreTest {
     private fun subnetUseCase(): SubnetCalculatorUseCase {
         val useCase = mockk<SubnetCalculatorUseCase>()
         every { useCase.cidrInputError(any()) } returns null
+        every { useCase.rangeOrderError(any(), any()) } returns null
         return useCase
     }
 }

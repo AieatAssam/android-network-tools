@@ -4,7 +4,6 @@ import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 
 class SubnetCalculatorRepositoryImpl : SubnetCalculatorRepository {
-
     override fun calculate(input: String): NetworkResult<SubnetInfo> = guarded { computeSubnet(input) }
 
     override fun calculateRange(
@@ -64,7 +63,9 @@ class SubnetCalculatorRepositoryImpl : SubnetCalculatorRepository {
     ): NetworkResult<SubnetInfo> {
         val minLong = parseIpv4(minIp.trim())
         val maxLong = parseIpv4(maxIp.trim())
-        require(minLong <= maxLong) { "Minimum IP must be ≤ maximum IP" }
+        if (minLong > maxLong) {
+            throw SubnetInputException(ErrorCode.SUBNET_RANGE_INVERTED, "Minimum IP must be ≤ maximum IP")
+        }
         // Number of bits needed to represent the difference determines host bit count
         val hostBitsNeeded = Long.SIZE_BITS - (minLong xor maxLong).countLeadingZeroBits()
         require(hostBitsNeeded <= IPV4_BITS) { "IP range too large for a valid IPv4 subnet" }

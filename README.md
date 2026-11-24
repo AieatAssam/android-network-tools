@@ -67,8 +67,9 @@ Network path analysis with per-hop geolocation enrichment.
 ### Port Scanner
 TCP port reachability scanning with service identification.
 - 7 preset port groups: Common Services, Well-Known (1–1024), Web, Databases, Mail, Remote Access, and Custom range (up to 10,000 ports)
-- A custom range is checked as you type: an inverted range or one over 10,000 ports shows a message and disables Scan Ports. Dragging the range slider stops at the 10,000-port cap
-- Concurrent scanning (1–500 simultaneous probes), per-port timeout slider (200–10,000 ms)
+- The range is set with the Start and End fields only (no range slider). An inverted range or one over 10,000 ports shows a message and disables Scan Ports. The selected range and port count are shown next to Scan Ports
+- Concurrency is chosen from fixed steps (1, 2, 5, 10, 25, 50, 100, 250, 500 simultaneous probes) and the per-port timeout is a slider (200–10,000 ms)
+- The worst-case duration is estimated from the port count, timeout and concurrency. Scan Ports stays disabled, with the estimate shown, when that worst case would exceed the 15-minute operation limit
 - Service names come from the built-in registry; a port with no registered name shows no service name rather than a generic label
 - Banner grabbing for open ports. Multi-line replies (for example HTTP headers) keep their lines, joined with " | ", up to 200 characters
 - Copy and Share at the foot of the summary card send a plain-text report (host, IP, port counts, duration, open ports with banners and TLS subject). Copy confirms with "Copied to clipboard". The host line shows the resolved IP only when it differs from the host, and the Open section does not repeat the Open badge on each row
@@ -232,10 +233,12 @@ LAN service discovery via multicast DNS (RFC 6762 / DNS-SD RFC 6763).
 ### Subnet Calculator
 IPv4 subnet calculator with binary breakdown, notation conversion, an "is this address in the subnet?" check, and equal splitting. **IPv4 only**: IPv6 input is rejected with an explanation. IPv6 support is deferred.
 - Two input modes: **CIDR / Mask** and **IP Range** (finds the tightest subnet covering a given min–max IP pair)
+- IP Range mode with a minimum above the maximum is flagged on the maximum field with a specific message, and Find subnet is disabled until the bounds are corrected
 - CIDR mode accepts CIDR (`192.168.1.0/24`), dot-decimal mask (`192.168.1.0/255.255.255.0`), space-separated mask, or bare IP (assumes `/32`)
 - Input is rejected with a specific message when the prefix is missing (`192.168.1.0/`), out of range (`/33`), has a leading zero (`/08`, `010.1.1.1`, which are not guessed), or the dotted mask is not contiguous
 - Computes: network address, broadcast, first/last usable host, and exact total and usable address counts (thousands separators on screen, plain digits in copied text)
 - Follows RFC 3021 for `/31`: two usable hosts, with first and last host being the two addresses. `/32` is a single host whose first and last host are the address itself
+- The broadcast row is hidden for `/31` (no broadcast address under RFC 3021), and the first and last host rows are hidden for `/32`
 - **Scope badge** for the whole subnet: Private (RFC 1918), Shared (CGNAT, 100.64.0.0/10), Loopback, Link-local, This network (0.0.0.0/8), Documentation, Benchmarking (198.18.0.0/15), Multicast, Reserved (240.0.0.0/4), Public, or Mixed when the subnet spans several blocks (for example 0.0.0.0/0)
 - **Binary Breakdown card**: colour-coded bit grid distinguishing network bits (blue) from host bits (orange) for IP address, subnet mask, and network address rows. On screens narrower than 600 dp the octets wrap to two rows of two so each bit cell stays readable. Each row is announced to screen readers as one description
 - **Notation Equivalents card**: CIDR, dot-decimal mask, wildcard mask, hex mask (`0xFFFFFF00`), and binary mask
@@ -269,6 +272,7 @@ Wake sleeping or powered-down machines on the local network with a UDP magic pac
 - Advanced options: broadcast address (default `255.255.255.255`; any dotted-decimal IPv4 address such as a subnet-directed `192.168.1.255` is accepted; host names and IPv6 are rejected inline) and UDP port (default 9, valid 1-65535). The panel opens automatically when one of these fields is invalid
 - Sends 3 duplicate packets per request for reliability over lossy UDP
 - The MAC, broadcast address and port survive rotation and process death. Leaving the tool with Back keeps them, the saved-device name being typed, and the last finished send (Success or Error) for the app session, in memory only; a send still in progress is not restored as running
+- The success title names the saved device when the send came from one, and a repeated send from the same screen shows how many packets have been sent
 - Success card reports the send and states that Wake-on-LAN is fire-and-forget: no delivery confirmation is returned. It confirms target MAC, broadcast address, port and packet count
 - Errors are specific: no local Wi-Fi or Ethernet network, a local-network permission denial, an invalid broadcast address, or a general send failure. Each has a Retry action
 - Saved devices (stored on this device only) sit in the same card as the MAC form, so entering, sending and saving use one flow. Save the current MAC under an optional name, use a saved device to fill the form, edit a saved device's name or MAC, and delete it (deleting asks for confirmation). A MAC is stored once, whichever notation it was entered in; an edit that would make two entries share a MAC is refused
@@ -291,6 +295,7 @@ Shows the device's active network, its IP configuration, and an optional public 
 ### MAC Lookup
 Identifies the vendor behind a MAC address or an OUI prefix, using the IEEE registry bundled with the app. Fully offline: nothing is sent to any service.
 - Input: paste one or many, one per line or separated by commas, semicolons, or spaces. Colon, hyphen, Cisco dotted, and bare hex are accepted in any letter case. A three-byte OUI prefix such as `B8-27-EB` is looked up on its own. Multicast and broadcast addresses are accepted and labelled as such
+- The result count in the header is the number of entries that were recognised and are listed. Entries that are not a MAC address or OUI prefix are counted separately as not recognised, and the input message names each rejected entry
 - Per address: the normalized address in colon form as the card title with its own copy button, then hyphen, Cisco dotted, and bare hex (upper or lower case, each with a copy button); the vendor name, or "Unknown vendor" when the registry has no block for it; the block size (MA-L, MA-M, or MA-S) when the registry lists it; the type (unicast, multicast, or broadcast); and whether the address is locally administered
 - Locally administered (randomized or private) addresses are labelled, and no vendor is shown for them, because the vendor code does not identify the hardware. Unicast addresses only: the locally administered flag reads "Not applicable" for broadcast and multicast, because the bit is not an owner's assignment for a group address. Broadcast addresses show no vendor
 - The same address entered in several notations (for example `00:1A:2B:3C:4D:5E` and `001a2b3c4d5e`) is one card, marked "Entered N times, merged into one card". Copy all and Share carry the same count

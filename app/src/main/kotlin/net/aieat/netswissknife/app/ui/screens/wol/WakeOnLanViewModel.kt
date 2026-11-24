@@ -43,6 +43,10 @@ sealed interface WolUiState {
 
     data class Success(
         val report: WolSendReport,
+        /** Name of the saved device this send went to, or null for a typed target. */
+        val deviceName: String? = null,
+        /** How many packets have been sent successfully in this session, including this one. */
+        val sendNumber: Int = 1,
     ) : WolUiState
 
     data class Error(
@@ -191,6 +195,7 @@ class WakeOnLanViewModel
 
         private var operationSession: OperationSession? = null
         private var sendGeneration = 0L
+        private var successfulSends = 0
 
         init {
             if (!handoffConsumed) {
@@ -254,7 +259,7 @@ class WakeOnLanViewModel
 
         fun send() {
             if (!canSend) return
-            sendTo(_macAddress.value, _broadcastAddress.value, _port.value)
+            sendTo(_macAddress.value, _broadcastAddress.value, _port.value, deviceName = null)
         }
 
         /** One tap on a saved device: fills the form with its target and sends to it. */
@@ -262,7 +267,7 @@ class WakeOnLanViewModel
             if (_uiState.value is WolUiState.Sending) return
             fillTarget(device)
             if (!canSend) return
-            sendTo(_macAddress.value, _broadcastAddress.value, _port.value)
+            sendTo(_macAddress.value, _broadcastAddress.value, _port.value, deviceName = device.name)
         }
 
         /** A finished send describes the target it went to; once the form changes, that result no longer applies. */
@@ -282,6 +287,7 @@ class WakeOnLanViewModel
             mac: String,
             broadcast: String,
             port: String,
+            deviceName: String?,
         ) {
             val params =
                 WakeOnLanParams(
@@ -300,8 +306,17 @@ class WakeOnLanViewModel
                     if (sendGeneration != generation || operationSession !== session) return@launch
                     _uiState.value =
                         when (result) {
-                            is NetworkResult.Success -> WolUiState.Success(result.data)
-                            is NetworkResult.Error -> result.toWolErrorState()
+                            is NetworkResult.Success -> {
+                                WolUiState.Success(
+                                    report = result.data,
+                                    deviceName = deviceName,
+                                    sendNumber = ++successfulSends,
+                                )
+                            }
+
+                            is NetworkResult.Error -> {
+                                result.toWolErrorState()
+                            }
                         }
                 } catch (cancelled: CancellationException) {
                     throw cancelled

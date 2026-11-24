@@ -33,33 +33,33 @@ import org.junit.jupiter.api.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("SubnetCalculatorViewModel")
 class SubnetCalculatorViewModelTest {
-
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var useCase: SubnetCalculatorUseCase
     private lateinit var viewModel: SubnetCalculatorViewModel
 
-    private val sampleSubnetInfo = SubnetInfo(
-        inputIp = "192.168.1.0",
-        prefixLength = 24,
-        networkAddress = "192.168.1.0",
-        broadcastAddress = "192.168.1.255",
-        firstHost = "192.168.1.1",
-        lastHost = "192.168.1.254",
-        subnetMask = "255.255.255.0",
-        wildcardMask = "0.0.0.255",
-        hexMask = "0xFFFFFF00",
-        binaryMask = "11111111.11111111.11111111.00000000",
-        binaryNetworkAddress = "11000000.10101000.00000001.00000000",
-        binaryIpAddress = "11000000.10101000.00000001.00000000",
-        totalHosts = 256,
-        usableHosts = 254,
-        hostBits = 8,
-        ipClass = "C",
-        isPrivate = true,
-        scope = Ipv4Scope.PRIVATE,
-        cidrNotation = "192.168.1.0/24",
-        inputIsAligned = true,
-    )
+    private val sampleSubnetInfo =
+        SubnetInfo(
+            inputIp = "192.168.1.0",
+            prefixLength = 24,
+            networkAddress = "192.168.1.0",
+            broadcastAddress = "192.168.1.255",
+            firstHost = "192.168.1.1",
+            lastHost = "192.168.1.254",
+            subnetMask = "255.255.255.0",
+            wildcardMask = "0.0.0.255",
+            hexMask = "0xFFFFFF00",
+            binaryMask = "11111111.11111111.11111111.00000000",
+            binaryNetworkAddress = "11000000.10101000.00000001.00000000",
+            binaryIpAddress = "11000000.10101000.00000001.00000000",
+            totalHosts = 256,
+            usableHosts = 254,
+            hostBits = 8,
+            ipClass = "C",
+            isPrivate = true,
+            scope = Ipv4Scope.PRIVATE,
+            cidrNotation = "192.168.1.0/24",
+            inputIsAligned = true,
+        )
 
     private val sampleMembership =
         SubnetMembership(
@@ -86,6 +86,7 @@ class SubnetCalculatorViewModelTest {
         coEvery { useCase(any()) } returns NetworkResult.Success(sampleSubnetInfo)
         every { useCase.cidrInputError(any()) } returns null
         coEvery { useCase.invokeRange(any(), any()) } returns NetworkResult.Success(sampleSubnetInfo)
+        every { useCase.rangeOrderError(any(), any()) } returns null
         coEvery { useCase.checkMembership(any(), any()) } returns NetworkResult.Success(sampleMembership)
         coEvery { useCase.splitIntoPrefix(any(), any()) } returns NetworkResult.Success(sampleSplit)
         coEvery { useCase.splitIntoCount(any(), any()) } returns NetworkResult.Success(sampleSplit)
@@ -100,63 +101,66 @@ class SubnetCalculatorViewModelTest {
     @Nested
     @DisplayName("toggleMode – CIDR → Range")
     inner class CidrToRange {
+        @Test
+        fun `with no prior result switches to range mode with blank fields`() =
+            runTest {
+                viewModel.onInputChange("192.168.1.0/24")
+                viewModel.toggleMode()
+
+                assertTrue(viewModel.uiState.value.isRangeMode)
+                assertEquals("192.168.1.0", viewModel.uiState.value.minIpInput)
+                assertEquals("", viewModel.uiState.value.maxIpInput)
+            }
 
         @Test
-        fun `with no prior result switches to range mode with blank fields`() = runTest {
-            viewModel.onInputChange("192.168.1.0/24")
-            viewModel.toggleMode()
+        fun `with calculated result pre-fills network and broadcast addresses`() =
+            runTest {
+                viewModel.onInputChange("192.168.1.0/24")
+                viewModel.calculate()
+                viewModel.toggleMode()
 
-            assertTrue(viewModel.uiState.value.isRangeMode)
-            assertEquals("192.168.1.0", viewModel.uiState.value.minIpInput)
-            assertEquals("", viewModel.uiState.value.maxIpInput)
-        }
-
-        @Test
-        fun `with calculated result pre-fills network and broadcast addresses`() = runTest {
-            viewModel.onInputChange("192.168.1.0/24")
-            viewModel.calculate()
-            viewModel.toggleMode()
-
-            assertTrue(viewModel.uiState.value.isRangeMode)
-            assertEquals("192.168.1.0", viewModel.uiState.value.minIpInput)
-            assertEquals("192.168.1.255", viewModel.uiState.value.maxIpInput)
-        }
+                assertTrue(viewModel.uiState.value.isRangeMode)
+                assertEquals("192.168.1.0", viewModel.uiState.value.minIpInput)
+                assertEquals("192.168.1.255", viewModel.uiState.value.maxIpInput)
+            }
 
         @Test
-        fun `clears result on toggle`() = runTest {
-            viewModel.onInputChange("192.168.1.0/24")
-            viewModel.calculate()
-            viewModel.toggleMode()
+        fun `clears result on toggle`() =
+            runTest {
+                viewModel.onInputChange("192.168.1.0/24")
+                viewModel.calculate()
+                viewModel.toggleMode()
 
-            assertFalse(viewModel.uiState.value.result != null)
-        }
+                assertFalse(viewModel.uiState.value.result != null)
+            }
     }
 
     @Nested
     @DisplayName("toggleMode – Range → CIDR")
     inner class RangeToCidr {
+        @Test
+        fun `switches to CIDR mode and copies minIp into CIDR input`() =
+            runTest {
+                viewModel.toggleMode() // switch to range first
+                viewModel.onMinIpChange("10.0.0.1")
+                viewModel.onMaxIpChange("10.0.0.100")
+                viewModel.toggleMode() // switch back to CIDR
+
+                assertFalse(viewModel.uiState.value.isRangeMode)
+                assertEquals("10.0.0.1", viewModel.uiState.value.input)
+            }
 
         @Test
-        fun `switches to CIDR mode and copies minIp into CIDR input`() = runTest {
-            viewModel.toggleMode() // switch to range first
-            viewModel.onMinIpChange("10.0.0.1")
-            viewModel.onMaxIpChange("10.0.0.100")
-            viewModel.toggleMode() // switch back to CIDR
+        fun `does not clear CIDR input when min IP is blank`() =
+            runTest {
+                viewModel.onInputChange("192.168.1.0/24")
+                viewModel.toggleMode() // to range — minIpInput should be "192.168.1.0" now
+                viewModel.onMinIpChange("") // clear min IP
+                viewModel.toggleMode() // back to CIDR
 
-            assertFalse(viewModel.uiState.value.isRangeMode)
-            assertEquals("10.0.0.1", viewModel.uiState.value.input)
-        }
-
-        @Test
-        fun `does not clear CIDR input when min IP is blank`() = runTest {
-            viewModel.onInputChange("192.168.1.0/24")
-            viewModel.toggleMode() // to range — minIpInput should be "192.168.1.0" now
-            viewModel.onMinIpChange("") // clear min IP
-            viewModel.toggleMode() // back to CIDR
-
-            assertFalse(viewModel.uiState.value.isRangeMode)
-            // input is preserved from before
-        }
+                assertFalse(viewModel.uiState.value.isRangeMode)
+                // input is preserved from before
+            }
     }
 
     @Nested
@@ -187,6 +191,26 @@ class SubnetCalculatorViewModelTest {
 
                 assertNull(viewModel.uiState.value.error)
                 assertNull(viewModel.uiState.value.result)
+            }
+        }
+
+        @Test
+        fun `inverted bounds are flagged on the fields and block Find subnet`() {
+            runTest {
+                val inverted = NetworkResult.error(ErrorCode.SUBNET_RANGE_INVERTED)
+                every { useCase.rangeOrderError("192.168.1.200", "192.168.1.10") } returns inverted
+                viewModel.toggleMode()
+                viewModel.onMinIpChange("192.168.1.200")
+                viewModel.onMaxIpChange("192.168.1.10")
+
+                assertEquals(inverted, viewModel.uiState.value.rangeError)
+                viewModel.calculateRange()
+                coVerify(exactly = 0) { useCase.invokeRange(any(), any()) }
+
+                every { useCase.rangeOrderError("192.168.1.200", "192.168.1.255") } returns null
+                viewModel.onMaxIpChange("192.168.1.255")
+
+                assertNull(viewModel.uiState.value.rangeError)
             }
         }
 

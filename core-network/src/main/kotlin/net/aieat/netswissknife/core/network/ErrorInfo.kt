@@ -73,6 +73,7 @@ enum class ErrorCode {
     SUBNET_BLANK,
     SUBNET_INVALID,
     SUBNET_RANGE_INVALID,
+    SUBNET_RANGE_INVERTED,
     SUBNET_ADDRESS_INVALID,
     SUBNET_PREFIX_MISSING,
     SUBNET_PREFIX_INVALID,
@@ -92,9 +93,14 @@ data class ErrorInfo(
     /** Existing diagnostic text, when a repository already has useful developer copy. */
     val developerMessage: String? = null,
 ) {
-    internal fun defaultDeveloperMessage(): String = developerMessage ?: when (code) {
-        ErrorCode.TIMEOUT_OUT_OF_RANGE ->
-            "Timeout must be between ${args.getOrNull(0) ?: "?"} ms and ${args.getOrNull(1) ?: "?"} ms"
-        else -> code.name.lowercase().replace('_', ' ')
-    }
+    internal fun defaultDeveloperMessage(): String =
+        developerMessage ?: when (code) {
+            ErrorCode.TIMEOUT_OUT_OF_RANGE -> {
+                "Timeout must be between ${args.getOrNull(0) ?: "?"} ms and ${args.getOrNull(1) ?: "?"} ms"
+            }
+
+            else -> {
+                code.name.lowercase().replace('_', ' ')
+            }
+        }
 }

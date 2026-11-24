@@ -46,8 +46,8 @@ sealed interface OuiLookupPhase {
 data class OuiLookupUiState(
     val input: String = "",
     val phase: OuiLookupPhase = OuiLookupPhase.Idle,
-    /** Pasted entries that are not a MAC address or OUI prefix, shown as inline validation. */
-    val invalidEntryCount: Int = 0,
+    /** Pasted entries that are not a MAC address or OUI prefix, named in the inline validation. */
+    val invalidEntries: List<String> = emptyList(),
 )
 
 @HiltViewModel
@@ -78,7 +78,7 @@ class OuiLookupViewModel
             _uiState.update { state ->
                 state.copy(
                     input = value,
-                    invalidEntryCount = countInvalid(value),
+                    invalidEntries = invalidEntriesOf(value),
                     phase = if (changed) OuiLookupPhase.Idle else state.phase,
                 )
             }
@@ -140,8 +140,8 @@ class OuiLookupViewModel
 
         private fun normalise(text: String): String = text.trim().uppercase()
 
-        private fun countInvalid(text: String): Int {
-            val pieces = MacInputParser.splitEntries(text)
-            return pieces.count { MacInputParser.parse(it) is MacParseResult.Invalid }
+        private fun invalidEntriesOf(text: String): List<String> {
+            val entries = MacInputParser.splitEntries(text)
+            return entries.filter { MacInputParser.parse(it) is MacParseResult.Invalid }
         }
     }

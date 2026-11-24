@@ -35,7 +35,6 @@ import net.aieat.netswissknife.core.domain.PortScanDeadlineBudget
 import net.aieat.netswissknife.core.domain.PortScanFlowResult
 import net.aieat.netswissknife.core.domain.PortScanParams
 import net.aieat.netswissknife.core.domain.PortScanPreset
-import net.aieat.netswissknife.core.domain.PortScanRange
 import net.aieat.netswissknife.core.domain.PortScanUseCase
 import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.ErrorInfo
@@ -47,6 +46,7 @@ import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
 import net.aieat.netswissknife.core.network.operation.OperationRequirement
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.portscan.PortScanOperationBudget
 import net.aieat.netswissknife.core.network.portscan.PortScanResult
 import net.aieat.netswissknife.core.network.portscan.PortScanSummary
 import net.aieat.netswissknife.core.network.portscan.PortStatus
@@ -322,28 +322,39 @@ class PortScanViewModel
         }
 
         fun onPresetChange(preset: PortScanPreset) {
+            dropBudgetRefusal()
             _selectedPreset.value = preset
             savedStateHandle[PORT_PRESET_KEY] = preset.name
         }
 
         fun onStartPortChange(value: String) {
+            dropBudgetRefusal()
             _startPort.value = value
             savedStateHandle[PORT_START_KEY] = value
         }
 
         fun onEndPortChange(value: String) {
+            dropBudgetRefusal()
             _endPort.value = value
             savedStateHandle[PORT_END_KEY] = value
         }
 
         fun onTimeoutChange(value: Int) {
+            dropBudgetRefusal()
             _timeoutMs.value = value
             savedStateHandle[PORT_TIMEOUT_KEY] = value
         }
 
         fun onConcurrencyChange(value: Int) {
+            dropBudgetRefusal()
             _concurrency.value = value.coerceIn(1, 500)
             savedStateHandle[PORT_CONCURRENCY_KEY] = _concurrency.value
+        }
+
+        /** A budget refusal describes the inputs that caused it, so it is dropped once they change. */
+        private fun dropBudgetRefusal() {
+            val state = _uiState.value
+            if (state is PortScanUiState.Error && state.isBudgetLimit) _uiState.value = PortScanUiState.Idle
         }
 
         fun onAggressiveProbesChange(value: Boolean) {
@@ -540,35 +551,25 @@ class PortScanViewModel
                     aggressiveProbes = _aggressiveProbes.value,
                 )
 
-            val totalPorts =
-                if (_selectedPreset.value == PortScanPreset.CUSTOM) {
-                    val start = params.startPort
-                    val end = params.endPort
-                    if (PortScanRange.problemOf(start, end) == null) {
-                        end - start + 1
-                    } else {
-                        0
-                    }
-                } else {
-                    _selectedPreset.value.ports.size
-                }
+            val plan =
+                PortScanDeadlineBudget.plan(
+                    preset = _selectedPreset.value,
+                    startPort = _startPort.value.toIntOrNull(),
+                    endPort = _endPort.value.toIntOrNull(),
+                    timeoutMs = params.timeoutMs,
+                    concurrency = params.concurrency,
+                )
+            val totalPorts = plan?.portCount ?: 0
 
-            if (totalPorts > 0 && params.timeoutMs in 100..30_000) {
-                val estimate =
-                    PortScanDeadlineBudget.estimate(
-                        portCount = totalPorts,
-                        timeoutMs = params.timeoutMs,
-                        requestedConcurrency = params.concurrency,
+            // The form disables Scan while the plan exceeds the limit; this guard covers any other entry point.
+            if (plan != null && plan.exceedsLimit && params.timeoutMs in 100..30_000) {
+                scanStartedAtNanos = null
+                _uiState.value =
+                    PortScanUiState.Error(
+                        message = PortScanOperationBudget.OVER_CEILING_MESSAGE,
+                        isBudgetLimit = true,
                     )
-                if (estimate.exceedsHardCeiling) {
-                    scanStartedAtNanos = null
-                    _uiState.value =
-                        PortScanUiState.Error(
-                            message = "This scan may exceed the 15-minute operation limit; increase concurrency or reduce the port range or timeout.",
-                            isBudgetLimit = true,
-                        )
-                    return
-                }
+                return
             }
 
             scanStartedAtNanos = monotonicClock.nowNanos()

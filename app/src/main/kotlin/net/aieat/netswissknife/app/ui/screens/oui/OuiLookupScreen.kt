@@ -179,7 +179,7 @@ private fun OuiLookupBody(
             )
             OuiInputCard(
                 input = uiState.input,
-                invalidCount = uiState.invalidEntryCount,
+                invalidEntries = uiState.invalidEntries,
                 lookupEnabled = uiState.input.isNotBlank() && uiState.phase != OuiLookupPhase.Loading,
                 actions = actions,
                 focusRequester = inputFocus,
@@ -212,7 +212,7 @@ private fun OuiLookupBody(
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun OuiInputCard(
     input: String,
-    invalidCount: Int,
+    invalidEntries: List<String>,
     lookupEnabled: Boolean,
     actions: OuiLookupActions,
     focusRequester: FocusRequester,
@@ -225,7 +225,7 @@ private fun OuiInputCard(
             modifier = Modifier.padding(CARD_PADDING_DP.dp),
             verticalArrangement = Arrangement.spacedBy(INPUT_GAP_DP.dp),
         ) {
-            OuiInputField(input, invalidCount, lookupEnabled, actions, focusRequester)
+            OuiInputField(input, invalidEntries, lookupEnabled, actions, focusRequester)
             // Full-width and stacked: side by side, the labels wrapped mid-word at 360 dp with font 1.3.
             OutlinedButton(
                 onClick =
@@ -256,11 +256,24 @@ private fun OuiInputCard(
     }
 }
 
+/** Names the rejected entries, up to [OUI_NAMED_ENTRIES], so the user can find the one to fix. */
+@Composable
+private fun invalidEntriesMessage(invalid: List<String>): String {
+    val named = invalid.take(OUI_NAMED_ENTRIES).joinToString(", ")
+    return if (invalid.size == 1) {
+        stringResource(R.string.oui_invalid_one, named)
+    } else {
+        pluralStringResource(R.plurals.oui_invalid_entries, invalid.size, invalid.size, named)
+    }
+}
+
+private const val OUI_NAMED_ENTRIES = 3
+
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun OuiInputField(
     input: String,
-    invalidCount: Int,
+    invalidEntries: List<String>,
     lookupEnabled: Boolean,
     actions: OuiLookupActions,
     focusRequester: FocusRequester,
@@ -276,14 +289,14 @@ private fun OuiInputField(
         supportingText = {
             Text(
                 text =
-                    if (invalidCount > 0) {
-                        pluralStringResource(R.plurals.oui_invalid_entries, invalidCount, invalidCount)
+                    if (invalidEntries.isNotEmpty()) {
+                        invalidEntriesMessage(invalidEntries)
                     } else {
                         stringResource(R.string.oui_input_hint)
                     },
             )
         },
-        isError = invalidCount > 0,
+        isError = invalidEntries.isNotEmpty(),
         minLines = 2,
         maxLines = 6,
         keyboardOptions = ouiInputKeyboardOptions,

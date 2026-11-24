@@ -156,8 +156,15 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
                                 maxIp = uiState.maxIpInput,
                                 onMinIpChange = viewModel::onMinIpChange,
                                 onMaxIpChange = viewModel::onMaxIpChange,
+                                rangeError =
+                                    uiState.rangeError?.let {
+                                        ErrorTextMapper.map(it.info, it.message).asString()
+                                    },
                                 onCalculate = viewModel::calculateRange,
-                                canCalculate = uiState.minIpInput.isNotBlank() && uiState.maxIpInput.isNotBlank(),
+                                canCalculate =
+                                    uiState.minIpInput.isNotBlank() &&
+                                        uiState.maxIpInput.isNotBlank() &&
+                                        uiState.rangeError == null,
                             )
                         } else {
                             SubnetCidrInputs(
@@ -303,6 +310,7 @@ private fun SubnetRangeInputs(
     maxIp: String,
     onMinIpChange: (String) -> Unit,
     onMaxIpChange: (String) -> Unit,
+    rangeError: String?,
     onCalculate: () -> Unit,
     canCalculate: Boolean,
 ) {
@@ -332,6 +340,8 @@ private fun SubnetRangeInputs(
             placeholder = { Text(stringResource(R.string.subnet_max_ip_placeholder)) },
             leadingIcon = { Icon(Icons.Default.Lan, contentDescription = null) },
             singleLine = true,
+            isError = rangeError != null,
+            supportingText = rangeError?.let { { Text(it) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { submit() }),
         )
@@ -574,21 +584,25 @@ private fun SubnetOverviewCard(info: SubnetInfo) {
                     value = info.networkAddress,
                     tooltip = stringResource(R.string.tooltip_network_address),
                 )
-                SubnetInfoRow(
-                    label = stringResource(R.string.subnet_broadcast),
-                    value = info.broadcastAddress,
-                    tooltip = stringResource(R.string.tooltip_broadcast),
-                )
-                SubnetInfoRow(
-                    label = stringResource(R.string.subnet_first_host),
-                    value = info.firstHost,
-                    tooltip = stringResource(R.string.tooltip_first_host),
-                )
-                SubnetInfoRow(
-                    label = stringResource(R.string.subnet_last_host),
-                    value = info.lastHost,
-                    tooltip = stringResource(R.string.tooltip_last_host),
-                )
+                if (showsBroadcastRow(info.prefixLength)) {
+                    SubnetInfoRow(
+                        label = stringResource(R.string.subnet_broadcast),
+                        value = info.broadcastAddress,
+                        tooltip = stringResource(R.string.tooltip_broadcast),
+                    )
+                }
+                if (showsHostRange(info.prefixLength)) {
+                    SubnetInfoRow(
+                        label = stringResource(R.string.subnet_first_host),
+                        value = info.firstHost,
+                        tooltip = stringResource(R.string.tooltip_first_host),
+                    )
+                    SubnetInfoRow(
+                        label = stringResource(R.string.subnet_last_host),
+                        value = info.lastHost,
+                        tooltip = stringResource(R.string.tooltip_last_host),
+                    )
+                }
                 SubnetInfoRow(
                     label = stringResource(R.string.subnet_total_hosts),
                     value = formatSubnetCount(info.totalHosts),

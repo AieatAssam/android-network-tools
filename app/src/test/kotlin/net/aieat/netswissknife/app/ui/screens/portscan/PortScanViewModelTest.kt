@@ -909,6 +909,21 @@ class PortScanViewModelTest {
             }
 
         @Test
+        fun `budget refusal is dropped once the concurrency that caused it changes`() =
+            runTest {
+                viewModel.onHostChange("example.com")
+                viewModel.onPresetChange(PortScanPreset.WELL_KNOWN)
+                viewModel.onTimeoutChange(10_000)
+                viewModel.onConcurrencyChange(2)
+                viewModel.startScan()
+                assertTrue((viewModel.uiState.value as PortScanUiState.Error).isBudgetLimit)
+
+                viewModel.onConcurrencyChange(71)
+
+                assertEquals(PortScanUiState.Idle, viewModel.uiState.value)
+            }
+
+        @Test
         fun `accumulates port results during scan`() =
             runTest {
                 every { portScanUseCase(any(), any()) } returns

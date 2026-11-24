@@ -45,9 +45,10 @@ class WolSavedDeviceEditor(
     private val _saveConflict = MutableStateFlow(false)
     val saveConflict: StateFlow<Boolean> = _saveConflict.asStateFlow()
 
-    /** Editing the MAC field clears a previous duplicate-MAC refusal. */
+    /** Editing the MAC field clears a previous duplicate-MAC refusal and the notice about the old MAC. */
     fun clearSaveConflict() {
         _saveConflict.value = false
+        _saveNotice.value = null
     }
 
     fun onDeviceNameChange(value: String) {
@@ -96,6 +97,7 @@ class WolSavedDeviceEditor(
         scope.launch {
             store.update { list -> WolSavedDevices.remove(list, mac) }
         }
+        _saveNotice.value = null
         if (_editingMac.value == mac) cancelEdit()
     }
 

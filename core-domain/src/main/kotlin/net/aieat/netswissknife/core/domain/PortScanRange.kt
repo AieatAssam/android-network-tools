@@ -24,22 +24,4 @@ object PortScanRange {
             end - start + 1 > MAX_PORTS -> Problem.TOO_LARGE
             else -> null
         }
-
-    /**
-     * Applies a range-slider change so the span stays within [MAX_PORTS]. Only the thumb that
-     * moved is limited, so dragging one end cannot push the other end away. Returns the
-     * (start, end) pair to store.
-     */
-    fun clampSliderChange(
-        previousStart: Int,
-        newStart: Int,
-        newEnd: Int,
-    ): Pair<Int, Int> {
-        val maxSpanEnd = MAX_PORTS - 1
-        return if (newStart != previousStart) {
-            maxOf(newStart, newEnd - maxSpanEnd) to newEnd
-        } else {
-            newStart to minOf(newEnd, newStart + maxSpanEnd)
-        }
-    }
 }
