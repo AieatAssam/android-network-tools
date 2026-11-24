@@ -2,7 +2,6 @@ package net.aieat.netswissknife.core.network.lan
 
 /** Events emitted by [LanScanRepository] during a scan. */
 sealed interface LanScanUpdate {
-
     /**
      * Emitted once, before any probe, with whether this device can read MAC addresses. The same
      * value reaches the final summary, so the list can show MAC state from the start of the scan.
@@ -40,5 +39,7 @@ sealed interface LanScanUpdate {
     ) : LanScanUpdate
 
     /** Emitted once when the scan finishes (always the last event). */
-    data class ScanComplete(val summary: LanScanSummary) : LanScanUpdate
+    data class ScanComplete(
+        val summary: LanScanSummary,
+    ) : LanScanUpdate
 }

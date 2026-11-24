@@ -77,7 +77,11 @@ class WhoisShareTextTest {
     }
 
     private fun calendarDate(epochMs: Long): String =
-        java.time.Instant.ofEpochMilli(epochMs).atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()
+        java.time.Instant
+            .ofEpochMilli(epochMs)
+            .atZone(java.time.ZoneOffset.UTC)
+            .toLocalDate()
+            .toString()
 
     @Test
     fun `IP and ASN results list the network fields after the query`() {

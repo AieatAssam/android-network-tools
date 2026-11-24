@@ -2,8 +2,8 @@ package net.aieat.netswissknife.app.ui.screens.oui
 
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -18,9 +18,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.oui.LocalAdministration
-import net.aieat.netswissknife.core.network.oui.MacInputProblem
 import net.aieat.netswissknife.core.network.oui.MacAddressInfo
 import net.aieat.netswissknife.core.network.oui.MacAddressKind
+import net.aieat.netswissknife.core.network.oui.MacInputProblem
 import net.aieat.netswissknife.core.network.oui.MacLookupEntry
 import net.aieat.netswissknife.core.network.oui.OuiBlockSize
 import net.aieat.netswissknife.core.network.oui.VendorResult
@@ -86,10 +86,11 @@ class OuiLookupScreenTest {
         val state =
             OuiLookupUiState(
                 input = "B8:27:EB",
-                phase = OuiLookupPhase.Results(
-                    listOf(MacLookupEntry.Rejected("zz", MacInputProblem.LENGTH)),
-                    truncated = false,
-                ),
+                phase =
+                    OuiLookupPhase.Results(
+                        listOf(MacLookupEntry.Rejected("zz", MacInputProblem.LENGTH)),
+                        truncated = false,
+                    ),
             )
         composeRule.setContent {
             NetSwissKnifeTheme { OuiLookupScreen(viewModel(state)) }

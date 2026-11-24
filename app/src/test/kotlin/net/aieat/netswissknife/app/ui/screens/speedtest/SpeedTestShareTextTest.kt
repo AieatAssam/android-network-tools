@@ -12,7 +12,10 @@ import org.junit.jupiter.api.Test
 class SpeedTestShareTextTest {
     private val throughput = ThroughputResult.from(1000, 100, listOf(ThroughputSample(100, 1000, 8.0)))
 
-    private fun result(loadedDown: LatencyStats, loadedUp: LatencyStats) = SpeedTestResult(
+    private fun result(
+        loadedDown: LatencyStats,
+        loadedUp: LatencyStats,
+    ) = SpeedTestResult(
         latency = LatencyStats.compute(listOf(LatencySample(1, 20))),
         download = throughput,
         upload = throughput,
@@ -30,12 +33,13 @@ class SpeedTestShareTextTest {
 
     @Test
     fun `loaded latency rows are listed when samples exist`() {
-        val share = buildSpeedTestShareText(
-            result(
-                LatencyStats.compute(listOf(LatencySample(1, 28))),
-                LatencyStats.compute(listOf(LatencySample(1, 31))),
-            ),
-        )
+        val share =
+            buildSpeedTestShareText(
+                result(
+                    LatencyStats.compute(listOf(LatencySample(1, 28))),
+                    LatencyStats.compute(listOf(LatencySample(1, 31))),
+                ),
+            )
 
         assertTrue(share.contains("Latency under download load: 28.0 ms avg / 1 samples"))
         assertTrue(share.contains("Latency under upload load: 31.0 ms avg / 1 samples"))

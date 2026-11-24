@@ -9,11 +9,12 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class HttpProbeDisplayTest {
-    private val localized = RedirectPlaceholders(
-        address = "[adresse masquée]",
-        path = "[chemin masqué]",
-        query = "[requête masquée]",
-    )
+    private val localized =
+        RedirectPlaceholders(
+            address = "[adresse masquée]",
+            path = "[chemin masqué]",
+            query = "[requête masquée]",
+        )
 
     @Test
     fun `redirect placeholders come from the caller, not from English defaults`() {
@@ -27,11 +28,12 @@ class HttpProbeDisplayTest {
 
     @Test
     fun `on-screen headers keep redirect addresses whole but still drop credentials`() {
-        val headers = mapOf(
-            "Location" to listOf("https://example.com/callback?token=abc"),
-            "Set-Cookie" to listOf("session=secret"),
-            "Content-Type" to listOf("text/html"),
-        )
+        val headers =
+            mapOf(
+                "Location" to listOf("https://example.com/callback?token=abc"),
+                "Set-Cookie" to listOf("session=secret"),
+                "Content-Type" to listOf("text/html"),
+            )
 
         val shown = httpResponseHeadersForDisplay(headers)
 
@@ -63,18 +65,19 @@ class HttpProbeDisplayTest {
 
     @Test
     fun `share text uses a colon rather than a dash after the tool name`() {
-        val result = HttpProbeResult(
-            request = HttpProbeRequest(url = "https://example.com/", method = HttpMethod.GET),
-            statusCode = 200,
-            statusMessage = "OK",
-            responseTimeMs = 12L,
-            responseHeaders = emptyMap(),
-            responseBody = null,
-            responseBodyBytes = 0L,
-            finalUrl = "https://example.com/",
-            redirectChain = emptyList(),
-            securityChecks = emptyList(),
-        )
+        val result =
+            HttpProbeResult(
+                request = HttpProbeRequest(url = "https://example.com/", method = HttpMethod.GET),
+                statusCode = 200,
+                statusMessage = "OK",
+                responseTimeMs = 12L,
+                responseHeaders = emptyMap(),
+                responseBody = null,
+                responseBodyBytes = 0L,
+                finalUrl = "https://example.com/",
+                redirectChain = emptyList(),
+                securityChecks = emptyList(),
+            )
 
         val text = buildHttpShareText(result, sizeText = "0 B")
 

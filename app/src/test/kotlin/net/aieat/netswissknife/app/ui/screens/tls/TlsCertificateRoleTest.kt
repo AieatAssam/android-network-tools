@@ -18,25 +18,30 @@ class TlsCertificateRoleTest {
 
     @Test
     fun `a served last certificate that is not self-signed is an intermediate, not a root`() {
-        val chain = listOf(
-            cert("leaf", selfSigned = false),
-            cert("intermediate", selfSigned = false),
-        )
+        val chain =
+            listOf(
+                cert("leaf", selfSigned = false),
+                cert("intermediate", selfSigned = false),
+            )
         assertEquals(TlsCertificateRole.INTERMEDIATE, certificateRoleOf(1, chain))
     }
 
     @Test
     fun `a self-signed last certificate is the root`() {
-        val chain = listOf(
-            cert("leaf", selfSigned = false),
-            cert("intermediate", selfSigned = false),
-            cert("root", selfSigned = true),
-        )
+        val chain =
+            listOf(
+                cert("leaf", selfSigned = false),
+                cert("intermediate", selfSigned = false),
+                cert("root", selfSigned = true),
+            )
         assertEquals(TlsCertificateRole.ROOT, certificateRoleOf(2, chain))
         assertEquals(TlsCertificateRole.INTERMEDIATE, certificateRoleOf(1, chain))
     }
 
-    private fun cert(name: String, selfSigned: Boolean) = TlsCertificate(
+    private fun cert(
+        name: String,
+        selfSigned: Boolean,
+    ) = TlsCertificate(
         subjectCN = name,
         subjectOrg = null,
         issuerCN = if (selfSigned) name else "issuer",

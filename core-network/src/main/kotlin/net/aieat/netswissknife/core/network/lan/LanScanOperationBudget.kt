@@ -16,7 +16,10 @@ object LanScanOperationBudget {
     private const val SCHEDULING_MARGIN_PERCENT = 25
     private const val FINAL_ARP_ALLOWANCE_MS = 1_000L
 
-    data class Estimate(val targetCount: Int, val timeoutMillis: Long) {
+    data class Estimate(
+        val targetCount: Int,
+        val timeoutMillis: Long,
+    ) {
         val exceedsHardCeiling: Boolean get() = timeoutMillis > HARD_CEILING_MILLIS
     }
 
@@ -33,11 +36,12 @@ object LanScanOperationBudget {
         require(presencePortCount >= 0)
         val timeout = timeoutMs.toLong()
         val tcpPresence = minOf(timeoutMs, TCP_PRESENCE_TIMEOUT_CAP_MS).toLong() * presencePortCount
-        val localNamePresence = if (enableNameProbes) {
-            2L * minOf(timeoutMs, LOCAL_NAME_TIMEOUT_CAP_MS)
-        } else {
-            0L
-        }
+        val localNamePresence =
+            if (enableNameProbes) {
+                2L * minOf(timeoutMs, LOCAL_NAME_TIMEOUT_CAP_MS)
+            } else {
+                0L
+            }
         val reverseDns = if (enableNameProbes) timeout else 0L
         val quickPorts = minOf(timeoutMs, QUICK_PORT_TIMEOUT_CAP_MS).toLong() * QUICK_PORT_COUNT
         val perHostAllowance = timeout + tcpPresence + localNamePresence + reverseDns + quickPorts
@@ -64,9 +68,10 @@ object LanScanOperationBudget {
     fun requireWithinCeiling(
         request: LanScanRequest,
         sessionConcurrency: Int = request.concurrency,
-    ): Estimate = estimate(request, sessionConcurrency).also {
-        require(!it.exceedsHardCeiling) { OVER_CEILING_MESSAGE }
-    }
+    ): Estimate =
+        estimate(request, sessionConcurrency).also {
+            require(!it.exceedsHardCeiling) { OVER_CEILING_MESSAGE }
+        }
 
     /** Malformed requests still get a finite session and reach the existing validation path. */
     fun sessionTimeoutMillis(request: LanScanRequest): Long {

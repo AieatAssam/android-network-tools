@@ -1,10 +1,9 @@
 package net.aieat.netswissknife.app.ui.screens.mdns
 
 import androidx.annotation.StringRes
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Cast
+import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.FolderShared
 import androidx.compose.material.icons.filled.Http
 import androidx.compose.material.icons.filled.Lock
@@ -12,6 +11,7 @@ import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.ui.graphics.vector.ImageVector
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 
@@ -22,7 +22,10 @@ internal const val MDNS_TXT_VISIBLE_LIMIT = 5
 internal fun mdnsElapsedSeconds(elapsedMs: Long): Long = elapsedMs.coerceAtLeast(0L) / 1_000L
 
 /** Fraction of the scan window that has passed, clamped to 0..1. */
-internal fun mdnsScanProgress(elapsedMs: Long, windowMs: Long): Float {
+internal fun mdnsScanProgress(
+    elapsedMs: Long,
+    windowMs: Long,
+): Float {
     if (windowMs <= 0L) return 0f
     return (elapsedMs.coerceAtLeast(0L).toFloat() / windowMs.toFloat()).coerceIn(0f, 1f)
 }

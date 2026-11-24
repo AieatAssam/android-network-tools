@@ -69,17 +69,17 @@ fun ToolHeroHeader(
         shape = AppShapes.large,
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.secondaryContainer,
-                        )
-                    )
-                )
-                .padding(if (compact) CompactHeroPadding else AppSpacing.l),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primaryContainer,
+                                MaterialTheme.colorScheme.secondaryContainer,
+                            ),
+                        ),
+                    ).padding(if (compact) CompactHeroPadding else AppSpacing.l),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (iconContent != null) {
@@ -88,25 +88,26 @@ fun ToolHeroHeader(
                     // Gradient ring around a solid disc: the white icon sits on solid primary, which keeps
                     // it readable. Putting it on the gradient's tertiary end fails contrast.
                     Box(
-                        modifier = Modifier
-                            .size(if (compact) 36.dp else 52.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(
-                                        MaterialTheme.colorScheme.primary,
-                                        MaterialTheme.colorScheme.tertiary,
-                                    )
-                                )
-                            )
-                            .padding(if (compact) 2.dp else 3.dp),
+                        modifier =
+                            Modifier
+                                .size(if (compact) 36.dp else 52.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(
+                                            MaterialTheme.colorScheme.primary,
+                                            MaterialTheme.colorScheme.tertiary,
+                                        ),
+                                    ),
+                                ).padding(if (compact) 2.dp else 3.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary),
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
@@ -181,9 +182,10 @@ fun HeroTitleText(
         maxLines = 1,
         softWrap = false,
         overflow = TextOverflow.Clip,
-        modifier = modifier
-            .semantics { heading() }
-            .let { if (ready) it else it.alpha(0f) },
+        modifier =
+            modifier
+                .semantics { heading() }
+                .let { if (ready) it else it.alpha(0f) },
         onTextLayout = { result ->
             if (result.didOverflowWidth) {
                 textStyle = textStyle.copy(fontSize = textStyle.fontSize * 0.92f)

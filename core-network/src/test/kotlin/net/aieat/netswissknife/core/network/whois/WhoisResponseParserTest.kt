@@ -8,24 +8,25 @@ import java.time.ZoneOffset
 
 @DisplayName("WhoisResponseParser")
 class WhoisResponseParserTest {
-
     @Test
     @DisplayName("parseDomainName extracts value after Domain Name key")
     fun `parseDomainName extracts value after Domain Name key`() {
-        val response = """
+        val response =
+            """
             Domain Name: EXAMPLE.COM
             Registry Domain ID: 2336799_DOMAIN_COM-VRSN
-        """.trimIndent()
+            """.trimIndent()
         assertEquals("EXAMPLE.COM", WhoisResponseParser.parseDomainName(response))
     }
 
     @Test
     @DisplayName("parseRegistrar extracts registrar name")
     fun `parseRegistrar extracts registrar name`() {
-        val response = """
+        val response =
+            """
             Registrar: MarkMonitor Inc.
             Registrar IANA ID: 292
-        """.trimIndent()
+            """.trimIndent()
         assertEquals("MarkMonitor Inc.", WhoisResponseParser.parseRegistrar(response))
     }
 
@@ -60,7 +61,12 @@ class WhoisResponseParserTest {
         val response = "Expiry Date: 13-Aug-2025"
         val result = WhoisResponseParser.parseExpiresOn(response)
         assertNotNull(result)
-        val expected = LocalDate.of(2025, 8, 13).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        val expected =
+            LocalDate
+                .of(2025, 8, 13)
+                .atStartOfDay(ZoneOffset.UTC)
+                .toInstant()
+                .toEpochMilli()
         assertEquals(expected, result)
     }
 
@@ -74,11 +80,12 @@ class WhoisResponseParserTest {
     @Test
     @DisplayName("parseNameServers collects all Name Server lines deduplicated uppercase")
     fun `parseNameServers collects all Name Server lines deduplicated uppercase`() {
-        val response = """
+        val response =
+            """
             Name Server: ns1.example.com
             Name Server: NS2.EXAMPLE.COM
             Name Server: ns1.example.com
-        """.trimIndent()
+            """.trimIndent()
         val result = WhoisResponseParser.parseNameServers(response)
         assertEquals(2, result.size)
         assertTrue(result.contains("NS1.EXAMPLE.COM"))
@@ -88,10 +95,11 @@ class WhoisResponseParserTest {
     @Test
     @DisplayName("parseStatusCodes strips trailing URL from status line")
     fun `parseStatusCodes strips trailing URL from status line`() {
-        val response = """
+        val response =
+            """
             Domain Status: clientTransferProhibited https://icann.org/epp#clientTransferProhibited
             Domain Status: clientDeleteProhibited https://icann.org/epp#clientDeleteProhibited
-        """.trimIndent()
+            """.trimIndent()
         val result = WhoisResponseParser.parseStatusCodes(response)
         assertEquals(2, result.size)
         assertTrue(result.contains("clientTransferProhibited"))
@@ -101,20 +109,22 @@ class WhoisResponseParserTest {
     @Test
     @DisplayName("parseReferral extracts refer value")
     fun `parseReferral extracts refer value`() {
-        val response = """
+        val response =
+            """
             domain:       COM
             refer:        whois.verisign-grs.com
-        """.trimIndent()
+            """.trimIndent()
         assertEquals("whois.verisign-grs.com", WhoisResponseParser.parseReferral(response))
     }
 
     @Test
     @DisplayName("parseRegistrarWhoisServer extracts hostname")
     fun `parseRegistrarWhoisServer extracts hostname`() {
-        val response = """
+        val response =
+            """
             Registrar: MarkMonitor Inc.
             Registrar WHOIS Server: whois.markmonitor.com
-        """.trimIndent()
+            """.trimIndent()
         assertEquals("whois.markmonitor.com", WhoisResponseParser.parseRegistrarWhoisServer(response))
     }
 
@@ -128,7 +138,10 @@ class WhoisResponseParserTest {
     @Test
     fun `a local date-time without an offset is read as UTC`() {
         assertEquals(
-            java.time.LocalDateTime.of(2024, 5, 1, 10, 30).toInstant(ZoneOffset.UTC).toEpochMilli(),
+            java.time.LocalDateTime
+                .of(2024, 5, 1, 10, 30)
+                .toInstant(ZoneOffset.UTC)
+                .toEpochMilli(),
             WhoisResponseParser.parseDate("2024-05-01T10:30:00"),
         )
     }
@@ -140,12 +153,18 @@ class WhoisResponseParserTest {
             listOf("America/Los_Angeles", "Asia/Tokyo").forEach { zone ->
                 java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone(zone))
                 assertEquals(
-                    LocalDate.of(1995, 8, 14).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+                    LocalDate
+                        .of(1995, 8, 14)
+                        .atStartOfDay(ZoneOffset.UTC)
+                        .toInstant()
+                        .toEpochMilli(),
                     WhoisResponseParser.parseDate("1995-08-14"),
                     zone,
                 )
                 assertEquals(
-                    java.time.Instant.parse("1995-08-14T10:00:00Z").toEpochMilli(),
+                    java.time.Instant
+                        .parse("1995-08-14T10:00:00Z")
+                        .toEpochMilli(),
                     WhoisResponseParser.parseDate("1995-08-14T10:00:00"),
                     zone,
                 )

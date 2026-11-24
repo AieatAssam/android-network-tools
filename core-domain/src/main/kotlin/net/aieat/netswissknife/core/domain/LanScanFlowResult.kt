@@ -1,14 +1,13 @@
 package net.aieat.netswissknife.core.domain
 
+import net.aieat.netswissknife.core.network.ErrorCode
+import net.aieat.netswissknife.core.network.ErrorInfo
 import net.aieat.netswissknife.core.network.lan.LanHost
 import net.aieat.netswissknife.core.network.lan.LanScanDiagnostic
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
-import net.aieat.netswissknife.core.network.ErrorCode
-import net.aieat.netswissknife.core.network.ErrorInfo
 
 /** Events emitted by [LanScanUseCase] during a scan. */
 sealed interface LanScanFlowResult {
-
     /** Emitted first, before any probe, with whether MAC addresses can be read on this device. */
     data class ScanStarted(
         val macResolutionSupported: Boolean,
@@ -42,10 +41,14 @@ sealed interface LanScanFlowResult {
     ) : LanScanFlowResult
 
     /** Emitted once after all IPs have been probed (always the last event). */
-    data class ScanComplete(val summary: LanScanSummary) : LanScanFlowResult
+    data class ScanComplete(
+        val summary: LanScanSummary,
+    ) : LanScanFlowResult
 
     /** Emitted as the only event when input validation fails. */
-    data class ValidationError(val info: ErrorInfo) : LanScanFlowResult {
+    data class ValidationError(
+        val info: ErrorInfo,
+    ) : LanScanFlowResult {
         val message: String get() = info.developerCopy()
         constructor(message: String) : this(ErrorInfo(ErrorCode.UNKNOWN, developerMessage = message))
     }

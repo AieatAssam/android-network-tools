@@ -30,14 +30,14 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
-import net.aieat.netswissknife.app.R
-import net.aieat.netswissknife.app.ui.i18n.UiText
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.Transport
+import net.aieat.netswissknife.app.ui.i18n.UiText
 import net.aieat.netswissknife.app.ui.navigation.HostTool
 import net.aieat.netswissknife.app.ui.navigation.ToolDestination
 import net.aieat.netswissknife.app.ui.navigation.ToolHost
@@ -390,11 +390,12 @@ class PingViewModelTest {
         @Test
         fun `transitions to Error on ValidationError`() =
             runTest {
-                coEvery { pingUseCase(any(), any()) } returns flowOf(
-                    PingFlowResult.ValidationError(
-                        ErrorInfo(ErrorCode.HOST_INVALID, args = listOf("bad host"), developerMessage = "invalid host")
+                coEvery { pingUseCase(any(), any()) } returns
+                    flowOf(
+                        PingFlowResult.ValidationError(
+                            ErrorInfo(ErrorCode.HOST_INVALID, args = listOf("bad host"), developerMessage = "invalid host"),
+                        ),
                     )
-                )
                 viewModel.onHostChange("")
                 viewModel.startPing()
                 val state = viewModel.uiState.value

@@ -9,11 +9,12 @@ internal data class RedirectPlaceholders(
     val query: String,
 ) {
     companion object {
-        val English = RedirectPlaceholders(
-            address = "[redirect address omitted]",
-            path = "[path omitted]",
-            query = "[query omitted]",
-        )
+        val English =
+            RedirectPlaceholders(
+                address = "[redirect address omitted]",
+                path = "[path omitted]",
+                query = "[query omitted]",
+            )
     }
 }
 
@@ -25,26 +26,28 @@ internal data class RedirectPlaceholders(
 internal fun safeRedirectDisplayValue(
     value: String,
     placeholders: RedirectPlaceholders = RedirectPlaceholders.English,
-): String = runCatching {
-    val uri = java.net.URI(value)
-    if (uri.rawAuthority == null) return@runCatching placeholders.address
-    val host = uri.host ?: return@runCatching placeholders.address
-    val safeAuthority = buildString {
-        append(host)
-        if (uri.port >= 0) append(":${uri.port}")
-    }
-    val pathPart =
-        when {
-            !uri.rawPath.isNullOrEmpty() && uri.rawPath != "/" -> "/${placeholders.path}"
-            uri.rawQuery != null -> "/${placeholders.query}"
-            else -> "/"
+): String =
+    runCatching {
+        val uri = java.net.URI(value)
+        if (uri.rawAuthority == null) return@runCatching placeholders.address
+        val host = uri.host ?: return@runCatching placeholders.address
+        val safeAuthority =
+            buildString {
+                append(host)
+                if (uri.port >= 0) append(":${uri.port}")
+            }
+        val pathPart =
+            when {
+                !uri.rawPath.isNullOrEmpty() && uri.rawPath != "/" -> "/${placeholders.path}"
+                uri.rawQuery != null -> "/${placeholders.query}"
+                else -> "/"
+            }
+        if (uri.isAbsolute) {
+            "${uri.scheme}://$safeAuthority$pathPart"
+        } else {
+            "//$safeAuthority$pathPart"
         }
-    if (uri.isAbsolute) {
-        "${uri.scheme}://$safeAuthority$pathPart"
-    } else {
-        "//$safeAuthority$pathPart"
-    }
-}.getOrElse { placeholders.address }
+    }.getOrElse { placeholders.address }
 
 /** Case-insensitive lookup of the first value of a response header (HTTP/2 names are lowercase). */
 internal fun httpHeaderValue(
@@ -61,15 +64,16 @@ private val sensitiveHeaderNames = setOf("cookie", "set-cookie", "authorization"
  * The address as shown on screen: userinfo and fragment removed, while the scheme, host, path and
  * query stay as the server sent them. A password in a URL is never useful on screen.
  */
-internal fun displayUrl(value: String): String = runCatching {
-    val uri = java.net.URI(value)
-    val query = uri.rawQuery?.let { "?$it" }.orEmpty()
-    if (uri.rawAuthority == null) return@runCatching "${uri.rawPath.orEmpty()}$query"
-    val host = uri.host ?: return@runCatching RedirectPlaceholders.English.address
-    val port = if (uri.port >= 0) ":${uri.port}" else ""
-    val prefix = if (uri.isAbsolute) "${uri.scheme}://" else "//"
-    "$prefix$host$port${uri.rawPath.orEmpty()}$query"
-}.getOrElse { RedirectPlaceholders.English.address }
+internal fun displayUrl(value: String): String =
+    runCatching {
+        val uri = java.net.URI(value)
+        val query = uri.rawQuery?.let { "?$it" }.orEmpty()
+        if (uri.rawAuthority == null) return@runCatching "${uri.rawPath.orEmpty()}$query"
+        val host = uri.host ?: return@runCatching RedirectPlaceholders.English.address
+        val port = if (uri.port >= 0) ":${uri.port}" else ""
+        val prefix = if (uri.isAbsolute) "${uri.scheme}://" else "//"
+        "$prefix$host$port${uri.rawPath.orEmpty()}$query"
+    }.getOrElse { RedirectPlaceholders.English.address }
 
 /** Response headers shown on screen. Credential-bearing headers are dropped; Location is shown via [displayUrl]. */
 internal fun httpResponseHeadersForDisplay(headers: Map<String, List<String>>): Map<String, List<String>> =
@@ -96,26 +100,27 @@ internal fun buildHttpShareText(
     result: HttpProbeResult,
     sizeText: String,
     placeholders: RedirectPlaceholders = RedirectPlaceholders.English,
-): String = buildString {
-    appendLine("HTTP: ${safeRedirectDisplayValue(result.request.url, placeholders)}")
-    appendLine("Final URL: ${safeRedirectDisplayValue(result.finalUrl, placeholders)}")
-    appendLine("Status: ${result.statusCode} ${result.statusMessage}")
-    appendLine("Time: ${result.responseTimeMs}ms")
-    appendLine("Size: $sizeText")
-    if (result.redirectChain.isNotEmpty()) {
-        appendLine()
-        appendLine("Redirects:")
-        result.redirectChain.forEach { url -> appendLine("  → ${safeRedirectDisplayValue(url, placeholders)}") }
+): String =
+    buildString {
+        appendLine("HTTP: ${safeRedirectDisplayValue(result.request.url, placeholders)}")
+        appendLine("Final URL: ${safeRedirectDisplayValue(result.finalUrl, placeholders)}")
+        appendLine("Status: ${result.statusCode} ${result.statusMessage}")
+        appendLine("Time: ${result.responseTimeMs}ms")
+        appendLine("Size: $sizeText")
+        if (result.redirectChain.isNotEmpty()) {
+            appendLine()
+            appendLine("Redirects:")
+            result.redirectChain.forEach { url -> appendLine("  → ${safeRedirectDisplayValue(url, placeholders)}") }
+        }
+        val safeHeaders = visibleHttpResponseHeaders(result.responseHeaders, placeholders)
+        if (safeHeaders.isNotEmpty()) {
+            appendLine()
+            appendLine("Response Headers:")
+            safeHeaders.forEach { (key, values) -> appendLine("  $key: ${values.joinToString(", ")}") }
+        }
+        if (result.securityChecks.isNotEmpty()) {
+            appendLine()
+            appendLine("Security Checks:")
+            result.securityChecks.forEach { check -> appendLine("  ${check.headerName}: ${check.rating.name}") }
+        }
     }
-    val safeHeaders = visibleHttpResponseHeaders(result.responseHeaders, placeholders)
-    if (safeHeaders.isNotEmpty()) {
-        appendLine()
-        appendLine("Response Headers:")
-        safeHeaders.forEach { (key, values) -> appendLine("  $key: ${values.joinToString(", ")}") }
-    }
-    if (result.securityChecks.isNotEmpty()) {
-        appendLine()
-        appendLine("Security Checks:")
-        result.securityChecks.forEach { check -> appendLine("  ${check.headerName}: ${check.rating.name}") }
-    }
-}

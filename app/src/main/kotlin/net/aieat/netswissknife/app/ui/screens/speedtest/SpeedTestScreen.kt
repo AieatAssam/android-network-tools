@@ -47,10 +47,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
@@ -58,14 +58,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -88,27 +85,30 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import net.aieat.netswissknife.app.ui.components.ResultActionsRow
-import net.aieat.netswissknife.app.ui.components.ToolRetryButton
-import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
-import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
-import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
-import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.util.formatBytesSi
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.speedtest.LatencyStats
+import net.aieat.netswissknife.core.network.speedtest.ServerInfo
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestPhase
 import net.aieat.netswissknife.core.network.speedtest.SpeedTestResult
 import net.aieat.netswissknife.core.network.speedtest.ThroughputResult
 import net.aieat.netswissknife.core.network.speedtest.ThroughputSample
-import net.aieat.netswissknife.core.network.speedtest.ServerInfo
 
 private const val CLOUDFLARE_SPEED_URL = "https://speed.cloudflare.com"
 private val GAUGE_SCALE_STEPS_MBPS = intArrayOf(10, 25, 50, 100, 250, 500, 1_000, 2_500, 10_000)
@@ -117,8 +117,7 @@ private val GAUGE_SCALE_STEPS_MBPS = intArrayOf(10, 25, 50, 100, 250, 500, 1_000
  * The round maximum shown on the gauge: the smallest step that fits [valueMbps]. Values above the
  * top step use the top step, and the arc stays full.
  */
-internal fun gaugeScaleMaxMbps(valueMbps: Double): Int =
-    GAUGE_SCALE_STEPS_MBPS.firstOrNull { valueMbps <= it } ?: GAUGE_SCALE_STEPS_MBPS.last()
+internal fun gaugeScaleMaxMbps(valueMbps: Double): Int = GAUGE_SCALE_STEPS_MBPS.firstOrNull { valueMbps <= it } ?: GAUGE_SCALE_STEPS_MBPS.last()
 
 @Composable
 fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
@@ -148,30 +147,32 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
     LaunchedEffect(Unit) { visible = true }
     var showHelp by remember { mutableStateOf(false) }
 
-    val phase = remember(uiState) {
-        when (uiState) {
-            is SpeedTestUiState.Idle -> DisplayPhase.IDLE
-            is SpeedTestUiState.Running -> DisplayPhase.RUNNING
-            is SpeedTestUiState.Finished -> DisplayPhase.FINISHED
-            is SpeedTestUiState.Error -> DisplayPhase.ERROR
+    val phase =
+        remember(uiState) {
+            when (uiState) {
+                is SpeedTestUiState.Idle -> DisplayPhase.IDLE
+                is SpeedTestUiState.Running -> DisplayPhase.RUNNING
+                is SpeedTestUiState.Finished -> DisplayPhase.FINISHED
+                is SpeedTestUiState.Error -> DisplayPhase.ERROR
+            }
         }
-    }
-    val announcementPhase = when (uiState) {
-        is SpeedTestUiState.Idle -> null
-        is SpeedTestUiState.Running -> ToolAnnouncementPhase.RUNNING
-        is SpeedTestUiState.Finished -> ToolAnnouncementPhase.FINISHED
-        is SpeedTestUiState.Error -> ToolAnnouncementPhase.ERROR
-    }
+    val announcementPhase =
+        when (uiState) {
+            is SpeedTestUiState.Idle -> null
+            is SpeedTestUiState.Running -> ToolAnnouncementPhase.RUNNING
+            is SpeedTestUiState.Finished -> ToolAnnouncementPhase.FINISHED
+            is SpeedTestUiState.Error -> ToolAnnouncementPhase.ERROR
+        }
     ToolStateAnnouncer(stringResource(R.string.help_speedtest_title), announcementPhase)
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(AppMotion.enter(400)) + slideInVertically(AppMotion.enter(400)) { it / 4 }
+        enter = fadeIn(AppMotion.enter(400)) + slideInVertically(AppMotion.enter(400)) { it / 4 },
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -208,21 +209,25 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
                 AnimatedContent(
                     targetState = phase,
                     transitionSpec = { fadeIn(AppMotion.enter(300)) togetherWith fadeOut(AppMotion.exit(200)) },
-                    label = "speedtest_content_state"
+                    label = "speedtest_content_state",
                 ) { target ->
                     when (target) {
-                        DisplayPhase.IDLE ->
+                        DisplayPhase.IDLE -> {
                             SpeedTestIdleContent(
                                 config = config,
                                 onStart = viewModel::startTest,
                                 onDownloadStreamsChange = viewModel::setDownloadStreams,
-                                onUploadStreamsChange = viewModel::setUploadStreams
+                                onUploadStreamsChange = viewModel::setUploadStreams,
                             )
-                        DisplayPhase.RUNNING ->
+                        }
+
+                        DisplayPhase.RUNNING -> {
                             (uiState as? SpeedTestUiState.Running)?.let {
                                 SpeedTestRunningContent(it, onCancel = viewModel::onCancel)
                             }
-                        DisplayPhase.FINISHED ->
+                        }
+
+                        DisplayPhase.FINISHED -> {
                             (uiState as? SpeedTestUiState.Finished)?.let { finished ->
                                 SpeedTestResultContent(
                                     result = finished.result,
@@ -230,15 +235,18 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
                                     onShare = {
                                         context.shareText(
                                             text = buildSpeedTestShareText(finished.result),
-                                            subject = shareSubject
+                                            subject = shareSubject,
                                         )
-                                    }
+                                    },
                                 )
                             }
-                        DisplayPhase.ERROR ->
+                        }
+
+                        DisplayPhase.ERROR -> {
                             (uiState as? SpeedTestUiState.Error)?.let {
                                 SpeedTestErrorContent(it, onRetry = viewModel::onRetry)
                             }
+                        }
                     }
                 }
             }
@@ -284,20 +292,21 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
             title = stringResource(R.string.help_speedtest_title),
             conceptHeading = stringResource(R.string.help_speedtest_concept_heading),
             conceptBody = stringResource(R.string.help_speedtest_concept_body),
-            sections = listOf(
-                HelpSection(stringResource(R.string.help_speedtest_what_heading), stringResource(R.string.help_speedtest_what_body)),
-                HelpSection(
-                    heading = stringResource(R.string.help_speedtest_phases_heading),
-                    body = stringResource(R.string.help_speedtest_phases_body),
-                    bullets = stringArrayResource(R.array.help_speedtest_phases_bullets).toList()
+            sections =
+                listOf(
+                    HelpSection(stringResource(R.string.help_speedtest_what_heading), stringResource(R.string.help_speedtest_what_body)),
+                    HelpSection(
+                        heading = stringResource(R.string.help_speedtest_phases_heading),
+                        body = stringResource(R.string.help_speedtest_phases_body),
+                        bullets = stringArrayResource(R.array.help_speedtest_phases_bullets).toList(),
+                    ),
+                    HelpSection(
+                        heading = stringResource(R.string.help_speedtest_results_heading),
+                        body = "",
+                        bullets = stringArrayResource(R.array.help_speedtest_results_bullets).toList(),
+                    ),
                 ),
-                HelpSection(
-                    heading = stringResource(R.string.help_speedtest_results_heading),
-                    body = "",
-                    bullets = stringArrayResource(R.array.help_speedtest_results_bullets).toList()
-                )
-            ),
-            onDismiss = { showHelp = false }
+            onDismiss = { showHelp = false },
         )
     }
 }
@@ -310,18 +319,18 @@ private enum class DisplayPhase { IDLE, RUNNING, FINISHED, ERROR }
 private fun SpeedTestHeaderCard(onHelpClick: () -> Unit) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.secondaryContainer
-                        )
-                    )
-                )
-                .padding(horizontal = 20.dp, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primaryContainer,
+                                MaterialTheme.colorScheme.secondaryContainer,
+                            ),
+                        ),
+                    ).padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -330,19 +339,19 @@ private fun SpeedTestHeaderCard(onHelpClick: () -> Unit) {
                         style = MaterialTheme.typography.displaySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = stringResource(R.string.speedtest_screen_subtitle),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
                     )
                 }
                 IconButton(onClick = onHelpClick) {
                     Icon(
                         imageVector = Icons.Default.Info,
                         contentDescription = stringResource(R.string.action_help),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
             }
@@ -357,33 +366,36 @@ private fun SpeedTestIdleContent(
     config: net.aieat.netswissknife.core.network.speedtest.SpeedTestConfig,
     onStart: () -> Unit,
     onDownloadStreamsChange: (Int) -> Unit,
-    onUploadStreamsChange: (Int) -> Unit
+    onUploadStreamsChange: (Int) -> Unit,
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(
-                modifier = Modifier
-                    .size(140.dp)
-                    .background(
-                        brush = Brush.radialGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
-                                Color.Transparent
-                            )
+                modifier =
+                    Modifier
+                        .size(140.dp)
+                        .background(
+                            brush =
+                                Brush.radialGradient(
+                                    listOf(
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                                        Color.Transparent,
+                                    ),
+                                ),
+                            shape = CircleShape,
                         ),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 Surface(
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(96.dp)
+                    modifier = Modifier.size(96.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         // Decorative only: the Start button below is the single primary action.
@@ -391,7 +403,7 @@ private fun SpeedTestIdleContent(
                             imageVector = Icons.Default.Speed,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(44.dp)
+                            modifier = Modifier.size(44.dp),
                         )
                     }
                 }
@@ -400,7 +412,7 @@ private fun SpeedTestIdleContent(
             Text(
                 text = stringResource(R.string.speedtest_idle_title),
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.height(16.dp))
             Row(
@@ -456,8 +468,11 @@ private fun StreamSetting(
             choices.forEach { value ->
                 DropdownMenuItem(
                     text = { Text(value.toString()) },
-                    onClick = { expanded = false; onSelect(value) },
-                    leadingIcon = if (value == selected) ({ Icon(Icons.Default.Speed, contentDescription = null) }) else null
+                    onClick = {
+                        expanded = false
+                        onSelect(value)
+                    },
+                    leadingIcon = if (value == selected) ({ Icon(Icons.Default.Speed, contentDescription = null) }) else null,
                 )
             }
         }
@@ -467,52 +482,65 @@ private fun StreamSetting(
 // ── Running state ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun SpeedTestRunningContent(state: SpeedTestUiState.Running, onCancel: () -> Unit) {
+private fun SpeedTestRunningContent(
+    state: SpeedTestUiState.Running,
+    onCancel: () -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
                 PhaseStepper(currentPhase = state.phase)
                 Spacer(Modifier.height(16.dp))
 
-                val phaseTitle = when (state.phase) {
-                    SpeedTestPhase.LATENCY -> R.string.speedtest_running_latency
-                    SpeedTestPhase.DOWNLOAD -> R.string.speedtest_running_download
-                    SpeedTestPhase.UPLOAD -> R.string.speedtest_running_upload
-                }
+                val phaseTitle =
+                    when (state.phase) {
+                        SpeedTestPhase.LATENCY -> R.string.speedtest_running_latency
+                        SpeedTestPhase.DOWNLOAD -> R.string.speedtest_running_download
+                        SpeedTestPhase.UPLOAD -> R.string.speedtest_running_upload
+                    }
                 Text(
                     text = stringResource(phaseTitle),
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(Modifier.height(16.dp))
 
                 when (state.phase) {
-                    SpeedTestPhase.LATENCY -> LatencyLiveStats(state.latencyStats)
-                    SpeedTestPhase.DOWNLOAD -> ThroughputLiveView(
-                        samples = state.downloadSamples,
-                        accentColor = MaterialTheme.colorScheme.primary,
-                        icon = Icons.Default.ArrowDownward
-                    )
-                    SpeedTestPhase.UPLOAD -> ThroughputLiveView(
-                        samples = state.uploadSamples,
-                        accentColor = MaterialTheme.colorScheme.tertiary,
-                        icon = Icons.Default.ArrowUpward
-                    )
+                    SpeedTestPhase.LATENCY -> {
+                        LatencyLiveStats(state.latencyStats)
+                    }
+
+                    SpeedTestPhase.DOWNLOAD -> {
+                        ThroughputLiveView(
+                            samples = state.downloadSamples,
+                            accentColor = MaterialTheme.colorScheme.primary,
+                            icon = Icons.Default.ArrowDownward,
+                        )
+                    }
+
+                    SpeedTestPhase.UPLOAD -> {
+                        ThroughputLiveView(
+                            samples = state.uploadSamples,
+                            accentColor = MaterialTheme.colorScheme.tertiary,
+                            icon = Icons.Default.ArrowUpward,
+                        )
+                    }
                 }
                 if (state.serverInfo != null) {
                     Spacer(Modifier.height(12.dp))
                     ServerInfoChip(state.serverInfo)
                 }
-                val loadedStats = when (state.phase) {
-                    SpeedTestPhase.DOWNLOAD -> state.loadedLatencyDown
-                    SpeedTestPhase.UPLOAD -> state.loadedLatencyUp
-                    SpeedTestPhase.LATENCY -> LatencyStats.EMPTY
-                }
+                val loadedStats =
+                    when (state.phase) {
+                        SpeedTestPhase.DOWNLOAD -> state.loadedLatencyDown
+                        SpeedTestPhase.UPLOAD -> state.loadedLatencyUp
+                        SpeedTestPhase.LATENCY -> LatencyStats.EMPTY
+                    }
                 if (loadedStats.samples.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
                     Text(
                         text = stringResource(if (state.phase == SpeedTestPhase.DOWNLOAD) R.string.speedtest_loaded_latency_download else R.string.speedtest_loaded_latency_upload),
-                        style = MaterialTheme.typography.labelMedium
+                        style = MaterialTheme.typography.labelMedium,
                     )
                     StatGrid(latencyStatGridEntries(loadedStats))
                 }
@@ -533,14 +561,15 @@ private fun SpeedTestRunningContent(state: SpeedTestUiState.Running, onCancel: (
 
 @Composable
 private fun PhaseStepper(currentPhase: SpeedTestPhase) {
-    val phases = listOf(
-        SpeedTestPhase.LATENCY to R.string.speedtest_phase_latency,
-        SpeedTestPhase.DOWNLOAD to R.string.speedtest_phase_download,
-        SpeedTestPhase.UPLOAD to R.string.speedtest_phase_upload
-    )
+    val phases =
+        listOf(
+            SpeedTestPhase.LATENCY to R.string.speedtest_phase_latency,
+            SpeedTestPhase.DOWNLOAD to R.string.speedtest_phase_download,
+            SpeedTestPhase.UPLOAD to R.string.speedtest_phase_upload,
+        )
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         phases.forEach { (phase, labelRes) ->
             val isActive = phase == currentPhase
@@ -548,30 +577,33 @@ private fun PhaseStepper(currentPhase: SpeedTestPhase) {
             val containerColor by animateFloatAsState(
                 targetValue = if (isActive || isDone) 1f else 0f,
                 animationSpec = AppMotion.effect(300),
-                label = "phase_chip_${phase.name}"
+                label = "phase_chip_${phase.name}",
             )
             Surface(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(50),
-                color = androidx.compose.ui.graphics.lerp(
-                    MaterialTheme.colorScheme.surfaceVariant,
-                    MaterialTheme.colorScheme.primary,
-                    containerColor
-                )
+                color =
+                    androidx.compose.ui.graphics.lerp(
+                        MaterialTheme.colorScheme.surfaceVariant,
+                        MaterialTheme.colorScheme.primary,
+                        containerColor,
+                    ),
             ) {
                 Text(
                     text = stringResource(labelRes),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                    color = androidx.compose.ui.graphics.lerp(
-                        MaterialTheme.colorScheme.onSurfaceVariant,
-                        MaterialTheme.colorScheme.onPrimary,
-                        containerColor
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    color =
+                        androidx.compose.ui.graphics.lerp(
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                            MaterialTheme.colorScheme.onPrimary,
+                            containerColor,
+                        ),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
             }
         }
@@ -583,17 +615,19 @@ private fun LatencyLiveStats(stats: LatencyStats) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
         val infiniteTransition = rememberInfiniteTransition(label = "latency_pulse")
         val pulse by infiniteTransition.animateFloat(
-            initialValue = 0.9f, targetValue = 1.05f,
+            initialValue = 0.9f,
+            targetValue = 1.05f,
             animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
-            label = "latency_pulse_scale"
+            label = "latency_pulse_scale",
         )
         Icon(
             imageVector = Icons.Default.NetworkCheck,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier
-                .size(56.dp)
-                .scale(pulse)
+            modifier =
+                Modifier
+                    .size(56.dp)
+                    .scale(pulse),
         )
         Spacer(Modifier.height(12.dp))
         if (stats.samples.isNotEmpty()) {
@@ -609,7 +643,7 @@ private fun latencyStatGridEntries(stats: LatencyStats): List<Pair<String, Strin
         stringResource(R.string.speedtest_latency_min) to "${stats.minMs} $msSuffix",
         stringResource(R.string.speedtest_latency_avg) to "%.1f %s".format(stats.avgMs, msSuffix),
         stringResource(R.string.speedtest_latency_max) to "${stats.maxMs} $msSuffix",
-        stringResource(R.string.speedtest_latency_jitter) to "%.1f %s".format(stats.jitterMs, msSuffix)
+        stringResource(R.string.speedtest_latency_jitter) to "%.1f %s".format(stats.jitterMs, msSuffix),
     )
 }
 
@@ -617,7 +651,7 @@ private fun latencyStatGridEntries(stats: LatencyStats): List<Pair<String, Strin
 private fun ThroughputLiveView(
     samples: List<ThroughputSample>,
     accentColor: Color,
-    icon: androidx.compose.ui.graphics.vector.ImageVector
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
 ) {
     val current = samples.lastOrNull()?.instantMbps ?: 0.0
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
@@ -633,12 +667,12 @@ private fun ThroughputLiveView(
 private fun SpeedGauge(
     valueMbps: Double,
     accentColor: Color,
-    icon: androidx.compose.ui.graphics.vector.ImageVector
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
 ) {
     val animatedValue by animateFloatAsState(
         targetValue = valueMbps.toFloat(),
         animationSpec = AppMotion.effect(500),
-        label = "speed_gauge_value"
+        label = "speed_gauge_value",
     )
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
     val density = LocalDensity.current
@@ -647,13 +681,15 @@ private fun SpeedGauge(
 
     Box(
         modifier = Modifier.size(180.dp),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val sweepBackground = 270f
             val startAngle = 135f
             val inset = strokeWidth / 2
-            val arcSize = androidx.compose.ui.geometry.Size(size.width - strokeWidth, size.height - strokeWidth)
+            val arcSize =
+                androidx.compose.ui.geometry
+                    .Size(size.width - strokeWidth, size.height - strokeWidth)
             val topLeft = Offset(inset, inset)
 
             drawArc(
@@ -663,7 +699,7 @@ private fun SpeedGauge(
                 useCenter = false,
                 topLeft = topLeft,
                 size = arcSize,
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
             )
 
             val progress = (animatedValue / scaleMaxMbps.toFloat()).coerceIn(0f, 1f)
@@ -674,7 +710,7 @@ private fun SpeedGauge(
                 useCenter = false,
                 topLeft = topLeft,
                 size = arcSize,
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
             )
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -687,12 +723,12 @@ private fun SpeedGauge(
             Text(
                 text = stringResource(R.string.speedtest_mbps_suffix),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 text = stringResource(R.string.speedtest_gauge_scale, scaleMaxMbps),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -701,7 +737,10 @@ private fun SpeedGauge(
 // ── Throughput chart ──────────────────────────────────────────────────────────
 
 @Composable
-private fun ThroughputChart(samples: List<ThroughputSample>, accentColor: Color) {
+private fun ThroughputChart(
+    samples: List<ThroughputSample>,
+    accentColor: Color,
+) {
     if (samples.size < 2) return
 
     val surfaceColor = MaterialTheme.colorScheme.surfaceVariant
@@ -713,9 +752,10 @@ private fun ThroughputChart(samples: List<ThroughputSample>, accentColor: Color)
     val edgePad = with(density) { 8.dp.toPx() }
 
     Canvas(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(120.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(120.dp),
     ) {
         val chartWidth = size.width
         val chartHeight = size.height
@@ -728,7 +768,7 @@ private fun ThroughputChart(samples: List<ThroughputSample>, accentColor: Color)
                 color = surfaceColor,
                 start = Offset(leftPad, y),
                 end = Offset(chartWidth - edgePad, y),
-                strokeWidth = 1f
+                strokeWidth = 1f,
             )
             val valueAtLine = step * (gridLines - 1 - i)
             val label = if (step < 1.0) "%.1f".format(valueAtLine) else "%.0f".format(valueAtLine)
@@ -736,29 +776,34 @@ private fun ThroughputChart(samples: List<ThroughputSample>, accentColor: Color)
             drawText(textLayoutResult = measured, topLeft = Offset(0f, y - measured.size.height / 2f))
         }
 
-        val points = samples.mapIndexed { index, sample ->
-            val x = leftPad + (chartWidth - leftPad - edgePad) * index / (samples.size - 1).coerceAtLeast(1)
-            val y = chartHeight - edgePad - (sample.instantMbps / maxMbps).toFloat() * (chartHeight - 2 * edgePad)
-            Offset(x, y)
-        }
+        val points =
+            samples.mapIndexed { index, sample ->
+                val x = leftPad + (chartWidth - leftPad - edgePad) * index / (samples.size - 1).coerceAtLeast(1)
+                val y = chartHeight - edgePad - (sample.instantMbps / maxMbps).toFloat() * (chartHeight - 2 * edgePad)
+                Offset(x, y)
+            }
 
-        val fillPath = Path().apply {
-            moveTo(points.first().x, chartHeight - edgePad)
-            points.forEach { lineTo(it.x, it.y) }
-            lineTo(points.last().x, chartHeight - edgePad)
-            close()
-        }
+        val fillPath =
+            Path().apply {
+                moveTo(points.first().x, chartHeight - edgePad)
+                points.forEach { lineTo(it.x, it.y) }
+                lineTo(points.last().x, chartHeight - edgePad)
+                close()
+            }
         drawPath(
             path = fillPath,
-            brush = Brush.verticalGradient(
-                colors = listOf(accentColor.copy(alpha = 0.35f), Color.Transparent),
-                startY = 0f, endY = chartHeight
-            )
+            brush =
+                Brush.verticalGradient(
+                    colors = listOf(accentColor.copy(alpha = 0.35f), Color.Transparent),
+                    startY = 0f,
+                    endY = chartHeight,
+                ),
         )
-        val linePath = Path().apply {
-            moveTo(points.first().x, points.first().y)
-            points.drop(1).forEach { lineTo(it.x, it.y) }
-        }
+        val linePath =
+            Path().apply {
+                moveTo(points.first().x, points.first().y)
+                points.drop(1).forEach { lineTo(it.x, it.y) }
+            }
         drawPath(path = linePath, color = accentColor, style = Stroke(width = 2.5f, cap = StrokeCap.Round))
     }
 }
@@ -770,14 +815,14 @@ private fun ResultStrip(downloadResult: ThroughputResult?) {
     if (downloadResult == null) return
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         MiniResultCard(
             modifier = Modifier.weight(1f),
             label = stringResource(R.string.speedtest_download_header),
             icon = Icons.Default.ArrowDownward,
             accentColor = MaterialTheme.colorScheme.primary,
-            valueMbps = downloadResult.avgMbps
+            valueMbps = downloadResult.avgMbps,
         )
     }
 }
@@ -788,12 +833,12 @@ private fun MiniResultCard(
     label: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     accentColor: Color,
-    valueMbps: Double
+    valueMbps: Double,
 ) {
     ElevatedCard(modifier = modifier) {
         Column(
             modifier = Modifier.padding(14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Icon(imageVector = icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(16.dp))
@@ -804,7 +849,7 @@ private fun MiniResultCard(
                 text = "%.1f %s".format(valueMbps, stringResource(R.string.speedtest_mbps_suffix)),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = accentColor
+                color = accentColor,
             )
         }
     }
@@ -827,7 +872,7 @@ private fun SpeedTestResultHeader() {
 private fun SpeedTestResultContent(
     result: SpeedTestResult,
     onRetry: () -> Unit,
-    onShare: () -> Unit
+    onShare: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SpeedTestResultHeader()
@@ -836,30 +881,30 @@ private fun SpeedTestResultContent(
 
         LatencyResultCard(
             title = stringResource(R.string.speedtest_idle_latency_header),
-            stats = result.latency
+            stats = result.latency,
         )
         ThroughputResultCard(
             title = stringResource(R.string.speedtest_download_header),
             icon = Icons.Default.ArrowDownward,
             accentColor = MaterialTheme.colorScheme.primary,
-            result = result.download
+            result = result.download,
         )
         ThroughputResultCard(
             title = stringResource(R.string.speedtest_upload_header),
             icon = Icons.Default.ArrowUpward,
             accentColor = MaterialTheme.colorScheme.tertiary,
-            result = result.upload
+            result = result.upload,
         )
         if (result.loadedLatencyDown.samples.isNotEmpty()) {
             LatencyResultCard(
                 title = stringResource(R.string.speedtest_loaded_latency_download),
-                stats = result.loadedLatencyDown
+                stats = result.loadedLatencyDown,
             )
         }
         if (result.loadedLatencyUp.samples.isNotEmpty()) {
             LatencyResultCard(
                 title = stringResource(R.string.speedtest_loaded_latency_upload),
-                stats = result.loadedLatencyUp
+                stats = result.loadedLatencyUp,
             )
         }
 
@@ -878,7 +923,7 @@ private fun SpeedTestResultContent(
 @Composable
 private fun LatencyResultCard(
     title: String,
-    stats: LatencyStats
+    stats: LatencyStats,
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -887,7 +932,7 @@ private fun LatencyResultCard(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
                 )
             }
             Spacer(Modifier.height(12.dp))
@@ -908,13 +953,13 @@ private fun ServerInfoChip(info: ServerInfo) {
     val asn = info.asn ?: stringResource(R.string.speedtest_server_unknown_asn)
     Surface(
         color = MaterialTheme.colorScheme.secondaryContainer,
-        shape = RoundedCornerShape(50)
+        shape = RoundedCornerShape(50),
     ) {
         Text(
             text = stringResource(R.string.speedtest_server_info, info.colo ?: stringResource(R.string.speedtest_server_global_edge), asn),
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSecondaryContainer
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
         )
     }
 }
@@ -924,7 +969,7 @@ private fun ThroughputResultCard(
     title: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     accentColor: Color,
-    result: ThroughputResult
+    result: ThroughputResult,
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -937,15 +982,15 @@ private fun ThroughputResultCard(
                 listOf(
                     stringResource(R.string.speedtest_avg_speed) to "%.1f %s".format(result.avgMbps, stringResource(R.string.speedtest_mbps_suffix)),
                     stringResource(R.string.speedtest_peak_speed) to "%.1f %s".format(result.peakMbps, stringResource(R.string.speedtest_mbps_suffix)),
-                    stringResource(R.string.speedtest_data_transferred) to formatBytesSi(result.bytesTransferred)
-                )
+                    stringResource(R.string.speedtest_data_transferred) to formatBytesSi(result.bytesTransferred),
+                ),
             )
             if (result.samples.size >= 2) {
                 Spacer(Modifier.height(16.dp))
                 Text(
                     text = stringResource(R.string.speedtest_chart_title),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))
                 ThroughputChart(samples = result.samples, accentColor = accentColor)
@@ -957,12 +1002,16 @@ private fun ThroughputResultCard(
 // ── Error state ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun SpeedTestErrorContent(state: SpeedTestUiState.Error, onRetry: () -> Unit) {
-    val phaseLabel = when (state.phase) {
-        SpeedTestPhase.LATENCY -> R.string.speedtest_phase_latency
-        SpeedTestPhase.DOWNLOAD -> R.string.speedtest_phase_download
-        SpeedTestPhase.UPLOAD -> R.string.speedtest_phase_upload
-    }
+private fun SpeedTestErrorContent(
+    state: SpeedTestUiState.Error,
+    onRetry: () -> Unit,
+) {
+    val phaseLabel =
+        when (state.phase) {
+            SpeedTestPhase.LATENCY -> R.string.speedtest_phase_latency
+            SpeedTestPhase.DOWNLOAD -> R.string.speedtest_phase_download
+            SpeedTestPhase.UPLOAD -> R.string.speedtest_phase_upload
+        }
     // Friendly, localized reason only: the raw exception text in state.message is never shown.
     val reasonLabel =
         if (state.reason == ErrorCode.NETWORK_TIMEOUT) {
@@ -972,36 +1021,37 @@ private fun SpeedTestErrorContent(state: SpeedTestUiState.Error, onRetry: () -> 
         }
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(
                 imageVector = Icons.Default.Warning,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(48.dp),
             )
             Spacer(Modifier.height(12.dp))
             Text(
                 text = stringResource(R.string.speedtest_error_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.error
+                color = MaterialTheme.colorScheme.error,
             )
             Spacer(Modifier.height(4.dp))
             Text(
                 text = stringResource(R.string.speedtest_error_phase, stringResource(phaseLabel)),
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(4.dp))
             Text(
                 text = stringResource(reasonLabel),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
             Spacer(Modifier.height(20.dp))
             ToolRetryButton(text = stringResource(R.string.speedtest_retry), onClick = onRetry)
@@ -1015,7 +1065,7 @@ private fun SpeedTestErrorContent(state: SpeedTestUiState.Error, onRetry: () -> 
 private fun StatGrid(entries: List<Pair<String, String>>) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         entries.forEach { (label, value) ->
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1034,50 +1084,54 @@ private fun CloudflareAttributionCard() {
             Text(
                 text = stringResource(R.string.speedtest_attribution_note),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(8.dp))
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { uriHandler.openUri(CLOUDFLARE_SPEED_URL) },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { uriHandler.openUri(CLOUDFLARE_SPEED_URL) },
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = CLOUDFLARE_SPEED_URL,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
-                    textDecoration = TextDecoration.Underline
+                    textDecoration = TextDecoration.Underline,
                 )
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                     contentDescription = null,
                     modifier = Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
         }
     }
 }
 
-internal fun buildSpeedTestShareText(result: SpeedTestResult): String = buildString {
-    appendLine("Net Swiss Knife: Speed Test Results")
-    appendLine()
-    appendLine("Idle latency: min ${result.latency.minMs} ms / avg %.1f ms / max ${result.latency.maxMs} ms / jitter %.1f ms"
-        .format(result.latency.avgMs, result.latency.jitterMs))
-    result.latency.connectRttMs?.let { appendLine("Connect RTT: $it ms") }
-    result.serverInfo?.let { appendLine("Server: ${it.colo ?: "Cloudflare"} · ${it.asn ?: "ASN unavailable"}${it.country?.let { country -> " · $country" } ?: ""}") }
-    if (result.loadedLatencyDown.samples.isNotEmpty()) {
-        appendLine("Latency under download load: %.1f ms avg / %d samples".format(result.loadedLatencyDown.avgMs, result.loadedLatencyDown.samples.size))
+internal fun buildSpeedTestShareText(result: SpeedTestResult): String =
+    buildString {
+        appendLine("Net Swiss Knife: Speed Test Results")
+        appendLine()
+        appendLine(
+            "Idle latency: min ${result.latency.minMs} ms / avg %.1f ms / max ${result.latency.maxMs} ms / jitter %.1f ms"
+                .format(result.latency.avgMs, result.latency.jitterMs),
+        )
+        result.latency.connectRttMs?.let { appendLine("Connect RTT: $it ms") }
+        result.serverInfo?.let { appendLine("Server: ${it.colo ?: "Cloudflare"} · ${it.asn ?: "ASN unavailable"}${it.country?.let { country -> " · $country" } ?: ""}") }
+        if (result.loadedLatencyDown.samples.isNotEmpty()) {
+            appendLine("Latency under download load: %.1f ms avg / %d samples".format(result.loadedLatencyDown.avgMs, result.loadedLatencyDown.samples.size))
+        }
+        if (result.loadedLatencyUp.samples.isNotEmpty()) {
+            appendLine("Latency under upload load: %.1f ms avg / %d samples".format(result.loadedLatencyUp.avgMs, result.loadedLatencyUp.samples.size))
+        }
+        appendLine("Download: avg %.1f Mbps / peak %.1f Mbps / %s".format(result.download.avgMbps, result.download.peakMbps, formatBytesSi(result.download.bytesTransferred)))
+        appendLine("Upload: avg %.1f Mbps / peak %.1f Mbps / %s".format(result.upload.avgMbps, result.upload.peakMbps, formatBytesSi(result.upload.bytesTransferred)))
+        appendLine()
+        appendLine("Measured against $CLOUDFLARE_SPEED_URL")
     }
-    if (result.loadedLatencyUp.samples.isNotEmpty()) {
-        appendLine("Latency under upload load: %.1f ms avg / %d samples".format(result.loadedLatencyUp.avgMs, result.loadedLatencyUp.samples.size))
-    }
-    appendLine("Download: avg %.1f Mbps / peak %.1f Mbps / %s".format(result.download.avgMbps, result.download.peakMbps, formatBytesSi(result.download.bytesTransferred)))
-    appendLine("Upload: avg %.1f Mbps / peak %.1f Mbps / %s".format(result.upload.avgMbps, result.upload.peakMbps, formatBytesSi(result.upload.bytesTransferred)))
-    appendLine()
-    appendLine("Measured against $CLOUDFLARE_SPEED_URL")
-}

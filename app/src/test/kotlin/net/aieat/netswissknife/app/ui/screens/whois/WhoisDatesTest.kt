@@ -23,7 +23,12 @@ class WhoisDatesTest {
 
     @Test
     fun `a registry date keeps its calendar day in every device zone`() {
-        val utcMidnight = LocalDate.of(1995, 8, 14).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        val utcMidnight =
+            LocalDate
+                .of(1995, 8, 14)
+                .atStartOfDay(ZoneOffset.UTC)
+                .toInstant()
+                .toEpochMilli()
 
         listOf("America/Los_Angeles", "Pacific/Honolulu", "UTC", "Asia/Tokyo", "Pacific/Kiritimati").forEach { zone ->
             TimeZone.setDefault(TimeZone.getTimeZone(zone))
@@ -33,7 +38,12 @@ class WhoisDatesTest {
 
     @Test
     fun `a late UTC timestamp keeps its UTC day in every device zone`() {
-        val lateUtc = LocalDate.of(2026, 11, 24).atTime(23, 30).toInstant(ZoneOffset.UTC).toEpochMilli()
+        val lateUtc =
+            LocalDate
+                .of(2026, 11, 24)
+                .atTime(23, 30)
+                .toInstant(ZoneOffset.UTC)
+                .toEpochMilli()
 
         listOf("America/New_York", "Europe/London", "Asia/Tokyo").forEach { zone ->
             TimeZone.setDefault(TimeZone.getTimeZone(zone))

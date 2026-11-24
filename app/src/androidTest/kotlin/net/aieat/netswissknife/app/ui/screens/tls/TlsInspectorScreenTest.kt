@@ -24,9 +24,9 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
+import net.aieat.netswissknife.core.domain.TlsInspectorErrorKeys
 import net.aieat.netswissknife.core.network.tls.TlsCertificate
 import net.aieat.netswissknife.core.network.tls.TlsInspectorResult
-import net.aieat.netswissknife.core.domain.TlsInspectorErrorKeys
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -67,8 +67,12 @@ class TlsInspectorScreenTest {
         // if the underlying screen has its own infinite (e.g. refresh-spin) animation.
         composeRule.mainClock.autoAdvance = true
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodes(androidx.compose.ui.test.isRoot())
-                .fetchSemanticsNodes().size > 1
+            composeRule
+                .onAllNodes(
+                    androidx.compose.ui.test
+                        .isRoot(),
+                ).fetchSemanticsNodes()
+                .size > 1
         }
         composeRule.mainClock.autoAdvance = false
 
@@ -103,10 +107,11 @@ class TlsInspectorScreenTest {
 
     @Test
     fun lanHandoff_showsEditableHostPortAndSourceWithoutInspecting() {
-        val viewModel = fakeViewModel(
-            TlsInspectorUiState(host = "192.0.2.8", port = "8443"),
-            sourceContext = ToolSource.LAN,
-        )
+        val viewModel =
+            fakeViewModel(
+                TlsInspectorUiState(host = "192.0.2.8", port = "8443"),
+                sourceContext = ToolSource.LAN,
+            )
 
         composeRule.setContent {
             NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
@@ -116,12 +121,14 @@ class TlsInspectorScreenTest {
         composeRule.onNodeWithTag(TlsInspectorScreenTestTags.SOURCE_CONTEXT).assertIsDisplayed()
         composeRule.onNodeWithText("192.0.2.8").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("8443").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.tls_inspect_button))
+        composeRule
+            .onNodeWithText(context.getString(R.string.tls_inspect_button))
             .performScrollTo()
             .assertIsEnabled()
         verify(exactly = 0) { viewModel.inspect() }
 
-        composeRule.onNodeWithTag(TlsInspectorScreenTestTags.CLEAR_PREFILL_ACTION)
+        composeRule
+            .onNodeWithTag(TlsInspectorScreenTestTags.CLEAR_PREFILL_ACTION)
             .performScrollTo()
             .performClick()
         composeRule.mainClock.advanceTimeBy(500L)
@@ -140,7 +147,8 @@ class TlsInspectorScreenTest {
         composeRule.mainClock.advanceTimeBy(1_000L)
 
         composeRule.onNodeWithTag(TlsInspectorScreenTestTags.INVALID_HANDOFF).assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.tls_host_label))
+        composeRule
+            .onNodeWithText(context.getString(R.string.tls_host_label))
             .performScrollTo()
             .assertIsDisplayed()
         verify(exactly = 0) { viewModel.inspect() }
@@ -154,7 +162,8 @@ class TlsInspectorScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
 
-        composeRule.onNodeWithText(context.getString(R.string.tls_inspect_button))
+        composeRule
+            .onNodeWithText(context.getString(R.string.tls_inspect_button))
             .performScrollTo()
             .assertIsEnabled()
             .performClick()
@@ -168,14 +177,17 @@ class TlsInspectorScreenTest {
             NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
-        composeRule.onNodeWithText(context.getString(R.string.tls_host_label))
+        composeRule
+            .onNodeWithText(context.getString(R.string.tls_host_label))
             .performTextInput("bad host")
         composeRule.mainClock.advanceTimeBy(200L)
 
-        composeRule.onNodeWithText(context.getString(R.string.error_invalid_host))
+        composeRule
+            .onNodeWithText(context.getString(R.string.error_invalid_host))
             .performScrollTo()
             .assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.tls_inspect_button))
+        composeRule
+            .onNodeWithText(context.getString(R.string.tls_inspect_button))
             .performScrollTo()
             .assertIsNotEnabled()
         verify(exactly = 0) { viewModel.inspect() }
@@ -186,7 +198,7 @@ class TlsInspectorScreenTest {
         composeRule.setContent {
             NetSwissKnifeTheme {
                 TlsInspectorScreen(
-                    viewModel = fakeViewModel(TlsInspectorUiState(host = "example.com", isLoading = true))
+                    viewModel = fakeViewModel(TlsInspectorUiState(host = "example.com", isLoading = true)),
                 )
             }
         }
@@ -200,9 +212,10 @@ class TlsInspectorScreenTest {
 
     @Test
     fun loadingState_showsCancelAction() {
-        val viewModel = fakeViewModel(
-            TlsInspectorUiState(host = "example.com", isLoading = true),
-        )
+        val viewModel =
+            fakeViewModel(
+                TlsInspectorUiState(host = "example.com", isLoading = true),
+            )
         composeRule.setContent {
             NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
         }
@@ -222,13 +235,14 @@ class TlsInspectorScreenTest {
         composeRule.setContent {
             NetSwissKnifeTheme {
                 TlsInspectorScreen(
-                    viewModel = fakeViewModel(
-                        TlsInspectorUiState(
-                            host = "example.com",
-                            isLoading = true,
-                            isCanceling = true,
+                    viewModel =
+                        fakeViewModel(
+                            TlsInspectorUiState(
+                                host = "example.com",
+                                isLoading = true,
+                                isCanceling = true,
+                            ),
                         ),
-                    ),
                 )
             }
         }
@@ -243,9 +257,10 @@ class TlsInspectorScreenTest {
 
     @Test
     fun canceledState_showsMessageAndInspectRetries() {
-        val viewModel = fakeViewModel(
-            TlsInspectorUiState(host = "example.com", isCanceled = true),
-        )
+        val viewModel =
+            fakeViewModel(
+                TlsInspectorUiState(host = "example.com", isCanceled = true),
+            )
         composeRule.setContent {
             NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
         }
@@ -264,9 +279,10 @@ class TlsInspectorScreenTest {
 
     @Test
     fun errorState_showsMessageAndRetryCallsInspect() {
-        val viewModel = fakeViewModel(
-            TlsInspectorUiState(host = "example.com", error = "Connection refused")
-        )
+        val viewModel =
+            fakeViewModel(
+                TlsInspectorUiState(host = "example.com", error = "Connection refused"),
+            )
         composeRule.setContent {
             NetSwissKnifeTheme {
                 TlsInspectorScreen(viewModel = viewModel)
@@ -291,7 +307,8 @@ class TlsInspectorScreenTest {
             NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
         }
         composeRule.mainClock.advanceTimeBy(500L)
-        composeRule.onAllNodesWithText(context.getString(R.string.tls_inspecting))
+        composeRule
+            .onAllNodesWithText(context.getString(R.string.tls_inspecting))
             .onFirst()
             .assertIsDisplayed()
 
@@ -305,13 +322,14 @@ class TlsInspectorScreenTest {
 
     @Test
     fun pinValidationError_usesLocalizedDescriptionKey() {
-        val viewModel = fakeViewModel(
-            TlsInspectorUiState(
-                host = "example.com",
-                error = "developer-only pin validation message",
-                errorDescriptionKey = TlsInspectorErrorKeys.PIN_INVALID_DESCRIPTION,
-            ),
-        )
+        val viewModel =
+            fakeViewModel(
+                TlsInspectorUiState(
+                    host = "example.com",
+                    error = "developer-only pin validation message",
+                    errorDescriptionKey = TlsInspectorErrorKeys.PIN_INVALID_DESCRIPTION,
+                ),
+            )
         composeRule.setContent {
             NetSwissKnifeTheme { TlsInspectorScreen(viewModel = viewModel) }
         }
@@ -323,35 +341,37 @@ class TlsInspectorScreenTest {
 
     @Test
     fun successState_displaysCertificateSubject() {
-        val cert = TlsCertificate(
-            subjectCN = "example.com",
-            subjectOrg = "Example Org",
-            issuerCN = "Example CA",
-            issuerOrg = "Example CA Inc",
-            notBefore = 0L,
-            notAfter = Long.MAX_VALUE / 2,
-            isExpired = false,
-            isSelfSigned = false,
-            sans = listOf("example.com", "www.example.com"),
-            serialNumber = "01",
-            signatureAlgorithm = "SHA256withRSA",
-            publicKeyAlgorithm = "RSA",
-            publicKeyBits = 2048,
-            sha256Fingerprint = "AA:BB:CC"
-        )
-        val result = TlsInspectorResult(
-            host = "example.com",
-            port = 443,
-            tlsVersion = "TLSv1.3",
-            cipherSuite = "TLS_AES_128_GCM_SHA256",
-            chain = listOf(cert),
-            isChainTrusted = true,
-            handshakeTimeMs = 123
-        )
+        val cert =
+            TlsCertificate(
+                subjectCN = "example.com",
+                subjectOrg = "Example Org",
+                issuerCN = "Example CA",
+                issuerOrg = "Example CA Inc",
+                notBefore = 0L,
+                notAfter = Long.MAX_VALUE / 2,
+                isExpired = false,
+                isSelfSigned = false,
+                sans = listOf("example.com", "www.example.com"),
+                serialNumber = "01",
+                signatureAlgorithm = "SHA256withRSA",
+                publicKeyAlgorithm = "RSA",
+                publicKeyBits = 2048,
+                sha256Fingerprint = "AA:BB:CC",
+            )
+        val result =
+            TlsInspectorResult(
+                host = "example.com",
+                port = 443,
+                tlsVersion = "TLSv1.3",
+                cipherSuite = "TLS_AES_128_GCM_SHA256",
+                chain = listOf(cert),
+                isChainTrusted = true,
+                handshakeTimeMs = 123,
+            )
         composeRule.setContent {
             NetSwissKnifeTheme {
                 TlsInspectorScreen(
-                    viewModel = fakeViewModel(TlsInspectorUiState(host = "example.com", result = result))
+                    viewModel = fakeViewModel(TlsInspectorUiState(host = "example.com", result = result)),
                 )
             }
         }
@@ -369,11 +389,13 @@ class TlsInspectorScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
 
-        composeRule.onNodeWithTag(TlsInspectorScreenTestTags.PROTOCOL_PROBE_TOGGLE)
+        composeRule
+            .onNodeWithTag(TlsInspectorScreenTestTags.PROTOCOL_PROBE_TOGGLE)
             .performScrollTo()
             .assertIsDisplayed()
             .performClick()
-        composeRule.onNodeWithTag(TlsInspectorScreenTestTags.EXPECTED_PIN_FIELD)
+        composeRule
+            .onNodeWithTag(TlsInspectorScreenTestTags.EXPECTED_PIN_FIELD)
             .performScrollTo()
             .assertIsDisplayed()
             .performTextInput("AA")
@@ -383,28 +405,46 @@ class TlsInspectorScreenTest {
 
     @Test
     fun successState_displaysProtocolTimingAndCertificateFindings() {
-        val cert = TlsCertificate(
-            subjectCN = "example.com", subjectOrg = null, issuerCN = "Test CA", issuerOrg = null,
-            notBefore = 0L, notAfter = Long.MAX_VALUE / 2, isExpired = true, isSelfSigned = false,
-            sans = listOf("example.com"), serialNumber = "01", signatureAlgorithm = "SHA256withRSA",
-            publicKeyAlgorithm = "RSA", publicKeyBits = 2048, sha256Fingerprint = "AA:BB:CC",
-            pemEncoded = "-----BEGIN CERTIFICATE-----\\nTEST\\n-----END CERTIFICATE-----",
-        )
-        val result = TlsInspectorResult(
-            host = "example.com", port = 443, tlsVersion = "TLSv1.3", cipherSuite = "TLS_AES_128_GCM_SHA256",
-            chain = listOf(cert), isChainTrusted = false, handshakeTimeMs = 123,
-            hostnameMatches = false,
-            chainIssues = listOf(
-                net.aieat.netswissknife.core.network.tls.ChainIssue.EXPIRED,
-                net.aieat.netswissknife.core.network.tls.ChainIssue.HOSTNAME_MISMATCH,
-            ),
-            connectTimeMs = 42,
-            alpn = "h2",
-            protocolSupport = mapOf("TLSv1.2" to true, "TLSv1.0" to false),
-            protocolProbeUnknown = setOf("TLSv1.1"),
-            protocolProbeNotTestable = setOf("TLSv1"),
-            pinMatch = false,
-        )
+        val cert =
+            TlsCertificate(
+                subjectCN = "example.com",
+                subjectOrg = null,
+                issuerCN = "Test CA",
+                issuerOrg = null,
+                notBefore = 0L,
+                notAfter = Long.MAX_VALUE / 2,
+                isExpired = true,
+                isSelfSigned = false,
+                sans = listOf("example.com"),
+                serialNumber = "01",
+                signatureAlgorithm = "SHA256withRSA",
+                publicKeyAlgorithm = "RSA",
+                publicKeyBits = 2048,
+                sha256Fingerprint = "AA:BB:CC",
+                pemEncoded = "-----BEGIN CERTIFICATE-----\\nTEST\\n-----END CERTIFICATE-----",
+            )
+        val result =
+            TlsInspectorResult(
+                host = "example.com",
+                port = 443,
+                tlsVersion = "TLSv1.3",
+                cipherSuite = "TLS_AES_128_GCM_SHA256",
+                chain = listOf(cert),
+                isChainTrusted = false,
+                handshakeTimeMs = 123,
+                hostnameMatches = false,
+                chainIssues =
+                    listOf(
+                        net.aieat.netswissknife.core.network.tls.ChainIssue.EXPIRED,
+                        net.aieat.netswissknife.core.network.tls.ChainIssue.HOSTNAME_MISMATCH,
+                    ),
+                connectTimeMs = 42,
+                alpn = "h2",
+                protocolSupport = mapOf("TLSv1.2" to true, "TLSv1.0" to false),
+                protocolProbeUnknown = setOf("TLSv1.1"),
+                protocolProbeNotTestable = setOf("TLSv1"),
+                pinMatch = false,
+            )
         composeRule.setContent {
             NetSwissKnifeTheme {
                 TlsInspectorScreen(viewModel = fakeViewModel(TlsInspectorUiState(host = "example.com", result = result)))

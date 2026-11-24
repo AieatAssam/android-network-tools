@@ -72,9 +72,7 @@ private const val LIVE_PUBLISH_INTERVAL_MS = 100L
  * The cleartext HTTP port the HTTP action should probe: the first candidate that was open,
  * or null when no web port answered, so the action is not offered.
  */
-internal fun preferredHttpProbePort(
-    openPorts: Collection<Int>,
-): Int? = HTTP_PROBE_CANDIDATES.firstOrNull { it in LanQuickPorts.ports && it in openPorts }
+internal fun preferredHttpProbePort(openPorts: Collection<Int>): Int? = HTTP_PROBE_CANDIDATES.firstOrNull { it in LanQuickPorts.ports && it in openPorts }
 
 /** Compatibility facade for the budget shared with the repository's no-session path. */
 internal object LanScanTimeBudget {
@@ -676,14 +674,18 @@ class LanScanViewModel
             val intervalNanos = LIVE_PUBLISH_INTERVAL_MS * 1_000_000L
             val sinceLastNanos = SystemMonotonicClock.nowNanos() - lastLivePublishNanos
             when {
-                immediate || sinceLastNanos >= intervalNanos -> flushLive()
-                livePublishJob == null ->
+                immediate || sinceLastNanos >= intervalNanos -> {
+                    flushLive()
+                }
+
+                livePublishJob == null -> {
                     livePublishJob =
                         viewModelScope.launch {
                             delay(((intervalNanos - sinceLastNanos) / 1_000_000L).coerceAtLeast(1L))
                             livePublishJob = null
                             flushLive()
                         }
+                }
             }
         }
 
@@ -888,7 +890,7 @@ class LanScanViewModel
          * Canceled. A scan the pause is already stopping takes its reason from [pendingCancellation].
          */
         private fun stateToKeepOnLeave(): LanScanUiState {
-        flushLive()
+            flushLive()
             val pending = pendingCancellation
             return when (val current = _uiState.value) {
                 is LanScanUiState.Finished, is LanScanUiState.Canceled -> {

@@ -5,9 +5,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -154,9 +154,10 @@ class UiSmokeTest {
         every { viewModel.selectedServer } returns MutableStateFlow(DnsServer.System())
         every { viewModel.customServerAddress } returns MutableStateFlow("")
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
-        every { viewModel.networkStatus } returns MutableStateFlow(
-            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
-        )
+        every { viewModel.networkStatus } returns
+            MutableStateFlow(
+                NetworkStatus(hasInternet = true, hasLocalNetwork = true),
+            )
         return viewModel
     }
 }

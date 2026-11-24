@@ -16,24 +16,24 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -42,8 +42,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.DeviceHub
@@ -57,17 +58,16 @@ import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -79,62 +79,59 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import kotlin.math.roundToInt
-import net.aieat.netswissknife.app.ui.components.AppModalBottomSheet
-import net.aieat.netswissknife.app.ui.components.ResultActionsRow
-import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
-import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
-import net.aieat.netswissknife.app.ui.components.ToolRetryButton
-import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
-import net.aieat.netswissknife.app.ui.components.ToolTextField
-import net.aieat.netswissknife.app.ui.format.humanDurationText
-import net.aieat.netswissknife.app.ui.theme.AppMotion
-import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
-import net.aieat.netswissknife.app.ui.components.ToolStopButton
-import net.aieat.netswissknife.app.ui.components.hapticAction
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.app.ui.components.AppModalBottomSheet
 import net.aieat.netswissknife.app.ui.components.HelpSection
-import net.aieat.netswissknife.app.ui.components.RecentHostsRow
-import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
-import net.aieat.netswissknife.app.platform.NetworkErrorKind
-import net.aieat.netswissknife.app.util.shareText
+import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import net.aieat.netswissknife.app.ui.components.ToolStopButton
+import net.aieat.netswissknife.app.ui.components.ToolTextField
+import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
+import net.aieat.netswissknife.app.ui.format.humanDurationText
 import net.aieat.netswissknife.app.ui.navigation.HostTool
 import net.aieat.netswissknife.app.ui.navigation.NavRoutes
 import net.aieat.netswissknife.app.ui.navigation.ToolDestination
@@ -143,11 +140,14 @@ import net.aieat.netswissknife.app.ui.navigation.ToolIntent
 import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 import net.aieat.netswissknife.app.ui.navigation.ToolPort
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
+import net.aieat.netswissknife.app.ui.theme.AppMotion
+import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.lan.LanHost
 import net.aieat.netswissknife.core.network.lan.LanQuickPorts
-import net.aieat.netswissknife.core.network.lan.MacSource
-import net.aieat.netswissknife.core.network.lan.LanScanSummary
 import net.aieat.netswissknife.core.network.lan.LanScanDiagnosticReason
+import net.aieat.netswissknife.core.network.lan.LanScanSummary
+import net.aieat.netswissknife.core.network.lan.MacSource
+import kotlin.math.roundToInt
 // collectAsState replaced by collectAsStateWithLifecycle below
 
 // ── Entry point ───────────────────────────────────────────────────────────────
@@ -936,9 +936,7 @@ internal fun sortLanHosts(
     }
 
 /** Sort key for ascending numeric IPv4 order (dotted-decimal string sort puts .2 after .10). */
-private fun ipSortKey(ip: String): Long {
-    return ip.split('.').fold(0L) { acc, part -> acc * 256L + (part.toLongOrNull() ?: 0L) }
-}
+private fun ipSortKey(ip: String): Long = ip.split('.').fold(0L) { acc, part -> acc * 256L + (part.toLongOrNull() ?: 0L) }
 
 @Composable
 private fun HostFilterChips(

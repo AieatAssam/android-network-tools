@@ -10,9 +10,9 @@ import android.content.res.Resources
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
-import androidx.annotation.StringRes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -53,15 +53,15 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SignalWifiOff
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Badge
@@ -587,7 +587,9 @@ internal fun wifiShareLabels(resources: Resources): WifiShareLabels =
         sampleTime = { timestampMs ->
             resources.getString(
                 R.string.wifi_share_sample_time,
-                java.text.DateFormat.getDateTimeInstance().format(java.util.Date(timestampMs)),
+                java.text.DateFormat
+                    .getDateTimeInstance()
+                    .format(java.util.Date(timestampMs)),
             )
         },
         wifiDisabled = resources.getString(R.string.wifi_share_wifi_disabled),
@@ -1562,7 +1564,6 @@ private fun WifiApDetailSheet(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                 ) { tokens.forEach { token -> ApBadge(token) } }
             }
-
         }
     }
 }

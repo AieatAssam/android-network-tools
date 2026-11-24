@@ -29,5 +29,5 @@ data class WifiConnectionInfo(
     /** Gateway selected by the active network's default route, if available. */
     val gateway: String? = null,
     /** DNS servers advertised by the active network, in platform order. */
-    val dnsServers: List<String> = emptyList()
+    val dnsServers: List<String> = emptyList(),
 )

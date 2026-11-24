@@ -11,7 +11,7 @@ data class WifiNetwork(
     val ssid: String,
     val security: WifiSecurity,
     /** All BSSIDs for this network, sorted strongest-first. */
-    val accessPoints: List<WifiAccessPoint>
+    val accessPoints: List<WifiAccessPoint>,
 ) {
     /**
      * Stable identity for list keys and per-row UI state.
@@ -24,13 +24,17 @@ data class WifiNetwork(
      * illegal duplicate keys in a lazy list.
      */
     val id: String get() =
-        if (ssid.isBlank()) "|hidden|${accessPoints.firstOrNull()?.bssid.orEmpty()}"
-        else "$ssid|${security.name}"
+        if (ssid.isBlank()) {
+            "|hidden|${accessPoints.firstOrNull()?.bssid.orEmpty()}"
+        } else {
+            "$ssid|${security.name}"
+        }
 
     /** Human-readable name. Hidden networks show last 8 chars of their BSSID. */
-    val displaySsid: String get() = ssid.ifBlank {
-        "<Hidden: ${accessPoints.first().bssid.takeLast(8)}>"
-    }
+    val displaySsid: String get() =
+        ssid.ifBlank {
+            "<Hidden: ${accessPoints.first().bssid.takeLast(8)}>"
+        }
 
     /** Strongest RSSI across all BSSIDs. */
     val bestRssi: Int get() = accessPoints.maxOf { it.rssi }

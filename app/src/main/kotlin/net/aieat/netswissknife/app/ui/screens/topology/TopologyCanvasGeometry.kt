@@ -129,7 +129,10 @@ internal object TopologyCanvasGeometry {
     }
 
     /** Dotted-quad addresses compare octet by octet so 10.0.0.9 sorts before 10.0.0.10. */
-    private fun compareAddresses(a: String, b: String): Int {
+    private fun compareAddresses(
+        a: String,
+        b: String,
+    ): Int {
         val partsA = a.split('.')
         val partsB = b.split('.')
         for (i in 0 until min(partsA.size, partsB.size)) {

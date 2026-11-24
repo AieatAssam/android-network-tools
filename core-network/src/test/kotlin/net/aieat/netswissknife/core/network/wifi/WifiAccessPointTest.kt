@@ -9,12 +9,11 @@ import org.junit.jupiter.api.Test
 
 @DisplayName("WifiAccessPoint")
 class WifiAccessPointTest {
-
     private fun makeAp(
         ssid: String = "TestNetwork",
         bssid: String = "AA:BB:CC:DD:EE:FF",
         rssi: Int = -60,
-        isConnected: Boolean = false
+        isConnected: Boolean = false,
     ) = WifiAccessPoint(
         ssid = ssid,
         bssid = bssid,
@@ -30,7 +29,7 @@ class WifiAccessPointTest {
         vendor = "Cisco",
         centerFrequency0 = 5210,
         centerFrequency1 = 0,
-        timestampUs = 0L
+        timestampUs = 0L,
     )
 
     @Nested

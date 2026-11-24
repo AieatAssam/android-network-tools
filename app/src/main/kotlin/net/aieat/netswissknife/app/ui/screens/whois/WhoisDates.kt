@@ -8,4 +8,8 @@ import java.time.ZoneOffset
  * so reading them in the device zone would show the previous day in zones west of UTC.
  */
 internal fun formatWhoisDate(epochMs: Long): String =
-    Instant.ofEpochMilli(epochMs).atZone(ZoneOffset.UTC).toLocalDate().toString()
+    Instant
+        .ofEpochMilli(epochMs)
+        .atZone(ZoneOffset.UTC)
+        .toLocalDate()
+        .toString()

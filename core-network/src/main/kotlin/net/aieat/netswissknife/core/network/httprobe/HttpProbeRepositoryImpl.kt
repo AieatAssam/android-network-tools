@@ -4,8 +4,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.withContext
-import net.aieat.netswissknife.core.network.MonotonicClock
 import net.aieat.netswissknife.core.network.ErrorCode
+import net.aieat.netswissknife.core.network.MonotonicClock
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.elapsedMillisSince
@@ -15,6 +15,7 @@ import net.aieat.netswissknife.core.network.httprobe.engine.HttpEngineRequest
 import net.aieat.netswissknife.core.network.httprobe.engine.HttpTimings
 import net.aieat.netswissknife.core.network.httprobe.engine.OkHttpEngine
 import net.aieat.netswissknife.core.network.httprobe.engine.RedirectHop
+import net.aieat.netswissknife.core.network.net.NetworkBinder
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationCancellationException
 import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededException
@@ -22,17 +23,16 @@ import net.aieat.netswissknife.core.network.operation.OperationResourcesContext
 import net.aieat.netswissknife.core.network.operation.OperationRunner
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.operation.ensureCurrentOperationActive
-import net.aieat.netswissknife.core.network.net.NetworkBinder
+import okhttp3.ResponseHeaderLimitException
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.ConnectException
-import java.net.UnknownHostException
-import okhttp3.ResponseHeaderLimitException
 import java.net.MalformedURLException
 import java.net.URI
 import java.net.URISyntaxException
 import java.net.URL
+import java.net.UnknownHostException
 import java.nio.charset.Charset
 import java.nio.charset.CodingErrorAction
 import java.util.concurrent.atomic.AtomicBoolean

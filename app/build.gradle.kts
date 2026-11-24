@@ -28,51 +28,52 @@ detekt {
 // ── CI-supplied properties ────────────────────────────────────────────────────
 // Pass via: ./gradlew :app:assembleRelease -PversionName=1.2.3 -PversionCode=100
 val ciVersionName: String? = findProperty("versionName") as String?
-val ciVersionCode: Int?    = (findProperty("versionCode") as String?)?.toIntOrNull()
+val ciVersionCode: Int? = (findProperty("versionCode") as String?)?.toIntOrNull()
 
 // Signing – set these secrets in GitHub Actions:
 //   RELEASE_KEYSTORE_BASE64, RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD
-val ciStoreFile:     String? = findProperty("storeFile")     as String?
+val ciStoreFile: String? = findProperty("storeFile") as String?
 val ciStorePassword: String? = findProperty("storePassword") as String?
-val ciKeyAlias:      String? = findProperty("keyAlias")      as String?
-val ciKeyPassword:   String? = findProperty("keyPassword")   as String?
+val ciKeyAlias: String? = findProperty("keyAlias") as String?
+val ciKeyPassword: String? = findProperty("keyPassword") as String?
 
-private val releaseSigningValues = listOf(
-    "storeFile" to ciStoreFile,
-    "storePassword" to ciStorePassword,
-    "keyAlias" to ciKeyAlias,
-    "keyPassword" to ciKeyPassword,
-)
+private val releaseSigningValues =
+    listOf(
+        "storeFile" to ciStoreFile,
+        "storePassword" to ciStorePassword,
+        "keyAlias" to ciKeyAlias,
+        "keyPassword" to ciKeyPassword,
+    )
 private val releaseSigningConfigured = releaseSigningValues.any { !it.second.isNullOrBlank() }
 check(!releaseSigningConfigured || releaseSigningValues.all { !it.second.isNullOrBlank() }) {
     "Release signing requires storeFile, storePassword, keyAlias, and keyPassword together."
 }
 
 android {
-    namespace  = "net.aieat.netswissknife.app"
+    namespace = "net.aieat.netswissknife.app"
     compileSdk = 37
 
     defaultConfig {
         applicationId = "net.aieat.netswissknife"
-        minSdk        = 26
-        targetSdk     = 37
+        minSdk = 26
+        targetSdk = 37
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Release workflows always provide these values. A stable local default keeps
         // debug and unsigned release builds reproducible across machines and invocations.
         // Note: the previous default was a Unix timestamp, so a debug build installed
         // before this change carries a far higher versionCode. Installing over it fails
         // with INSTALL_FAILED_VERSION_DOWNGRADE — uninstall the old build once.
-        versionCode   = ciVersionCode ?: 1
-        versionName   = ciVersionName ?: "1.0.0"
+        versionCode = ciVersionCode ?: 1
+        versionName = ciVersionName ?: "1.0.0"
     }
 
     signingConfigs {
         // Committed project keystore for consistent local/debug signing (password: "android")
         getByName("debug") {
-            storeFile     = file("debug.keystore")
+            storeFile = file("debug.keystore")
             storePassword = "android"
-            keyAlias      = "androiddebugkey"
-            keyPassword   = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
         }
         if (releaseSigningConfigured) {
             create("release") {
@@ -80,10 +81,10 @@ android {
                 check(keystore.isFile) {
                     "Release keystore does not exist: ${keystore.absolutePath}"
                 }
-                storeFile     = keystore
+                storeFile = keystore
                 storePassword = requireNotNull(ciStorePassword)
-                keyAlias      = requireNotNull(ciKeyAlias)
-                keyPassword   = requireNotNull(ciKeyPassword)
+                keyAlias = requireNotNull(ciKeyAlias)
+                keyPassword = requireNotNull(ciKeyPassword)
             }
         }
     }
@@ -94,11 +95,11 @@ android {
             versionNameSuffix = "-debug"
         }
         release {
-            isMinifyEnabled    = true
-            isShrinkResources  = true
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
             // Deliberately leave this unset when no release key is supplied. AGP then
             // emits an unsigned artifact; it must never silently use the debug key.

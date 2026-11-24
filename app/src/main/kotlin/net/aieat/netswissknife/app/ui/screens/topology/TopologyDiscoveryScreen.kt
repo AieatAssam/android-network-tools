@@ -1335,6 +1335,7 @@ private fun TopologyCanvas(
                     },
         ) {
             val center = Offset(size.width / 2f, size.height / 2f)
+
             fun screenOf(position: Offset): Offset = position * graphScale + center + graphOffset
 
             for (link in links) {
@@ -1415,6 +1416,7 @@ private fun TopologyCanvas(
         if (visibleIps.isNotEmpty()) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val labelCenter = Offset(constraints.maxWidth / 2f, constraints.maxHeight / 2f)
+
                 fun labelPosition(position: Offset): Offset = position * graphScale + labelCenter + graphOffset
 
                 for (node in nodes) {
@@ -1901,11 +1903,21 @@ private fun NeighbourRow(
         Column(modifier = Modifier.weight(1f)) {
             val portInfo =
                 when {
-                    localPort != null && remotePort != null ->
+                    localPort != null && remotePort != null -> {
                         stringResource(R.string.topology_neighbour_ports, localPort, remotePort)
-                    localPort != null -> stringResource(R.string.topology_neighbour_local_port, localPort)
-                    remotePort != null -> stringResource(R.string.topology_neighbour_remote_port, remotePort)
-                    else -> ""
+                    }
+
+                    localPort != null -> {
+                        stringResource(R.string.topology_neighbour_local_port, localPort)
+                    }
+
+                    remotePort != null -> {
+                        stringResource(R.string.topology_neighbour_remote_port, remotePort)
+                    }
+
+                    else -> {
+                        ""
+                    }
                 }
             if (portInfo.isNotBlank()) {
                 Text(

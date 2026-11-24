@@ -28,46 +28,52 @@ import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.app.platform.toNetworkErrorKind
 import net.aieat.netswissknife.core.domain.TopologyDiscoveryUseCase
 import net.aieat.netswissknife.core.network.HostValidator
-import net.aieat.netswissknife.core.network.topology.*
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationRequirement
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.topology.*
 import javax.inject.Inject
 
 sealed class TopologyUiState {
     object Idle : TopologyUiState()
+
     data class Discovering(
         val nodes: List<TopologyNode>,
         val links: List<TopologyLink>,
         val progressMessage: String,
         val nodesDone: Int,
-        val selectedNodeIp: String? = null
+        val selectedNodeIp: String? = null,
     ) : TopologyUiState()
+
     data class Canceling(
         val nodes: List<TopologyNode>,
         val links: List<TopologyLink>,
         val progressMessage: String,
         val nodesDone: Int,
         val operationId: Long,
-        val selectedNodeIp: String? = null
+        val selectedNodeIp: String? = null,
     ) : TopologyUiState()
+
     data class Canceled(
         val nodes: List<TopologyNode>,
         val links: List<TopologyLink>,
         val nodesDone: Int,
-        val selectedNodeIp: String? = null
+        val selectedNodeIp: String? = null,
     ) : TopologyUiState()
+
     data class TimeLimit(
         val nodes: List<TopologyNode>,
         val links: List<TopologyLink>,
         val nodesDone: Int,
-        val selectedNodeIp: String? = null
+        val selectedNodeIp: String? = null,
     ) : TopologyUiState()
+
     data class Done(
         val graph: TopologyGraph,
-        val selectedNodeIp: String?
+        val selectedNodeIp: String?,
     ) : TopologyUiState()
+
     /**
      * [message] carries text from the domain layer as-is. [messageRes] is used for failures the
      * ViewModel itself raises, so the screen can show a localized string instead.
@@ -93,164 +99,241 @@ private fun TopologyUiState.Discovering.asCanceled() = TopologyUiState.Canceled(
 private fun TopologyUiState.Canceling.asCanceled() = TopologyUiState.Canceled(nodes, links, nodesDone, selectedNodeIp)
 
 @HiltViewModel
-class TopologyDiscoveryViewModel @Inject constructor(
-    private val useCase: TopologyDiscoveryUseCase,
-    private val recentHostsRepository: RecentHostsRepository,
-    networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
-    // Hilt supplies the activity-retained holder; the default keeps direct unit tests simple.
-    private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
-) : ViewModel() {
+class TopologyDiscoveryViewModel
+    @Inject
+    constructor(
+        private val useCase: TopologyDiscoveryUseCase,
+        private val recentHostsRepository: RecentHostsRepository,
+        networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+        // Hilt supplies the activity-retained holder; the default keeps direct unit tests simple.
+        private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
+    ) : ViewModel() {
+        val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
-    val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
+        private val _uiState = MutableStateFlow<TopologyUiState>(TopologyUiState.Idle)
+        val uiState: StateFlow<TopologyUiState> = _uiState.asStateFlow()
 
-    private val _uiState = MutableStateFlow<TopologyUiState>(TopologyUiState.Idle)
-    val uiState: StateFlow<TopologyUiState> = _uiState.asStateFlow()
+        val recentSeeds: StateFlow<List<String>> =
+            recentHostsRepository
+                .getRecents(AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS)
+                .validHostRecents()
+                .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val recentSeeds: StateFlow<List<String>> = recentHostsRepository
-        .getRecents(AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS)
-        .validHostRecents()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    init {
-        viewModelScope.launch {
-            recentHostsRepository.purgeInvalidHostRecents(AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS)
-        }
-    }
-
-    private var discoveryJob: Job? = null
-    private var operationSession: OperationSession? = null
-    private var operationId = 0L
-
-    /** The seed of the last discovery, so the form is refilled when the tool is shown again. */
-    private var lastSeed: String? = null
-
-    /** The seed kept from the last visit, for the screen's initial host field value. */
-    val restoredSeed: String? = sessionMemory.get<TopologySessionSnapshot>(TOPOLOGY_SESSION_KEY)?.seed
-
-    init {
-        sessionMemory.get<TopologySessionSnapshot>(TOPOLOGY_SESSION_KEY)?.let { _uiState.value = it.state }
-        addCloseable(LIFECYCLE_CLOSEABLE_KEY, AutoCloseable {
-            cancelDiscovery(CancellationReason.LIFECYCLE_PAUSE)
-        })
-    }
-
-    /**
-     * Keeps the last terminal result when the tool is left. A discovery still running is kept as
-     * the canceled partial result it becomes once its closeable stops it. The SNMP community and the
-     * v3 passwords are never kept: they live in the screen, not in this state.
-     */
-    override fun onCleared() {
-        val kept =
-            when (val state = _uiState.value) {
-                is TopologyUiState.Discovering -> state.asCanceled()
-                is TopologyUiState.Canceling -> state.asCanceled()
-                else -> state
+        init {
+            viewModelScope.launch {
+                recentHostsRepository.purgeInvalidHostRecents(AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS)
             }
-        sessionMemory.put(TOPOLOGY_SESSION_KEY, TopologySessionSnapshot(seed = lastSeed, state = kept))
-        super.onCleared()
-    }
-
-    fun startDiscovery(params: TopologyParams) {
-        // Guard the ViewModel boundary as well as disabling the UI button. This also
-        // prevents a fresh scan from starting while asynchronous Stop cleanup is active.
-        if (operationSession != null || _uiState.value is TopologyUiState.Discovering ||
-            _uiState.value is TopologyUiState.Canceling
-        ) return
-        lastSeed = params.targetIp
-        val operationTimeoutMillis = TopologyOperationBudget.timeoutMillisOrNull(params)
-        if (operationTimeoutMillis == null) {
-            _uiState.value = TopologyUiState.Failure(
-                message = TopologyOperationBudget.OVER_CEILING_MESSAGE,
-                isBudgetLimit = true,
-            )
-            return
         }
-        val session = OperationSession(
-            OperationBudget.start(
-                requirement = OperationRequirement.LOCAL_NETWORK,
-                timeoutMillis = operationTimeoutMillis,
-            )
-        )
-        operationSession = session
-        // Normalize valid input at the ViewModel boundary as well as in the form.
-        // Keep invalid raw input so the domain use case can report its usual error.
-        val normalizedTargetIp = HostValidator.normalize(params.targetIp)
-        val normalizedParams = params.copy(targetIp = normalizedTargetIp ?: params.targetIp)
-        val currentOperationId = ++operationId
-        _uiState.value = TopologyUiState.Discovering(emptyList(), emptyList(), "", 0)
-        discoveryJob = viewModelScope.launch {
-            val nodes = mutableListOf<TopologyNode>()
-            val links = mutableListOf<TopologyLink>()
-            var savedSeed = false
-            var terminalEventReceived = false
-            var terminalState: TopologyUiState? = null
 
-            try {
-                useCase.invoke(normalizedParams, session).collect { event ->
-                    val cancellationReason = session.cancellationReason
-                    if (operationSession !== session || terminalEventReceived ||
-                        cancellationReason == CancellationReason.USER_STOP ||
-                        cancellationReason == CancellationReason.LIFECYCLE_PAUSE ||
-                        (cancellationReason != null && event !is TopologyDiscoveryEvent.Error &&
-                            event !is TopologyDiscoveryEvent.TimeLimit)
-                    ) {
-                        return@collect
-                    }
-                    when (event) {
-                        is TopologyDiscoveryEvent.NodeDiscovered -> {
-                            if (!savedSeed) {
-                                savedSeed = true
-                                recentHostsRepository.addRecent(
-                                    AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS,
-                                    normalizedParams.targetIp
+        private var discoveryJob: Job? = null
+        private var operationSession: OperationSession? = null
+        private var operationId = 0L
+
+        /** The seed of the last discovery, so the form is refilled when the tool is shown again. */
+        private var lastSeed: String? = null
+
+        /** The seed kept from the last visit, for the screen's initial host field value. */
+        val restoredSeed: String? = sessionMemory.get<TopologySessionSnapshot>(TOPOLOGY_SESSION_KEY)?.seed
+
+        init {
+            sessionMemory.get<TopologySessionSnapshot>(TOPOLOGY_SESSION_KEY)?.let { _uiState.value = it.state }
+            addCloseable(
+                LIFECYCLE_CLOSEABLE_KEY,
+                AutoCloseable {
+                    cancelDiscovery(CancellationReason.LIFECYCLE_PAUSE)
+                },
+            )
+        }
+
+        /**
+         * Keeps the last terminal result when the tool is left. A discovery still running is kept as
+         * the canceled partial result it becomes once its closeable stops it. The SNMP community and the
+         * v3 passwords are never kept: they live in the screen, not in this state.
+         */
+        override fun onCleared() {
+            val kept =
+                when (val state = _uiState.value) {
+                    is TopologyUiState.Discovering -> state.asCanceled()
+                    is TopologyUiState.Canceling -> state.asCanceled()
+                    else -> state
+                }
+            sessionMemory.put(TOPOLOGY_SESSION_KEY, TopologySessionSnapshot(seed = lastSeed, state = kept))
+            super.onCleared()
+        }
+
+        fun startDiscovery(params: TopologyParams) {
+            // Guard the ViewModel boundary as well as disabling the UI button. This also
+            // prevents a fresh scan from starting while asynchronous Stop cleanup is active.
+            if (operationSession != null || _uiState.value is TopologyUiState.Discovering ||
+                _uiState.value is TopologyUiState.Canceling
+            ) {
+                return
+            }
+            lastSeed = params.targetIp
+            val operationTimeoutMillis = TopologyOperationBudget.timeoutMillisOrNull(params)
+            if (operationTimeoutMillis == null) {
+                _uiState.value =
+                    TopologyUiState.Failure(
+                        message = TopologyOperationBudget.OVER_CEILING_MESSAGE,
+                        isBudgetLimit = true,
+                    )
+                return
+            }
+            val session =
+                OperationSession(
+                    OperationBudget.start(
+                        requirement = OperationRequirement.LOCAL_NETWORK,
+                        timeoutMillis = operationTimeoutMillis,
+                    ),
+                )
+            operationSession = session
+            // Normalize valid input at the ViewModel boundary as well as in the form.
+            // Keep invalid raw input so the domain use case can report its usual error.
+            val normalizedTargetIp = HostValidator.normalize(params.targetIp)
+            val normalizedParams = params.copy(targetIp = normalizedTargetIp ?: params.targetIp)
+            val currentOperationId = ++operationId
+            _uiState.value = TopologyUiState.Discovering(emptyList(), emptyList(), "", 0)
+            discoveryJob =
+                viewModelScope.launch {
+                    val nodes = mutableListOf<TopologyNode>()
+                    val links = mutableListOf<TopologyLink>()
+                    var savedSeed = false
+                    var terminalEventReceived = false
+                    var terminalState: TopologyUiState? = null
+
+                    try {
+                        useCase.invoke(normalizedParams, session).collect { event ->
+                            val cancellationReason = session.cancellationReason
+                            if (operationSession !== session || terminalEventReceived ||
+                                cancellationReason == CancellationReason.USER_STOP ||
+                                cancellationReason == CancellationReason.LIFECYCLE_PAUSE ||
+                                (
+                                    cancellationReason != null && event !is TopologyDiscoveryEvent.Error &&
+                                        event !is TopologyDiscoveryEvent.TimeLimit
                                 )
+                            ) {
+                                return@collect
                             }
-                            nodes.add(event.node)
-                            val current = _uiState.value
-                            if (current is TopologyUiState.Discovering) {
-                                _uiState.value = current.copy(
-                                    nodes = nodes.toList(),
-                                    nodesDone = nodes.size
-                                )
+                            when (event) {
+                                is TopologyDiscoveryEvent.NodeDiscovered -> {
+                                    if (!savedSeed) {
+                                        savedSeed = true
+                                        recentHostsRepository.addRecent(
+                                            AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS,
+                                            normalizedParams.targetIp,
+                                        )
+                                    }
+                                    nodes.add(event.node)
+                                    val current = _uiState.value
+                                    if (current is TopologyUiState.Discovering) {
+                                        _uiState.value =
+                                            current.copy(
+                                                nodes = nodes.toList(),
+                                                nodesDone = nodes.size,
+                                            )
+                                    }
+                                }
+
+                                is TopologyDiscoveryEvent.LinkDiscovered -> {
+                                    links.add(event.link)
+                                    val current = _uiState.value
+                                    if (current is TopologyUiState.Discovering) {
+                                        _uiState.value = current.copy(links = links.toList())
+                                    }
+                                }
+
+                                is TopologyDiscoveryEvent.Progress -> {
+                                    val current = _uiState.value
+                                    if (current is TopologyUiState.Discovering) {
+                                        _uiState.value =
+                                            current.copy(
+                                                progressMessage = event.message,
+                                                nodesDone = event.nodesDone,
+                                            )
+                                    }
+                                }
+
+                                is TopologyDiscoveryEvent.Complete -> {
+                                    if (operationSession === session && session.cancellationReason == null) {
+                                        terminalEventReceived = true
+                                        // Keep Start disabled until upstream flow cleanup has finished.
+                                        terminalState = TopologyUiState.Done(graph = event.graph, selectedNodeIp = null)
+                                    }
+                                }
+
+                                is TopologyDiscoveryEvent.TimeLimit -> {
+                                    terminalEventReceived = true
+                                    terminalState =
+                                        TopologyUiState.TimeLimit(
+                                            nodes = event.partialGraph.nodes,
+                                            links = event.partialGraph.links,
+                                            nodesDone = event.partialGraph.nodes.size,
+                                        )
+                                }
+
+                                is TopologyDiscoveryEvent.Error -> {
+                                    terminalEventReceived = true
+                                    // Some repositories emit an error before OperationRunner closes its
+                                    // registered SNMP client. Publish Retry only after collection ends.
+                                    terminalState =
+                                        if (
+                                            session.cancellationReason == CancellationReason.DEADLINE_EXCEEDED
+                                        ) {
+                                            TopologyUiState.TimeLimit(
+                                                nodes = nodes.toList(),
+                                                links = links.toList(),
+                                                nodesDone = nodes.size,
+                                            )
+                                        } else {
+                                            TopologyUiState.Failure(
+                                                event.message,
+                                                event.cause.toNetworkErrorKind(),
+                                            )
+                                        }
+                                }
                             }
                         }
-                        is TopologyDiscoveryEvent.LinkDiscovered -> {
-                            links.add(event.link)
-                            val current = _uiState.value
-                            if (current is TopologyUiState.Discovering) {
-                                _uiState.value = current.copy(links = links.toList())
-                            }
-                        }
-                        is TopologyDiscoveryEvent.Progress -> {
-                            val current = _uiState.value
-                            if (current is TopologyUiState.Discovering) {
-                                _uiState.value = current.copy(
-                                    progressMessage = event.message,
-                                    nodesDone = event.nodesDone
-                                )
-                            }
-                        }
-                        is TopologyDiscoveryEvent.Complete -> {
-                            if (operationSession === session && session.cancellationReason == null) {
-                                terminalEventReceived = true
-                                // Keep Start disabled until upstream flow cleanup has finished.
-                                terminalState = TopologyUiState.Done(graph = event.graph, selectedNodeIp = null)
-                            }
-                        }
-                        is TopologyDiscoveryEvent.TimeLimit -> {
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        if (operationSession === session && session.cancellationReason == null) {
                             terminalEventReceived = true
-                            terminalState = TopologyUiState.TimeLimit(
-                                nodes = event.partialGraph.nodes,
-                                links = event.partialGraph.links,
-                                nodesDone = event.partialGraph.nodes.size,
+                            terminalState =
+                                TopologyUiState.Failure(
+                                    message = e.message.orEmpty(),
+                                    networkErrorKind = e.toNetworkErrorKind(),
+                                    messageRes = if (e.message == null) R.string.topology_failure_generic else null,
+                                )
+                        }
+                    } finally {
+                        if (operationSession === session) operationSession = null
+                        val current = _uiState.value
+                        // The repository can emit Complete after OperationRunner has marked the
+                        // session finished. In that interleaving cancel(USER_STOP) cannot record a
+                        // reason, so the synchronous Canceling state is the authoritative Stop fence.
+                        // A previously won deadline or other non-user cancellation still resolves as
+                        // its error even if the user taps Stop during the cleanup window.
+                        val cancellationReason = session.cancellationReason
+                        if (current is TopologyUiState.Canceling && current.operationId == currentOperationId &&
+                            (cancellationReason == null || cancellationReason == CancellationReason.USER_STOP)
+                        ) {
+                            _uiState.value =
+                                TopologyUiState.Canceled(
+                                    nodes = current.nodes,
+                                    links = current.links,
+                                    nodesDone = current.nodesDone,
+                                    selectedNodeIp = current.selectedNodeIp,
+                                )
+                        } else if (cancellationReason == null) {
+                            _uiState.value = terminalState ?: TopologyUiState.Failure(
+                                message = "",
+                                messageRes = R.string.topology_failure_no_result,
                             )
-                        }
-                        is TopologyDiscoveryEvent.Error -> {
-                            terminalEventReceived = true
-                            // Some repositories emit an error before OperationRunner closes its
-                            // registered SNMP client. Publish Retry only after collection ends.
-                            terminalState = if (
-                                session.cancellationReason == CancellationReason.DEADLINE_EXCEEDED
+                        } else if (cancellationReason != CancellationReason.USER_STOP &&
+                            cancellationReason != CancellationReason.LIFECYCLE_PAUSE
+                        ) {
+                            _uiState.value = terminalState ?: if (
+                                cancellationReason == CancellationReason.DEADLINE_EXCEEDED
                             ) {
                                 TopologyUiState.TimeLimit(
                                     nodes = nodes.toList(),
@@ -259,152 +342,103 @@ class TopologyDiscoveryViewModel @Inject constructor(
                                 )
                             } else {
                                 TopologyUiState.Failure(
-                                    event.message,
-                                    event.cause.toNetworkErrorKind(),
+                                    message = "",
+                                    messageRes = R.string.topology_failure_interrupted,
                                 )
                             }
                         }
                     }
                 }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                if (operationSession === session && session.cancellationReason == null) {
-                    terminalEventReceived = true
-                    terminalState = TopologyUiState.Failure(
-                        message = e.message.orEmpty(),
-                        networkErrorKind = e.toNetworkErrorKind(),
-                        messageRes = if (e.message == null) R.string.topology_failure_generic else null,
-                    )
-                }
-            } finally {
-                if (operationSession === session) operationSession = null
-                val current = _uiState.value
-                // The repository can emit Complete after OperationRunner has marked the
-                // session finished. In that interleaving cancel(USER_STOP) cannot record a
-                // reason, so the synchronous Canceling state is the authoritative Stop fence.
-                // A previously won deadline or other non-user cancellation still resolves as
-                // its error even if the user taps Stop during the cleanup window.
-                val cancellationReason = session.cancellationReason
-                if (current is TopologyUiState.Canceling && current.operationId == currentOperationId &&
-                    (cancellationReason == null || cancellationReason == CancellationReason.USER_STOP)
-                ) {
-                    _uiState.value = TopologyUiState.Canceled(
-                        nodes = current.nodes,
-                        links = current.links,
-                        nodesDone = current.nodesDone,
-                        selectedNodeIp = current.selectedNodeIp,
-                    )
-                } else if (cancellationReason == null) {
-                    _uiState.value = terminalState ?: TopologyUiState.Failure(
-                        message = "",
-                        messageRes = R.string.topology_failure_no_result,
-                    )
-                } else if (cancellationReason != CancellationReason.USER_STOP &&
-                    cancellationReason != CancellationReason.LIFECYCLE_PAUSE
-                ) {
-                    _uiState.value = terminalState ?: if (
-                        cancellationReason == CancellationReason.DEADLINE_EXCEEDED
-                    ) {
-                        TopologyUiState.TimeLimit(
-                            nodes = nodes.toList(),
-                            links = links.toList(),
-                            nodesDone = nodes.size,
-                        )
-                    } else {
-                        TopologyUiState.Failure(
-                            message = "",
-                            messageRes = R.string.topology_failure_interrupted,
-                        )
-                    }
-                }
+        }
+
+        fun removeRecentSeed(seed: String) {
+            viewModelScope.launch {
+                recentHostsRepository.removeRecent(AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS, seed)
             }
         }
-    }
 
-    fun removeRecentSeed(seed: String) {
-        viewModelScope.launch {
-            recentHostsRepository.removeRecent(AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS, seed)
+        fun clearRecentSeeds() {
+            viewModelScope.launch {
+                recentHostsRepository.clearAll(AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS)
+            }
         }
-    }
 
-    fun clearRecentSeeds() {
-        viewModelScope.launch {
-            recentHostsRepository.clearAll(AppPreferenceKeys.RECENT_TOPOLOGY_SEEDS)
+        /** Selection works both mid-scan and once discovery finishes, so users can inspect
+         *  nodes as they stream in instead of waiting for [TopologyUiState.Done]. */
+        fun selectNode(ip: String) {
+            when (val current = _uiState.value) {
+                is TopologyUiState.Discovering -> _uiState.value = current.copy(selectedNodeIp = ip)
+                is TopologyUiState.Canceling -> _uiState.value = current.copy(selectedNodeIp = ip)
+                is TopologyUiState.Canceled -> _uiState.value = current.copy(selectedNodeIp = ip)
+                is TopologyUiState.TimeLimit -> _uiState.value = current.copy(selectedNodeIp = ip)
+                is TopologyUiState.Done -> _uiState.value = current.copy(selectedNodeIp = ip)
+                else -> Unit
+            }
         }
-    }
 
-    /** Selection works both mid-scan and once discovery finishes, so users can inspect
-     *  nodes as they stream in instead of waiting for [TopologyUiState.Done]. */
-    fun selectNode(ip: String) {
-        when (val current = _uiState.value) {
-            is TopologyUiState.Discovering -> _uiState.value = current.copy(selectedNodeIp = ip)
-            is TopologyUiState.Canceling -> _uiState.value = current.copy(selectedNodeIp = ip)
-            is TopologyUiState.Canceled -> _uiState.value = current.copy(selectedNodeIp = ip)
-            is TopologyUiState.TimeLimit -> _uiState.value = current.copy(selectedNodeIp = ip)
-            is TopologyUiState.Done -> _uiState.value = current.copy(selectedNodeIp = ip)
-            else -> Unit
+        fun deselectNode() {
+            when (val current = _uiState.value) {
+                is TopologyUiState.Discovering -> _uiState.value = current.copy(selectedNodeIp = null)
+                is TopologyUiState.Canceling -> _uiState.value = current.copy(selectedNodeIp = null)
+                is TopologyUiState.Canceled -> _uiState.value = current.copy(selectedNodeIp = null)
+                is TopologyUiState.TimeLimit -> _uiState.value = current.copy(selectedNodeIp = null)
+                is TopologyUiState.Done -> _uiState.value = current.copy(selectedNodeIp = null)
+                else -> Unit
+            }
         }
-    }
 
-    fun deselectNode() {
-        when (val current = _uiState.value) {
-            is TopologyUiState.Discovering -> _uiState.value = current.copy(selectedNodeIp = null)
-            is TopologyUiState.Canceling -> _uiState.value = current.copy(selectedNodeIp = null)
-            is TopologyUiState.Canceled -> _uiState.value = current.copy(selectedNodeIp = null)
-            is TopologyUiState.TimeLimit -> _uiState.value = current.copy(selectedNodeIp = null)
-            is TopologyUiState.Done -> _uiState.value = current.copy(selectedNodeIp = null)
-            else -> Unit
-        }
-    }
-
-    fun reset() {
-        if (_uiState.value is TopologyUiState.Canceling) return
-        val current = _uiState.value
-        if (current is TopologyUiState.Discovering && operationSession != null) {
-            _uiState.value = TopologyUiState.Canceling(
-                nodes = current.nodes,
-                links = current.links,
-                progressMessage = current.progressMessage,
-                nodesDone = current.nodesDone,
-                operationId = operationId,
-                selectedNodeIp = current.selectedNodeIp,
-            )
+        fun reset() {
+            if (_uiState.value is TopologyUiState.Canceling) return
+            val current = _uiState.value
+            if (current is TopologyUiState.Discovering && operationSession != null) {
+                _uiState.value =
+                    TopologyUiState.Canceling(
+                        nodes = current.nodes,
+                        links = current.links,
+                        progressMessage = current.progressMessage,
+                        nodesDone = current.nodesDone,
+                        operationId = operationId,
+                        selectedNodeIp = current.selectedNodeIp,
+                    )
+                cancelDiscovery(CancellationReason.USER_STOP)
+                return
+            }
             cancelDiscovery(CancellationReason.USER_STOP)
-            return
+            _uiState.value = TopologyUiState.Idle
         }
-        cancelDiscovery(CancellationReason.USER_STOP)
-        _uiState.value = TopologyUiState.Idle
-    }
 
-    private fun cancelDiscovery(reason: CancellationReason) {
-        val session = operationSession
-        operationSession = null
-        if (session != null) {
-            // OperationSession cancellation closes registered transports synchronously. Keep
-            // that potentially blocking work away from UI and ViewModel lifecycle callers.
-            TopologyOperationCancellationScope.cancel(session, reason, discoveryJob)
-        } else {
-            discoveryJob?.cancel()
+        private fun cancelDiscovery(reason: CancellationReason) {
+            val session = operationSession
+            operationSession = null
+            if (session != null) {
+                // OperationSession cancellation closes registered transports synchronously. Keep
+                // that potentially blocking work away from UI and ViewModel lifecycle callers.
+                TopologyOperationCancellationScope.cancel(session, reason, discoveryJob)
+            } else {
+                discoveryJob?.cancel()
+            }
+            discoveryJob = null
         }
-        discoveryJob = null
-    }
 
-    /** Runs the current form parameters only after an explicit retry action. */
-    fun retryDiscovery(params: TopologyParams) {
-        startDiscovery(params)
-    }
+        /** Runs the current form parameters only after an explicit retry action. */
+        fun retryDiscovery(params: TopologyParams) {
+            startDiscovery(params)
+        }
 
-    private companion object {
-        const val LIFECYCLE_CLOSEABLE_KEY = "topology-discovery-operation"
+        private companion object {
+            const val LIFECYCLE_CLOSEABLE_KEY = "topology-discovery-operation"
+        }
     }
-}
 
 /** Process-lifetime cancellation dispatcher so ViewModel teardown cannot cancel this work. */
 private object TopologyOperationCancellationScope {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    fun cancel(session: OperationSession, reason: CancellationReason, discoveryJob: Job?) {
+    fun cancel(
+        session: OperationSession,
+        reason: CancellationReason,
+        discoveryJob: Job?,
+    ) {
         scope.launch {
             session.cancel(reason)
             // A validation or mocked flow may not attach the session to OperationRunner, so

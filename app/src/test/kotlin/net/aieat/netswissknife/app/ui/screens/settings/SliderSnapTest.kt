@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class SliderSnapTest {
-
     @Test
     fun `unit step rounds to nearest integer inside range`() {
         assertEquals(10, snapSliderValue(9.6f, step = 1, range = 1..100))

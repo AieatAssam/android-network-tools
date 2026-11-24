@@ -4,14 +4,14 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
@@ -47,7 +47,7 @@ fun RecentHostsRow(
         visible = shownHosts.isNotEmpty(),
         enter = fadeIn(),
         exit = fadeOut(),
-        modifier = modifier
+        modifier = modifier,
     ) {
         val listState = rememberLazyListState()
         // Keyed items keep their scroll offset when a new host is prepended, which left the
@@ -56,24 +56,25 @@ fun RecentHostsRow(
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
                 text = stringResource(R.string.recent_hosts_label),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(end = 4.dp)
+                modifier = Modifier.padding(end = 4.dp),
             )
             LazyRow(
-                modifier = Modifier
-                    .weight(1f)
-                    .scrollEdgeFade(
-                        canScrollBackward = listState.canScrollBackward,
-                        canScrollForward = listState.canScrollForward,
-                    ),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .scrollEdgeFade(
+                            canScrollBackward = listState.canScrollBackward,
+                            canScrollForward = listState.canScrollForward,
+                        ),
                 state = listState,
                 contentPadding = PaddingValues(start = 4.dp, end = ScrollEdgeFadeWidth),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 items(shownHosts, key = { it }) { host ->
                     InputChip(
@@ -85,7 +86,7 @@ fun RecentHostsRow(
                                 text = host,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.labelMedium
+                                style = MaterialTheme.typography.labelMedium,
                             )
                         },
                         trailingIcon = {
@@ -97,23 +98,23 @@ fun RecentHostsRow(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = removeDescription,
                                     modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                        }
+                        },
                     )
                 }
             }
             IconButton(
                 onClick = onClearAll,
                 enabled = actionsEnabled,
-                modifier = Modifier.size(ToolTouchTargetSize)
+                modifier = Modifier.size(ToolTouchTargetSize),
             ) {
                 Icon(
                     imageVector = Icons.Default.DeleteSweep,
                     contentDescription = clearDescription,
                     modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

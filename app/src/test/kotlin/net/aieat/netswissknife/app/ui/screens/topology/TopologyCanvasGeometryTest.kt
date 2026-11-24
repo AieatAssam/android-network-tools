@@ -17,10 +17,15 @@ class TopologyCanvasGeometryTest {
         return root to listOf(root) + (2..n + 1).map { "10.0.0.$it" }
     }
 
-    private fun edgesFromRoot(root: String, ips: List<String>): List<Pair<String, String>> =
-        ips.filter { it != root }.map { root to it }
+    private fun edgesFromRoot(
+        root: String,
+        ips: List<String>,
+    ): List<Pair<String, String>> = ips.filter { it != root }.map { root to it }
 
-    private fun distance(a: Offset, b: Offset): Float = sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y))
+    private fun distance(
+        a: Offset,
+        b: Offset,
+    ): Float = sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y))
 
     private fun assertNoOverlap(positions: Map<String, Offset>) {
         val entries = positions.entries.toList()
@@ -44,10 +49,12 @@ class TopologyCanvasGeometryTest {
         for (n in listOf(1, 2, 3, 5, 8, 17, 32, 48)) {
             val (root, ips) = star(n)
             val layout = TopologyCanvasGeometry.layout(root, ips, edgesFromRoot(root, ips))
-            val angles = ips.filter { it != root }
-                .map { ip -> layout.positions.getValue(ip).let { atan2(it.y, it.x).toDouble() } }
-                .map { if (it < 0) it + 2 * PI else it }
-                .sorted()
+            val angles =
+                ips
+                    .filter { it != root }
+                    .map { ip -> layout.positions.getValue(ip).let { atan2(it.y, it.x).toDouble() } }
+                    .map { if (it < 0) it + 2 * PI else it }
+                    .sorted()
             if (n < 2) continue
             val expectedStep = 2 * PI / n
             for (i in 1 until angles.size) {
@@ -123,10 +130,11 @@ class TopologyCanvasGeometryTest {
 
     @Test
     fun `nearest node within its hit radius wins`() {
-        val candidates = listOf(
-            "10.0.0.1" to Offset(0f, 0f),
-            "10.0.0.2" to Offset(10f, 0f),
-        )
+        val candidates =
+            listOf(
+                "10.0.0.1" to Offset(0f, 0f),
+                "10.0.0.2" to Offset(10f, 0f),
+            )
         val hit = TopologyCanvasGeometry.nearestNodeWithin(Offset(7f, 0f), candidates) { 30f }
         assertEquals("10.0.0.2", hit)
     }

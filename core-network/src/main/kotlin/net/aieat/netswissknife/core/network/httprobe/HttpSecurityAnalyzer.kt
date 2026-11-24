@@ -9,18 +9,19 @@ object HttpSecurityAnalyzer {
             responseHeaders.entries
                 .groupBy { it.key.lowercase() }
                 .mapValues { (_, entries) -> entries.flatMap { it.value } }
-        val checks = listOf(
-            checkHsts(normalized, isHttps),
-            checkContentSecurityPolicy(normalized),
-            checkXFrameOptions(normalized),
-            checkXssProtection(normalized),
-            checkXContentTypeOptions(normalized),
-            checkReferrerPolicy(normalized),
-            checkPermissionsPolicy(normalized),
-            checkCrossOriginOpenerPolicy(normalized),
-            checkCrossOriginEmbedderPolicy(normalized),
-            checkServerHeader(normalized),
-        ) + CookieAnalyzer.analyze(responseHeaders, isHttps)
+        val checks =
+            listOf(
+                checkHsts(normalized, isHttps),
+                checkContentSecurityPolicy(normalized),
+                checkXFrameOptions(normalized),
+                checkXssProtection(normalized),
+                checkXContentTypeOptions(normalized),
+                checkReferrerPolicy(normalized),
+                checkPermissionsPolicy(normalized),
+                checkCrossOriginOpenerPolicy(normalized),
+                checkCrossOriginEmbedderPolicy(normalized),
+                checkServerHeader(normalized),
+            ) + CookieAnalyzer.analyze(responseHeaders, isHttps)
         return if (isDocumentResponse(normalized)) checks else checks.map(::notApplicableToNonDocument)
     }
 
@@ -47,13 +48,14 @@ object HttpSecurityAnalyzer {
         }
     }
 
-    private val DOCUMENT_ONLY_HEADERS = setOf(
-        "content-security-policy",
-        "x-frame-options",
-        "x-xss-protection",
-        "cross-origin-opener-policy",
-        "cross-origin-embedder-policy",
-    )
+    private val DOCUMENT_ONLY_HEADERS =
+        setOf(
+            "content-security-policy",
+            "x-frame-options",
+            "x-xss-protection",
+            "cross-origin-opener-policy",
+            "cross-origin-embedder-policy",
+        )
 
     private fun rawValues(
         headers: Map<String, List<String>>,

@@ -1,8 +1,8 @@
 package net.aieat.netswissknife.app.ui.screens.ping
 
+import net.aieat.netswissknife.core.network.ping.PingEngineKind
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
-import net.aieat.netswissknife.core.network.ping.PingEngineKind
 import org.junit.jupiter.api.Test
 
 @DisplayName("ping display formatting")

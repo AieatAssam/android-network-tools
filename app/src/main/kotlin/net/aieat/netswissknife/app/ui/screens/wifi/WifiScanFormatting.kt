@@ -20,10 +20,11 @@ internal fun wifiScanAgeSeconds(
 }
 
 @StringRes
-internal fun signalLevelLabelRes(level: SignalLevel): Int = when (level) {
-    SignalLevel.EXCELLENT -> R.string.wifi_signal_level_excellent
-    SignalLevel.GOOD -> R.string.wifi_signal_level_good
-    SignalLevel.FAIR -> R.string.wifi_signal_level_fair
-    SignalLevel.WEAK -> R.string.wifi_signal_level_weak
-    SignalLevel.POOR -> R.string.wifi_signal_level_poor
-}
+internal fun signalLevelLabelRes(level: SignalLevel): Int =
+    when (level) {
+        SignalLevel.EXCELLENT -> R.string.wifi_signal_level_excellent
+        SignalLevel.GOOD -> R.string.wifi_signal_level_good
+        SignalLevel.FAIR -> R.string.wifi_signal_level_fair
+        SignalLevel.WEAK -> R.string.wifi_signal_level_weak
+        SignalLevel.POOR -> R.string.wifi_signal_level_poor
+    }

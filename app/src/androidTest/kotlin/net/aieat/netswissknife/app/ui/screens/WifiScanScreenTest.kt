@@ -2,13 +2,12 @@ package net.aieat.netswissknife.app.ui.screens
 
 import android.Manifest
 import android.os.Build
-import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -16,6 +15,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
@@ -30,8 +30,8 @@ import net.aieat.netswissknife.app.ui.screens.wifi.WifiScanViewModel
 import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
 import net.aieat.netswissknife.core.network.wifi.WifiConnectionInfo
-import net.aieat.netswissknife.core.network.wifi.WifiScanResult
 import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
+import net.aieat.netswissknife.core.network.wifi.WifiScanResult
 import net.aieat.netswissknife.core.network.wifi.WifiSecurity
 import net.aieat.netswissknife.core.network.wifi.WifiStandard
 import org.junit.Assert.assertTrue
@@ -52,11 +52,12 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class WifiScanScreenTest {
     @get:Rule
-    val permissionRule: GrantPermissionRule = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        GrantPermissionRule.grant(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES)
-    } else {
-        GrantPermissionRule.grant(Manifest.permission.ACCESS_FINE_LOCATION)
-    }
+    val permissionRule: GrantPermissionRule =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            GrantPermissionRule.grant(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES)
+        } else {
+            GrantPermissionRule.grant(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
 
     @get:Rule
     val composeRule = createComposeRule()
@@ -89,8 +90,12 @@ class WifiScanScreenTest {
         // idle, so it's safe to run it with the clock auto-advancing.
         composeRule.mainClock.autoAdvance = true
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodes(androidx.compose.ui.test.isRoot())
-                .fetchSemanticsNodes().size > 1
+            composeRule
+                .onAllNodes(
+                    androidx.compose.ui.test
+                        .isRoot(),
+                ).fetchSemanticsNodes()
+                .size > 1
         }
         composeRule.mainClock.autoAdvance = false
 
@@ -163,7 +168,8 @@ class WifiScanScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
 
-        composeRule.onNodeWithText(context.getString(R.string.cancel))
+        composeRule
+            .onNodeWithText(context.getString(R.string.cancel))
             .assertIsDisplayed()
             .performClick()
 
@@ -197,16 +203,17 @@ class WifiScanScreenTest {
 
     @Test
     fun timedOutSuccessState_showsCachedResultsAndAge() {
-        val result = WifiScanResult(
-            accessPoints = listOf(fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50)),
-            channels = emptyList(),
-            connectedNetwork = null,
-            scanTimestampMs = 0L,
-            isWifiEnabled = true,
-            isFresh = false,
-            scanAgeMs = 42_000L,
-            refreshStatus = WifiScanRefreshStatus.TIMED_OUT
-        )
+        val result =
+            WifiScanResult(
+                accessPoints = listOf(fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50)),
+                channels = emptyList(),
+                connectedNetwork = null,
+                scanTimestampMs = 0L,
+                isWifiEnabled = true,
+                isFresh = false,
+                scanAgeMs = 42_000L,
+                refreshStatus = WifiScanRefreshStatus.TIMED_OUT,
+            )
         composeRule.setContent {
             NetSwissKnifeTheme {
                 WifiScanScreen(viewModel = fakeViewModel(WifiScanUiState.Success(result)))
@@ -214,16 +221,18 @@ class WifiScanScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule.onNodeWithText(context.getString(R.string.wifi_scan_timed_out)).assertIsDisplayed()
-        composeRule.onNodeWithText(
-            context.resources.getQuantityString(R.plurals.wifi_results_age, 42, 42)
-        ).assertIsDisplayed()
+        composeRule
+            .onNodeWithText(
+                context.resources.getQuantityString(R.plurals.wifi_results_age, 42, 42),
+            ).assertIsDisplayed()
     }
 
     @Test
     fun permissionDeniedCachedState_offersPermissionRequest() {
-        val result = successState(
-            listOf(fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50))
-        ).result.copy(refreshStatus = WifiScanRefreshStatus.PERMISSION_DENIED)
+        val result =
+            successState(
+                listOf(fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50)),
+            ).result.copy(refreshStatus = WifiScanRefreshStatus.PERMISSION_DENIED)
         composeRule.setContent {
             NetSwissKnifeTheme {
                 WifiScanScreen(viewModel = fakeViewModel(WifiScanUiState.Success(result)))
@@ -232,9 +241,10 @@ class WifiScanScreenTest {
         composeRule.mainClock.advanceTimeBy(1_000L)
 
         composeRule.onNodeWithText(context.getString(R.string.wifi_grant_permission)).assertIsDisplayed()
-        composeRule.onNodeWithText(
-            context.getString(R.string.wifi_scan_permission_denied_cached)
-        ).assertIsDisplayed()
+        composeRule
+            .onNodeWithText(
+                context.getString(R.string.wifi_scan_permission_denied_cached),
+            ).assertIsDisplayed()
     }
 
     @Test
@@ -253,30 +263,32 @@ class WifiScanScreenTest {
 
     @Test
     fun connectedCard_showsIpv6GatewayAndDns() {
-        val connection = WifiConnectionInfo(
-            ssid = "HomeNet",
-            bssid = "AA:AA:AA:AA:AA:01",
-            rssi = -50,
-            frequency = 2437,
-            channel = 6,
-            band = net.aieat.netswissknife.core.network.wifi.WifiBand.BAND_2_4GHZ,
-            linkSpeedMbps = 144,
-            txLinkSpeedMbps = 144,
-            rxLinkSpeedMbps = 144,
-            ipAddress = "192.168.1.5",
-            standard = WifiStandard.WIFI_4,
-            security = WifiSecurity.WPA2,
-            ipv6Addresses = listOf("fe80::1", "2001:db8::5"),
-            gateway = "192.168.1.1",
-            dnsServers = listOf("192.168.1.1", "2001:4860:4860::8888")
-        )
-        val result = WifiScanResult(
-            accessPoints = listOf(fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50)),
-            channels = emptyList(),
-            connectedNetwork = connection,
-            scanTimestampMs = 0L,
-            isWifiEnabled = true
-        )
+        val connection =
+            WifiConnectionInfo(
+                ssid = "HomeNet",
+                bssid = "AA:AA:AA:AA:AA:01",
+                rssi = -50,
+                frequency = 2437,
+                channel = 6,
+                band = net.aieat.netswissknife.core.network.wifi.WifiBand.BAND_2_4GHZ,
+                linkSpeedMbps = 144,
+                txLinkSpeedMbps = 144,
+                rxLinkSpeedMbps = 144,
+                ipAddress = "192.168.1.5",
+                standard = WifiStandard.WIFI_4,
+                security = WifiSecurity.WPA2,
+                ipv6Addresses = listOf("fe80::1", "2001:db8::5"),
+                gateway = "192.168.1.1",
+                dnsServers = listOf("192.168.1.1", "2001:4860:4860::8888"),
+            )
+        val result =
+            WifiScanResult(
+                accessPoints = listOf(fakeAp("HomeNet", "AA:AA:AA:AA:AA:01", -50)),
+                channels = emptyList(),
+                connectedNetwork = connection,
+                scanTimestampMs = 0L,
+                isWifiEnabled = true,
+            )
         composeRule.setContent {
             NetSwissKnifeTheme {
                 WifiScanScreen(viewModel = fakeViewModel(WifiScanUiState.Success(result)))
@@ -332,18 +344,20 @@ class WifiScanScreenTest {
         val alpha = fakeAp("Alpha", "AA:AA:AA:AA:AA:01", -70)
         val bravo = fakeAp("Bravo", "BB:BB:BB:BB:BB:01", -80)
         val charlie = fakeAp("Charlie", "CC:CC:CC:CC:CC:01", -50)
-        val frozenOrder = listOf(
-            "Bravo|${WifiSecurity.WPA2.name}",
-            "Alpha|${WifiSecurity.WPA2.name}",
-            "Charlie|${WifiSecurity.WPA2.name}"
-        )
+        val frozenOrder =
+            listOf(
+                "Bravo|${WifiSecurity.WPA2.name}",
+                "Alpha|${WifiSecurity.WPA2.name}",
+                "Charlie|${WifiSecurity.WPA2.name}",
+            )
 
         composeRule.setContent {
             NetSwissKnifeTheme {
                 WifiScanScreen(
-                    viewModel = fakeViewModel(
-                        successState(listOf(alpha, bravo, charlie), frozenOrder = frozenOrder)
-                    )
+                    viewModel =
+                        fakeViewModel(
+                            successState(listOf(alpha, bravo, charlie), frozenOrder = frozenOrder),
+                        ),
                 )
             }
         }
@@ -378,11 +392,12 @@ class WifiScanScreenTest {
         every { viewModel.expandedNetworks } returns expandedNetworks
         every { viewModel.toggleNetworkExpanded(any()) } answers {
             val networkId = firstArg<String>()
-            expandedNetworks.value = if (networkId in expandedNetworks.value) {
-                expandedNetworks.value - networkId
-            } else {
-                expandedNetworks.value + networkId
-            }
+            expandedNetworks.value =
+                if (networkId in expandedNetworks.value) {
+                    expandedNetworks.value - networkId
+                } else {
+                    expandedNetworks.value + networkId
+                }
         }
         every { viewModel.selectAccessPoint(any()) } answers {
             val current = state.value as WifiScanUiState.Success
@@ -397,35 +412,41 @@ class WifiScanScreenTest {
 
         // The spectrum is collapsed by default, so open it before checking its description.
         composeRule.onNodeWithTag(WifiScreenTestTags.SPECTRUM_TOGGLE).performScrollTo().performClick()
-        val spectrumDescription = context.getString(
-            R.string.wifi_spectrum_a11y,
-            2,
-            ap.band.displayName,
-            strongestAp.displaySsid,
-            strongestAp.rssi,
-        )
+        val spectrumDescription =
+            context.getString(
+                R.string.wifi_spectrum_a11y,
+                2,
+                ap.band.displayName,
+                strongestAp.displaySsid,
+                strongestAp.rssi,
+            )
         composeRule.onNodeWithContentDescription(spectrumDescription).performScrollTo().assertIsDisplayed()
 
         // Expand the grouped network, then open its BSSID details to expose the arc gauge.
-        composeRule.onNodeWithTag(WifiScreenTestTags.CONTENT_LIST)
+        composeRule
+            .onNodeWithTag(WifiScreenTestTags.CONTENT_LIST)
             .performScrollToIndex(WifiScreenTestTags.NETWORKS_START_INDEX + 1)
-        composeRule.onNodeWithTag("wifi_network_card_${ap.displaySsid}")
+        composeRule
+            .onNodeWithTag("wifi_network_card_${ap.displaySsid}")
             .performScrollTo()
             .performClick()
         composeRule.mainClock.advanceTimeBy(500L)
-        composeRule.onNodeWithTag(WifiScreenTestTags.CONTENT_LIST)
+        composeRule
+            .onNodeWithTag(WifiScreenTestTags.CONTENT_LIST)
             .performTouchInput { swipeUp() }
         composeRule.onNodeWithText(ap.bssid).assertIsDisplayed().performClick()
         composeRule.mainClock.advanceTimeBy(1_000L)
-        val levelResource = when (ap.signalLevel) {
-            net.aieat.netswissknife.core.network.wifi.SignalLevel.EXCELLENT -> R.string.wifi_signal_level_excellent
-            net.aieat.netswissknife.core.network.wifi.SignalLevel.GOOD -> R.string.wifi_signal_level_good
-            net.aieat.netswissknife.core.network.wifi.SignalLevel.FAIR -> R.string.wifi_signal_level_fair
-            net.aieat.netswissknife.core.network.wifi.SignalLevel.WEAK -> R.string.wifi_signal_level_weak
-            net.aieat.netswissknife.core.network.wifi.SignalLevel.POOR -> R.string.wifi_signal_level_poor
-        }
+        val levelResource =
+            when (ap.signalLevel) {
+                net.aieat.netswissknife.core.network.wifi.SignalLevel.EXCELLENT -> R.string.wifi_signal_level_excellent
+                net.aieat.netswissknife.core.network.wifi.SignalLevel.GOOD -> R.string.wifi_signal_level_good
+                net.aieat.netswissknife.core.network.wifi.SignalLevel.FAIR -> R.string.wifi_signal_level_fair
+                net.aieat.netswissknife.core.network.wifi.SignalLevel.WEAK -> R.string.wifi_signal_level_weak
+                net.aieat.netswissknife.core.network.wifi.SignalLevel.POOR -> R.string.wifi_signal_level_poor
+            }
         val levelLabel = context.getString(levelResource)
-        composeRule.onNodeWithTag(WifiScreenTestTags.AP_DETAIL_CONTENT)
+        composeRule
+            .onNodeWithTag(WifiScreenTestTags.AP_DETAIL_CONTENT)
             .performTouchInput { swipeUp() }
         // The detail sheet states the signal level once, as a label next to the dBm value.
         assertTrue(composeRule.onAllNodesWithText(levelLabel).fetchSemanticsNodes().isNotEmpty())
@@ -444,13 +465,14 @@ class WifiScanScreenTest {
         composeRule.mainClock.advanceTimeBy(1_000L)
 
         composeRule.onNodeWithTag(WifiScreenTestTags.SPECTRUM_TOGGLE).performScrollTo().performClick()
-        val description = context.getString(
-            R.string.wifi_spectrum_a11y,
-            1,
-            ap.band.displayName,
-            ap.displaySsid,
-            ap.rssi,
-        )
+        val description =
+            context.getString(
+                R.string.wifi_spectrum_a11y,
+                1,
+                ap.band.displayName,
+                ap.displaySsid,
+                ap.rssi,
+            )
         composeRule.onNodeWithContentDescription(description).performScrollTo().assertIsDisplayed()
     }
 
@@ -458,7 +480,7 @@ class WifiScanScreenTest {
         ssid: String,
         bssid: String,
         rssi: Int,
-        security: WifiSecurity = WifiSecurity.WPA2
+        security: WifiSecurity = WifiSecurity.WPA2,
     ) = WifiAccessPoint(
         ssid = ssid,
         bssid = bssid,
@@ -474,21 +496,22 @@ class WifiScanScreenTest {
         vendor = "",
         centerFrequency0 = 0,
         centerFrequency1 = 0,
-        timestampUs = 0L
+        timestampUs = 0L,
     )
 
     private fun successState(
         accessPoints: List<WifiAccessPoint>,
-        frozenOrder: List<String>? = null
+        frozenOrder: List<String>? = null,
     ) = WifiScanUiState.Success(
-        result = WifiScanResult(
-            accessPoints = accessPoints,
-            channels = emptyList(),
-            connectedNetwork = null,
-            scanTimestampMs = 0L,
-            isWifiEnabled = true
-        ),
-        frozenOrder = frozenOrder
+        result =
+            WifiScanResult(
+                accessPoints = accessPoints,
+                channels = emptyList(),
+                connectedNetwork = null,
+                scanTimestampMs = 0L,
+                isWifiEnabled = true,
+            ),
+        frozenOrder = frozenOrder,
     )
 
     private fun fakeViewModel(state: WifiScanUiState): WifiScanViewModel {

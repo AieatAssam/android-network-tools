@@ -159,7 +159,6 @@ private fun HeroHeader(compact: Boolean) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                     textAlign = TextAlign.Center,
                 )
-
             }
         }
     }

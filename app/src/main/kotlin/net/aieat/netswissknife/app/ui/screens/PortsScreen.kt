@@ -211,12 +211,14 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     var showAll by rememberSaveable { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
     val finishedSummary = (uiState as? PortScanUiState.Finished)?.summary
-    val finishedOpen = remember(finishedSummary) {
-        finishedSummary?.results.orEmpty().filter { it.status == PortStatus.OPEN }
-    }
-    val finishedClosedAndFiltered = remember(finishedSummary) {
-        finishedSummary?.results.orEmpty().filter { it.status != PortStatus.OPEN }
-    }
+    val finishedOpen =
+        remember(finishedSummary) {
+            finishedSummary?.results.orEmpty().filter { it.status == PortStatus.OPEN }
+        }
+    val finishedClosedAndFiltered =
+        remember(finishedSummary) {
+            finishedSummary?.results.orEmpty().filter { it.status != PortStatus.OPEN }
+        }
     val liveResults = (uiState as? PortScanUiState.Scanning)?.liveResults.orEmpty()
     val liveOpen = remember(liveResults) { liveResults.filter { it.status == PortStatus.OPEN } }
 

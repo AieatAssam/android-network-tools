@@ -4,9 +4,15 @@ package net.aieat.netswissknife.app.ui.screens.httprobe
 internal const val BODY_PREVIEW_LIMIT_CHARS = 32_000
 
 /** The text shown for a body. [truncated] is true when the preview cut off part of the body. */
-internal data class BodyPreview(val text: String?, val truncated: Boolean)
+internal data class BodyPreview(
+    val text: String?,
+    val truncated: Boolean,
+)
 
-internal fun previewBody(body: String?, limit: Int = BODY_PREVIEW_LIMIT_CHARS): BodyPreview =
+internal fun previewBody(
+    body: String?,
+    limit: Int = BODY_PREVIEW_LIMIT_CHARS,
+): BodyPreview =
     when {
         body == null -> BodyPreview(null, false)
         body.length <= limit -> BodyPreview(body, false)
@@ -15,13 +21,15 @@ internal fun previewBody(body: String?, limit: Int = BODY_PREVIEW_LIMIT_CHARS): 
 
 /** True for `application/json`, `text/json` and any `+json` media type. Parameters are ignored. */
 internal fun isJsonResponse(headers: Map<String, List<String>>): Boolean {
-    val mediaType = headers.entries
-        .firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }
-        ?.value?.firstOrNull()
-        ?.substringBefore(';')
-        ?.trim()
-        ?.lowercase()
-        ?: return false
+    val mediaType =
+        headers.entries
+            .firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }
+            ?.value
+            ?.firstOrNull()
+            ?.substringBefore(';')
+            ?.trim()
+            ?.lowercase()
+            ?: return false
     return mediaType == "application/json" || mediaType == "text/json" || mediaType.endsWith("+json")
 }
 
@@ -42,8 +50,9 @@ internal fun responseSizeKind(
     truncated: Boolean,
     declaredBytes: Long?,
     contentEncoded: Boolean,
-): ResponseSizeKind = when {
-    !truncated -> ResponseSizeKind.EXACT
-    declaredBytes != null && !contentEncoded -> ResponseSizeKind.DECLARED
-    else -> ResponseSizeKind.AT_LEAST
-}
+): ResponseSizeKind =
+    when {
+        !truncated -> ResponseSizeKind.EXACT
+        declaredBytes != null && !contentEncoded -> ResponseSizeKind.DECLARED
+        else -> ResponseSizeKind.AT_LEAST
+    }

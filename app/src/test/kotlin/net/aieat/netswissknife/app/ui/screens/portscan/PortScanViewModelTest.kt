@@ -16,11 +16,11 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
@@ -1261,142 +1261,142 @@ class PortScanViewModelTest {
             viewModel.onClear()
         }
 
-        @Test
-        fun `progress updates are throttled and a trailing flush publishes the latest results`() =
-            runTest {
-                every { portScanUseCase(any(), any()) } returns
-                    kotlinx.coroutines.flow.flow {
-                        emit(PortScanFlowResult.Started("127.0.0.1", 4))
-                        repeat(3) { index ->
-                            emit(
-                                PortScanFlowResult.PortScanned(
-                                    stubResult.copy(port = 80 + index),
-                                    scannedCount = index + 1,
-                                    totalCount = 4,
-                                ),
-                            )
-                        }
-                        awaitCancellation()
+    @Test
+    fun `progress updates are throttled and a trailing flush publishes the latest results`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns
+                kotlinx.coroutines.flow.flow {
+                    emit(PortScanFlowResult.Started("127.0.0.1", 4))
+                    repeat(3) { index ->
+                        emit(
+                            PortScanFlowResult.PortScanned(
+                                stubResult.copy(port = 80 + index),
+                                scannedCount = index + 1,
+                                totalCount = 4,
+                            ),
+                        )
                     }
-                viewModel.onHostChange("example.com")
-                viewModel.startScan()
-                assertEquals(0, (viewModel.uiState.value as PortScanUiState.Scanning).liveResults.size)
+                    awaitCancellation()
+                }
+            viewModel.onHostChange("example.com")
+            viewModel.startScan()
+            assertEquals(0, (viewModel.uiState.value as PortScanUiState.Scanning).liveResults.size)
 
-                advanceTimeBy(SCAN_UI_INTERVAL_MS)
-                runCurrent()
+            advanceTimeBy(SCAN_UI_INTERVAL_MS)
+            runCurrent()
 
-                val state = viewModel.uiState.value as PortScanUiState.Scanning
-                assertEquals(listOf(80, 81, 82), state.liveResults.map { it.port })
-                assertEquals(3, state.scannedCount)
-                assertEquals(3, state.openCount)
-                viewModel.onClear()
-            }
+            val state = viewModel.uiState.value as PortScanUiState.Scanning
+            assertEquals(listOf(80, 81, 82), state.liveResults.map { it.port })
+            assertEquals(3, state.scannedCount)
+            assertEquals(3, state.openCount)
+            viewModel.onClear()
+        }
 
-        @Test
-        fun `a burst of results is published once per interval without losing any result`() =
-            runTest {
-                val burst = 1_000
-                every { portScanUseCase(any(), any()) } returns
-                    kotlinx.coroutines.flow.flow {
-                        emit(PortScanFlowResult.Started("127.0.0.1", burst))
-                        repeat(burst) { index ->
-                            emit(
-                                PortScanFlowResult.PortScanned(
-                                    stubResult.copy(port = index + 1, status = PortStatus.CLOSED),
-                                    scannedCount = index + 1,
-                                    totalCount = burst,
-                                ),
-                            )
-                        }
-                        awaitCancellation()
+    @Test
+    fun `a burst of results is published once per interval without losing any result`() =
+        runTest {
+            val burst = 1_000
+            every { portScanUseCase(any(), any()) } returns
+                kotlinx.coroutines.flow.flow {
+                    emit(PortScanFlowResult.Started("127.0.0.1", burst))
+                    repeat(burst) { index ->
+                        emit(
+                            PortScanFlowResult.PortScanned(
+                                stubResult.copy(port = index + 1, status = PortStatus.CLOSED),
+                                scannedCount = index + 1,
+                                totalCount = burst,
+                            ),
+                        )
                     }
-                val emitted = mutableListOf<PortScanUiState>()
-                backgroundScope.launch { viewModel.uiState.collect { emitted += it } }
-                viewModel.onHostChange("example.com")
-                viewModel.startScan()
-                runCurrent()
-                val beforeFlush = emitted.size
+                    awaitCancellation()
+                }
+            val emitted = mutableListOf<PortScanUiState>()
+            backgroundScope.launch { viewModel.uiState.collect { emitted += it } }
+            viewModel.onHostChange("example.com")
+            viewModel.startScan()
+            runCurrent()
+            val beforeFlush = emitted.size
 
-                advanceTimeBy(SCAN_UI_INTERVAL_MS)
-                runCurrent()
+            advanceTimeBy(SCAN_UI_INTERVAL_MS)
+            runCurrent()
 
-                assertEquals(1, emitted.size - beforeFlush)
-                val state = viewModel.uiState.value as PortScanUiState.Scanning
-                assertEquals(burst, state.liveResults.size)
-                assertEquals(burst, state.scannedCount)
-                assertEquals(0, state.openCount)
-                viewModel.onClear()
-            }
+            assertEquals(1, emitted.size - beforeFlush)
+            val state = viewModel.uiState.value as PortScanUiState.Scanning
+            assertEquals(burst, state.liveResults.size)
+            assertEquals(burst, state.scannedCount)
+            assertEquals(0, state.openCount)
+            viewModel.onClear()
+        }
 
-        @Test
-        fun `stopping inside the progress window keeps every received result and exact counts`() =
-            runTest {
-                val statuses = listOf(PortStatus.OPEN, PortStatus.CLOSED, PortStatus.FILTERED, PortStatus.OPEN)
-                every { portScanUseCase(any(), any()) } returns
-                    kotlinx.coroutines.flow.flow {
-                        emit(PortScanFlowResult.Started("127.0.0.1", statuses.size))
-                        statuses.forEachIndexed { index, status ->
-                            emit(
-                                PortScanFlowResult.PortScanned(
-                                    stubResult.copy(port = 20 + index, status = status),
-                                    scannedCount = index + 1,
-                                    totalCount = statuses.size,
-                                ),
-                            )
-                        }
-                        awaitCancellation()
+    @Test
+    fun `stopping inside the progress window keeps every received result and exact counts`() =
+        runTest {
+            val statuses = listOf(PortStatus.OPEN, PortStatus.CLOSED, PortStatus.FILTERED, PortStatus.OPEN)
+            every { portScanUseCase(any(), any()) } returns
+                kotlinx.coroutines.flow.flow {
+                    emit(PortScanFlowResult.Started("127.0.0.1", statuses.size))
+                    statuses.forEachIndexed { index, status ->
+                        emit(
+                            PortScanFlowResult.PortScanned(
+                                stubResult.copy(port = 20 + index, status = status),
+                                scannedCount = index + 1,
+                                totalCount = statuses.size,
+                            ),
+                        )
                     }
-                viewModel.onHostChange("example.com")
-                viewModel.startScan()
+                    awaitCancellation()
+                }
+            viewModel.onHostChange("example.com")
+            viewModel.startScan()
 
-                viewModel.onStopScan()
+            viewModel.onStopScan()
 
-                val finished = viewModel.uiState.value as PortScanUiState.Finished
-                assertEquals(PortScanUiState.Completion.USER_STOPPED, finished.completion)
-                assertEquals(listOf(20, 21, 22, 23), finished.summary.results.map { it.port })
-                assertEquals(2, finished.summary.openPorts)
-                assertEquals(1, finished.summary.closedPorts)
-                assertEquals(1, finished.summary.filteredPorts)
-                assertEquals(statuses.size, finished.requestedPorts)
-            }
+            val finished = viewModel.uiState.value as PortScanUiState.Finished
+            assertEquals(PortScanUiState.Completion.USER_STOPPED, finished.completion)
+            assertEquals(listOf(20, 21, 22, 23), finished.summary.results.map { it.port })
+            assertEquals(2, finished.summary.openPorts)
+            assertEquals(1, finished.summary.closedPorts)
+            assertEquals(1, finished.summary.filteredPorts)
+            assertEquals(statuses.size, finished.requestedPorts)
+        }
 
-        @Test
-        fun `a stopped scan reports the host it started with`() =
-            runTest {
-                every { portScanUseCase(any(), any()) } returns
-                    kotlinx.coroutines.flow.flow {
-                        emit(PortScanFlowResult.Started("93.184.216.34", 2))
-                        emit(PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 2))
-                        awaitCancellation()
-                    }
-                viewModel.onHostChange("example.com")
-                viewModel.startScan()
+    @Test
+    fun `a stopped scan reports the host it started with`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns
+                kotlinx.coroutines.flow.flow {
+                    emit(PortScanFlowResult.Started("93.184.216.34", 2))
+                    emit(PortScanFlowResult.PortScanned(stubResult, scannedCount = 1, totalCount = 2))
+                    awaitCancellation()
+                }
+            viewModel.onHostChange("example.com")
+            viewModel.startScan()
 
-                viewModel.onHostChange("example.org")
-                viewModel.onStopScan()
+            viewModel.onHostChange("example.org")
+            viewModel.onStopScan()
 
-                val finished = viewModel.uiState.value as PortScanUiState.Finished
-                assertEquals("example.com", finished.summary.host)
-                assertEquals("example.com", viewModel.host.value)
-            }
+            val finished = viewModel.uiState.value as PortScanUiState.Finished
+            assertEquals("example.com", finished.summary.host)
+            assertEquals("example.com", viewModel.host.value)
+        }
 
-        @Test
-        fun `validation failures keep their typed error for localisation`() =
-            runTest {
-                every { portScanUseCase(any(), any()) } returns
-                    flowOf(
-                        PortScanFlowResult.ValidationError(
-                            ErrorInfo(ErrorCode.TIMEOUT_OUT_OF_RANGE, listOf(100, 30_000)),
-                        ),
-                    )
-                viewModel.onHostChange("example.com")
+    @Test
+    fun `validation failures keep their typed error for localisation`() =
+        runTest {
+            every { portScanUseCase(any(), any()) } returns
+                flowOf(
+                    PortScanFlowResult.ValidationError(
+                        ErrorInfo(ErrorCode.TIMEOUT_OUT_OF_RANGE, listOf(100, 30_000)),
+                    ),
+                )
+            viewModel.onHostChange("example.com")
 
-                viewModel.startScan()
+            viewModel.startScan()
 
-                val error = viewModel.uiState.value as PortScanUiState.Error
-                assertEquals(ErrorCode.TIMEOUT_OUT_OF_RANGE, error.info?.code)
-                assertEquals(listOf<Any?>(100, 30_000), error.info?.args)
-            }
+            val error = viewModel.uiState.value as PortScanUiState.Error
+            assertEquals(ErrorCode.TIMEOUT_OUT_OF_RANGE, error.info?.code)
+            assertEquals(listOf<Any?>(100, 30_000), error.info?.args)
+        }
 
     private class FakeMonotonicClock(
         var nowNanos: Long = 1_000_000_000L,

@@ -293,11 +293,26 @@ fun MdnsDiscoveryScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) { state ->
                         when (state) {
-                            "idle" -> IdleHint()
-                            "canceling_empty" -> CancelingPlaceholder()
-                            "canceled_empty" -> CanceledEmptyHint()
-                            "scanning_empty" -> ScanningPlaceholder()
-                            "empty_done" -> EmptyResultHint()
+                            "idle" -> {
+                                IdleHint()
+                            }
+
+                            "canceling_empty" -> {
+                                CancelingPlaceholder()
+                            }
+
+                            "canceled_empty" -> {
+                                CanceledEmptyHint()
+                            }
+
+                            "scanning_empty" -> {
+                                ScanningPlaceholder()
+                            }
+
+                            "empty_done" -> {
+                                EmptyResultHint()
+                            }
+
                             else -> {
                                 ErrorCard(
                                     message = stringResource(uiState.errorReason.messageRes()),
@@ -422,10 +437,11 @@ private fun HeroCard(
                     )
                     if (state.isScanning) {
                         StatBadge(
-                            value = stringResource(
-                                R.string.mdns_elapsed_value,
-                                mdnsElapsedSeconds(state.elapsedMs).toInt(),
-                            ),
+                            value =
+                                stringResource(
+                                    R.string.mdns_elapsed_value,
+                                    mdnsElapsedSeconds(state.elapsedMs).toInt(),
+                                ),
                             label = stringResource(R.string.mdns_stat_elapsed),
                         )
                     }

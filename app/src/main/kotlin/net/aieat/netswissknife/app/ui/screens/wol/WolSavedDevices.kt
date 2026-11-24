@@ -174,11 +174,13 @@ object WolSavedDevices {
         val canonical = WolMagicPacket.canonicalMacOrNull(fields[0]) ?: return null
         val name = sanitizeName(fields.getOrElse(1) { "" })
         val broadcast =
-            fields.getOrNull(2)
+            fields
+                .getOrNull(2)
                 ?.takeIf { WolMagicPacket.broadcastProblem(it) == null }
                 ?: WakeOnLanViewModel.DEFAULT_BROADCAST
         val port =
-            fields.getOrNull(3)
+            fields
+                .getOrNull(3)
                 ?.toIntOrNull()
                 ?.takeIf { it in WakeOnLanParams.MIN_PORT..WakeOnLanParams.MAX_PORT }
                 ?: WakeOnLanViewModel.DEFAULT_PORT

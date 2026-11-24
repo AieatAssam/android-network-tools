@@ -72,13 +72,14 @@ class WifiBandSelectionTest {
 
     @Test
     fun `filtered lists are computed when the state is built`() {
-        val result = WifiScanResult(
-            accessPoints = listOf(ap("A", WifiBand.BAND_2_4GHZ, -40), ap("B", WifiBand.BAND_5GHZ, -60)),
-            channels = emptyList(),
-            connectedNetwork = null,
-            scanTimestampMs = 0L,
-            isWifiEnabled = true,
-        )
+        val result =
+            WifiScanResult(
+                accessPoints = listOf(ap("A", WifiBand.BAND_2_4GHZ, -40), ap("B", WifiBand.BAND_5GHZ, -60)),
+                channels = emptyList(),
+                connectedNetwork = null,
+                scanTimestampMs = 0L,
+                isWifiEnabled = true,
+            )
 
         val state = WifiScanUiState.Success(result = result, bandFilter = WifiBand.BAND_5GHZ)
 
@@ -86,25 +87,30 @@ class WifiBandSelectionTest {
         assertEquals(listOf("B"), state.filteredNetworks.map { it.displaySsid })
     }
 
-    private fun ap(ssid: String, band: WifiBand, rssi: Int) =
-        WifiAccessPoint(
-            ssid = ssid,
-            bssid = "AA:BB:CC:DD:EE:%02X".format(ssid.first().code),
-            rssi = rssi,
-            frequency = if (band == WifiBand.BAND_2_4GHZ) 2412 else 5180,
-            channelWidthMhz = 20,
-            capabilities = "[WPA2-PSK-CCMP][ESS]",
-            channel = if (band == WifiBand.BAND_2_4GHZ) 1 else 36,
-            band = band,
-            standard = WifiStandard.WIFI_5,
-            security = WifiSecurity.WPA2,
-            isConnected = false,
-            vendor = "",
-            centerFrequency0 = 0,
-            centerFrequency1 = 0,
-            timestampUs = 0,
-        )
+    private fun ap(
+        ssid: String,
+        band: WifiBand,
+        rssi: Int,
+    ) = WifiAccessPoint(
+        ssid = ssid,
+        bssid = "AA:BB:CC:DD:EE:%02X".format(ssid.first().code),
+        rssi = rssi,
+        frequency = if (band == WifiBand.BAND_2_4GHZ) 2412 else 5180,
+        channelWidthMhz = 20,
+        capabilities = "[WPA2-PSK-CCMP][ESS]",
+        channel = if (band == WifiBand.BAND_2_4GHZ) 1 else 36,
+        band = band,
+        standard = WifiStandard.WIFI_5,
+        security = WifiSecurity.WPA2,
+        isConnected = false,
+        vendor = "",
+        centerFrequency0 = 0,
+        centerFrequency1 = 0,
+        timestampUs = 0,
+    )
 
-    private fun network(ssid: String, vararg aps: WifiAccessPoint) =
-        WifiNetwork(ssid = ssid, security = WifiSecurity.WPA2, accessPoints = aps.toList())
+    private fun network(
+        ssid: String,
+        vararg aps: WifiAccessPoint,
+    ) = WifiNetwork(ssid = ssid, security = WifiSecurity.WPA2, accessPoints = aps.toList())
 }

@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class HomeScreenGroupingTest {
-
     private val sections =
         listOf(
             ToolSection(labelRes = 1, routes = listOf("ping", "dns")),
@@ -52,7 +51,9 @@ class HomeScreenGroupingTest {
 
     @Test
     fun `routes are read through the accessor`() {
-        data class Tool(val route: String)
+        data class Tool(
+            val route: String,
+        )
 
         val grouped = groupBySection(sections, listOf(Tool("tls"))) { it.route }
 
