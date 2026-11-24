@@ -225,9 +225,10 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
                 val displayState = when {
                     uiState.isLoading          -> DisplayState.Loading
                     uiState.isCanceled         -> DisplayState.Canceled
-                    uiState.error != null      -> DisplayState.Error(
-                        uiState.error!!,
+                    uiState.error != null || uiState.errorDescriptionKey != null -> DisplayState.Error(
+                        uiState.error.orEmpty(),
                         uiState.errorDescriptionKey,
+                        uiState.host,
                     )
                     uiState.result != null     -> DisplayState.Success(uiState.result!!)
                     else                       -> DisplayState.Idle
@@ -244,7 +245,7 @@ fun TlsInspectorScreen(viewModel: TlsInspectorViewModel = hiltViewModel()) {
                         is DisplayState.Idle    -> TlsIdlePlaceholder()
                         is DisplayState.Loading -> TlsLoadingContent()
                         is DisplayState.Canceled -> TlsCanceledContent(onRetry = { viewModel.inspect() })
-                        is DisplayState.Error   -> TlsErrorContent(state.message, state.descriptionKey) { viewModel.inspect() }
+                        is DisplayState.Error   -> TlsErrorContent(state.message, state.descriptionKey, state.host) { viewModel.inspect() }
                         is DisplayState.Success -> TlsSuccessContent(state.result)
                     }
                 }
@@ -281,7 +282,7 @@ private sealed class DisplayState {
     object Idle : DisplayState()
     object Loading : DisplayState()
     object Canceled : DisplayState()
-    data class Error(val message: String, val descriptionKey: String?) : DisplayState()
+    data class Error(val message: String, val descriptionKey: String?, val host: String) : DisplayState()
     data class Success(val result: TlsInspectorResult) : DisplayState()
 }
 
@@ -433,12 +434,6 @@ private fun TlsInputSection(
                     modifier  = Modifier.weight(1f)
                 ) {
                     if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier  = Modifier.size(18.dp),
-                            color     = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.tls_inspecting))
                     } else {
                         Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -475,12 +470,6 @@ private fun TlsIdlePlaceholder() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.Lock,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-            )
             Text(
                 text  = stringResource(R.string.tls_idle_title),
                 style = MaterialTheme.typography.titleMedium,
@@ -554,8 +543,13 @@ private fun TlsLoadingContent() {
 // ── Error ─────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun TlsErrorContent(message: String, descriptionKey: String?, onRetry: () -> Unit) {
+private fun TlsErrorContent(message: String, descriptionKey: String?, host: String, onRetry: () -> Unit) {
     val visibleMessage = when (descriptionKey) {
+        TlsInputErrorKeys.HOST_BLANK -> stringResource(R.string.err_host_blank)
+        TlsInputErrorKeys.HOST_INVALID ->
+            stringResource(HostValidator.problemOf(host)?.messageRes() ?: R.string.err_host_invalid)
+        TlsInputErrorKeys.PORT_INVALID -> stringResource(R.string.tls_port_invalid)
+        TlsInputErrorKeys.INSPECTION_FAILED -> stringResource(R.string.err_tls_inspection_failed)
         TlsInspectorErrorKeys.PIN_INVALID_DESCRIPTION -> stringResource(R.string.tls_pin_invalid)
         TlsInspectorErrorKeys.NOT_TLS_PORT_DESCRIPTION -> stringResource(R.string.tls_not_tls_port)
         TlsInspectorErrorKeys.HANDSHAKE_REJECTED_DESCRIPTION -> stringResource(R.string.tls_handshake_rejected)
@@ -595,11 +589,10 @@ private fun TlsSuccessContent(result: TlsInspectorResult) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ConnectionCard(result)
         result.chain.forEachIndexed { index, cert ->
-            val certLabel = when {
-                result.chain.size == 1 -> stringResource(R.string.tls_cert_leaf)
-                index == 0             -> stringResource(R.string.tls_cert_leaf)
-                index == result.chain.size - 1 -> stringResource(R.string.tls_cert_root)
-                else                   -> stringResource(R.string.tls_cert_intermediate)
+            val certLabel = when (certificateRoleOf(index, result.chain)) {
+                TlsCertificateRole.LEAF -> stringResource(R.string.tls_cert_leaf)
+                TlsCertificateRole.INTERMEDIATE -> stringResource(R.string.tls_cert_intermediate)
+                TlsCertificateRole.ROOT -> stringResource(R.string.tls_cert_root)
             }
             CertificateCard(
                 cert      = cert,
@@ -625,6 +618,11 @@ private fun TlsSuccessContent(result: TlsInspectorResult) {
 
 @Composable
 private fun ConnectionCard(result: TlsInspectorResult) {
+    val accent = if (result.isConnectionTrusted) {
+        listOf(StatusGood, StatusBlue)
+    } else {
+        listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)
+    }
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // Gradient header
@@ -635,7 +633,7 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                         .height(4.dp)
                 ) {
                     drawRect(
-                        brush = Brush.linearGradient(listOf(StatusGood, StatusBlue))
+                        brush = Brush.linearGradient(accent)
                     )
                 }
             }
@@ -681,6 +679,14 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                     label = stringResource(R.string.tls_version),
                     value = result.tlsVersion
                 )
+                result.hostnameMatches?.let { matches ->
+                    LabeledValue(
+                        label = stringResource(R.string.tls_hostname_label),
+                        value = stringResource(
+                            if (matches) R.string.tls_hostname_matches else R.string.tls_hostname_does_not_match,
+                        ),
+                    )
+                }
                 LabeledValue(
                     label = stringResource(R.string.tls_cipher_suite),
                     value = withSeparatorBreaks(result.cipherSuite)
@@ -718,24 +724,35 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                         fontWeight = FontWeight.SemiBold,
                     )
                     result.chainIssues.forEach { issue ->
+                        val blocking = issue.isBlocking
                         Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = if (blocking) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp),
+                            )
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Surface(
                                     shape = MaterialTheme.shapes.small,
-                                    color = MaterialTheme.colorScheme.errorContainer,
+                                    color = if (blocking) MaterialTheme.colorScheme.errorContainer
+                                    else MaterialTheme.colorScheme.secondaryContainer,
                                 ) {
                                     Text(
-                                        issue.name,
+                                        stringResource(
+                                            if (blocking) R.string.tls_finding_blocking else R.string.tls_finding_advisory,
+                                        ),
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        color = if (blocking) MaterialTheme.colorScheme.onErrorContainer
+                                        else MaterialTheme.colorScheme.onSecondaryContainer,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                     )
                                 }
                                 Text(
                                     issueText(issue, result.untrustedRootName),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error,
+                                    color = if (blocking) MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
@@ -914,7 +931,7 @@ private fun CertificateDetails(cert: TlsCertificate) {
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
         // Issuer
-        LabeledValue(stringResource(R.string.tls_issuer_cn),  cert.issuerCN.ifBlank { "N/A" })
+        LabeledValue(stringResource(R.string.tls_issuer_cn),  cert.issuerCN.ifBlank { stringResource(R.string.tls_unknown_cn) })
         cert.issuerOrg?.let { LabeledValue(stringResource(R.string.tls_issuer_org), it) }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -1030,7 +1047,7 @@ private fun formatDate(epochMs: Long): String =
         .format(dateFormatter)
 
 internal fun buildTlsShareText(result: TlsInspectorResult): String = buildString {
-    appendLine("TLS – ${result.host}:${result.port}")
+    appendLine("TLS: ${result.host}:${result.port}")
     appendLine("Protocol: ${result.tlsVersion}")
     appendLine("Cipher: ${result.cipherSuite}")
     appendLine("Trusted: ${result.isConnectionTrusted}")
@@ -1048,14 +1065,14 @@ internal fun buildTlsShareText(result: TlsInspectorResult): String = buildString
     if (result.chainIssues.isNotEmpty()) appendLine("Findings: ${result.chainIssues.joinToString { it.name }}")
     appendLine()
     result.chain.forEachIndexed { index, cert ->
-        val label = when {
-            result.chain.size == 1 || index == 0 -> "Leaf"
-            index == result.chain.size - 1 -> "Root"
-            else -> "Intermediate"
+        val label = when (certificateRoleOf(index, result.chain)) {
+            TlsCertificateRole.LEAF -> "Leaf"
+            TlsCertificateRole.INTERMEDIATE -> "Intermediate"
+            TlsCertificateRole.ROOT -> "Root"
         }
         appendLine("[$label] ${cert.subjectCN}")
         appendLine("  Issuer: ${cert.issuerCN}")
-        appendLine("  Valid: ${formatDate(cert.notBefore)} – ${formatDate(cert.notAfter)}")
+        appendLine("  Valid: ${formatDate(cert.notBefore)} to ${formatDate(cert.notAfter)}")
         if (cert.sans.isNotEmpty()) {
             appendLine("  SANs: ${cert.sans.joinToString(", ")}")
         }
@@ -1067,6 +1084,15 @@ internal fun buildTlsShareText(result: TlsInspectorResult): String = buildString
 internal fun buildTlsPemShareText(result: TlsInspectorResult): String = result.chain
     .mapNotNull { it.pemEncoded.takeIf(String::isNotBlank)?.trim() }
     .joinToString(separator = "\n", postfix = "\n")
+
+/** The role a certificate plays in the chain as served. Servers usually omit the root, so only a self-signed last entry is one. */
+internal enum class TlsCertificateRole { LEAF, INTERMEDIATE, ROOT }
+
+internal fun certificateRoleOf(index: Int, chain: List<TlsCertificate>): TlsCertificateRole = when {
+    index == 0 -> TlsCertificateRole.LEAF
+    index == chain.lastIndex && chain[index].isSelfSigned -> TlsCertificateRole.ROOT
+    else -> TlsCertificateRole.INTERMEDIATE
+}
 
 /** Names the missing issuing root when it is the only finding; otherwise the generic issue text. */
 @Composable

@@ -14,4 +14,13 @@ enum class ChainIssue {
 
     /** The leaf certificate's SHA-256 does not match the expected pin supplied by the user. */
     PIN_MISMATCH,
+    ;
+
+    /** A finding that fails the connection verdict. The others are advisory and do not change it. */
+    val isBlocking: Boolean
+        get() = this in BLOCKING
+
+    private companion object {
+        val BLOCKING = setOf(UNTRUSTED, EXPIRED, NOT_YET_VALID, HOSTNAME_MISMATCH, PIN_MISMATCH)
+    }
 }

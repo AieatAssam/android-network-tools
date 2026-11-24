@@ -1,6 +1,5 @@
 package net.aieat.netswissknife.app.ui.screens.httprobe
 
-import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -69,6 +68,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -76,10 +76,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import android.content.ClipData
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.ClipEntry
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
@@ -92,9 +88,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.aieat.netswissknife.app.ui.components.ResultActionsRow
+import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolRetryButton
@@ -180,8 +179,6 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
             else -> null
         }
     val sourceText: String? = sourceLabel
-    val clipboard = LocalClipboard.current
-    val clipboardScope = rememberCoroutineScope()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -318,10 +315,11 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                         is DisplayState.Error   -> HttpProbeErrorContent(state.message) { viewModel.send() }
                         is DisplayState.BlockedRedirect -> HttpProbeBlockedRedirectContent(state.warning)
                         is DisplayState.Success -> {
-                            val curlCopiedMessage = stringResource(R.string.httprobe_curl_copied)
+                            val copyWithFeedback = rememberCopyWithFeedback()
+                            val redirectText = redirectPlaceholders()
                             val shareSubject = stringResource(
                                 R.string.share_subject_http,
-                                safeRedirectDisplayValue(state.result.request.url),
+                                safeRedirectDisplayValue(state.result.request.url, redirectText),
                             )
                             val shareSizeText = responseSizeText(
                                 state.result,
@@ -331,19 +329,15 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                                 result = state.result,
                                 selectedTab = uiState.selectedTab,
                                 prettyJson = uiState.prettyJson,
+                                resultFromSession = uiState.resultFromSession,
                                 onTabSelected = viewModel::onTabSelected,
                                 onPrettyJsonToggle = viewModel::onPrettyJsonToggle,
                                 onCopyCurl = {
-                                    viewModel.copyAsCurl()?.let { command ->
-                                        clipboardScope.launch {
-                                            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("cURL", command)))
-                                            Toast.makeText(context, curlCopiedMessage, Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
+                                    viewModel.copyAsCurl()?.let(copyWithFeedback)
                                 },
                                 onShare = {
                                     context.shareText(
-                                        text = buildHttpShareText(state.result, shareSizeText),
+                                        text = buildHttpShareText(state.result, shareSizeText, redirectText),
                                         subject = shareSubject
                                     )
                                 }
@@ -405,7 +399,7 @@ private fun CrossOriginEntityReplayApprovalCard(
                 approval.method.name
             ))
             Text(
-                text = safeRedirectDisplayValue(approval.destinationUrl),
+                text = safeRedirectDisplayValue(approval.destinationUrl, redirectPlaceholders()),
                 style = MaterialTheme.typography.bodyMedium,
                 fontFamily = FontFamily.Monospace
             )
@@ -461,7 +455,7 @@ private fun HttpProbeBlockedRedirectContent(warning: BlockedHttpRedirectWarning)
 @Composable
 private fun RedirectEvidenceLine(label: Int, value: String) {
     Text(
-        text = stringResource(label, safeRedirectDisplayValue(value)),
+        text = stringResource(label, safeRedirectDisplayValue(value, redirectPlaceholders())),
         style = MaterialTheme.typography.bodySmall,
         fontFamily = FontFamily.Monospace,
     )
@@ -728,12 +722,6 @@ private fun HttpProbeInputCard(
                     )
                 ) {
                     if (uiState.isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.httprobe_sending))
                     } else {
                         Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -842,19 +830,21 @@ private fun HttpProbeSuccessContent(
     result: HttpProbeResult,
     selectedTab: Int,
     prettyJson: Boolean,
+    resultFromSession: Boolean,
     onTabSelected: (Int) -> Unit,
     onPrettyJsonToggle: () -> Unit,
     onCopyCurl: () -> Unit,
     onShare: () -> Unit
 ) {
     val atLeastFormat = stringResource(R.string.httprobe_response_size_at_least)
+    val redirectText = redirectPlaceholders()
     // Copy sends the same summary as Share: status, headers and timings, never request headers or body.
     val summaryText =
-        remember(result, atLeastFormat) {
-            buildHttpShareText(result, responseSizeText(result, atLeastFormat))
+        remember(result, atLeastFormat, redirectText) {
+            buildHttpShareText(result, responseSizeText(result, atLeastFormat), redirectText)
         }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (CurlExporter.redirectFollowingSuppressed(result.request)) {
+        if (!resultFromSession && CurlExporter.redirectFollowingSuppressed(result.request)) {
             Text(
                 text = stringResource(R.string.httprobe_curl_redirect_safety),
                 style = MaterialTheme.typography.bodySmall,
@@ -908,7 +898,7 @@ private fun HttpProbeSuccessContent(
             ) { tab ->
                 when (tab) {
                     0 -> OverviewTabContent(result)
-                    1 -> HeadersTabContent(result)
+                    1 -> HeadersTabContent(result, resultFromSession)
                     2 -> BodyTabContent(result, prettyJson, onPrettyJsonToggle)
                     3 -> SecurityTabContent(result.securityChecks)
                     else -> OverviewTabContent(result)
@@ -919,7 +909,7 @@ private fun HttpProbeSuccessContent(
             copyText = summaryText,
             onShare = onShare,
             extraActions = {
-                TextButton(
+                if (!resultFromSession) TextButton(
                     onClick = onCopyCurl,
                     modifier = Modifier.testTag(HttpProbeScreenTestTags.COPY_CURL_ACTION),
                 ) {
@@ -963,7 +953,7 @@ private fun StatusBannerCard(result: HttpProbeResult) {
                         )
                     }
                     Text(
-                        text = safeRedirectDisplayValue(result.finalUrl),
+                        text = displayUrl(result.finalUrl),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -979,26 +969,6 @@ private fun StatusBannerCard(result: HttpProbeResult) {
                     )
                     Text(
                         text = stringResource(R.string.httprobe_response_time_label),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            if (result.redirectChain.isNotEmpty()) {
-                HorizontalDivider()
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Info,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = pluralStringResource(R.plurals.httprobe_redirects_label, result.redirectChain.size, result.redirectChain.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1056,7 +1026,7 @@ private fun OverviewTabContent(result: HttpProbeResult) {
                         )
                     }
                     Text(
-                        text = safeRedirectDisplayValue(url),
+                        text = displayUrl(url),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f),
@@ -1125,7 +1095,7 @@ private fun TimingBreakdown(timings: HttpTimings) {
 // ── Headers tab ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun HeadersTabContent(result: HttpProbeResult) {
+private fun HeadersTabContent(result: HttpProbeResult, resultFromSession: Boolean) {
     var showRequest by remember { mutableStateOf(false) }
     var showResponse by remember { mutableStateOf(true) }
 
@@ -1136,7 +1106,13 @@ private fun HeadersTabContent(result: HttpProbeResult) {
             expanded = showRequest,
             onToggle = { showRequest = !showRequest }
         ) {
-            if (result.request.headers.isEmpty()) {
+            if (resultFromSession) {
+                Text(
+                    text = stringResource(R.string.httprobe_request_details_not_kept),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else if (result.request.headers.isEmpty()) {
                 Text(
                     text = stringResource(R.string.httprobe_no_custom_headers),
                     style = MaterialTheme.typography.bodySmall,
@@ -1155,7 +1131,7 @@ private fun HeadersTabContent(result: HttpProbeResult) {
             expanded = showResponse,
             onToggle = { showResponse = !showResponse }
         ) {
-            val displayHeaders = visibleHttpResponseHeaders(result.responseHeaders)
+            val displayHeaders = httpResponseHeadersForDisplay(result.responseHeaders)
             if (displayHeaders.isEmpty()) {
                 Text(
                     text = stringResource(R.string.httprobe_no_headers),
@@ -1237,15 +1213,26 @@ private fun HeaderRow(key: String, value: String) {
 
 // ── Body tab ──────────────────────────────────────────────────────────────────
 
+private data class JsonFormat(val text: String?)
+
 @Composable
 private fun BodyTabContent(result: HttpProbeResult, prettyJson: Boolean, onPrettyJsonToggle: () -> Unit) {
-    val clipboard = LocalClipboard.current
-    val scope = rememberCoroutineScope()
-
+    val copyWithFeedback = rememberCopyWithFeedback()
     val responseBody = result.responseBody
-    val formattedJson = remember(responseBody, result.responseBodyTruncated) {
-        if (result.responseBodyTruncated) null else responseBody?.let(JsonPrettyPrinter::prettyPrint)
+    val isJson = remember(result.responseHeaders) { isJsonResponse(result.responseHeaders) }
+    val preview = remember(responseBody) { previewBody(responseBody) }
+    val previewBytes = remember(preview) { preview.text?.toByteArray(Charsets.UTF_8)?.size?.toLong() ?: 0L }
+    val jsonUnavailable = result.responseBodyTruncated || preview.truncated
+    // Pretty-printing runs off the composition thread; null means the check has not finished yet.
+    val formattedJson by produceState<JsonFormat?>(initialValue = null, responseBody, isJson, jsonUnavailable) {
+        value =
+            if (!isJson || jsonUnavailable || responseBody == null) {
+                JsonFormat(null)
+            } else {
+                JsonFormat(withContext(Dispatchers.Default) { JsonPrettyPrinter.prettyPrint(responseBody) })
+            }
     }
+    val shownBytes = if (result.responseBodyTruncated) result.responseBodyBytes else previewBytes
 
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -1259,21 +1246,19 @@ private fun BodyTabContent(result: HttpProbeResult, prettyJson: Boolean, onPrett
                 modifier = Modifier.weight(1f)
             )
             if (!responseBody.isNullOrBlank()) {
-                TextButton(
-                    onClick = { scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", responseBody))) } }
-                ) {
+                TextButton(onClick = { copyWithFeedback(responseBody) }) {
                     Text(stringResource(R.string.httprobe_copy_body), style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
 
-        if (result.responseBodyTruncated) {
+        if (result.responseBodyTruncated || preview.truncated) {
             Surface(
                 shape = MaterialTheme.shapes.small,
                 color = MaterialTheme.colorScheme.tertiaryContainer
             ) {
                 Text(
-                    text = stringResource(R.string.httprobe_body_truncated, formatBytes(result.responseBodyBytes)),
+                    text = stringResource(R.string.httprobe_body_truncated, formatBytes(shownBytes)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -1288,33 +1273,36 @@ private fun BodyTabContent(result: HttpProbeResult, prettyJson: Boolean, onPrett
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(stringResource(R.string.httprobe_pretty_json), style = MaterialTheme.typography.labelMedium)
-                Text(
-                    stringResource(
+            if (isJson) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(stringResource(R.string.httprobe_pretty_json), style = MaterialTheme.typography.labelMedium)
+                    val validityLabel =
                         when {
-                            result.responseBodyTruncated -> R.string.httprobe_json_incomplete
-                            formattedJson != null -> R.string.httprobe_json_valid
+                            jsonUnavailable -> R.string.httprobe_json_incomplete
+                            formattedJson == null -> R.string.httprobe_json_checking
+                            formattedJson?.text != null -> R.string.httprobe_json_valid
                             else -> R.string.httprobe_json_invalid
                         }
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = when {
-                        result.responseBodyTruncated -> MaterialTheme.colorScheme.onSurfaceVariant
-                        formattedJson != null -> StatusGoodDeep
-                        else -> StatusWarnDeep
-                    },
-                )
-                Switch(
-                    checked = prettyJson,
-                    onCheckedChange = { onPrettyJsonToggle() },
-                    enabled = formattedJson != null && !result.responseBodyTruncated,
-                    modifier = Modifier.testTag(HttpProbeScreenTestTags.PRETTY_JSON_SWITCH),
-                )
+                    Text(
+                        stringResource(validityLabel),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = when {
+                            jsonUnavailable || formattedJson == null -> MaterialTheme.colorScheme.onSurfaceVariant
+                            formattedJson?.text != null -> StatusGoodDeep
+                            else -> StatusWarnDeep
+                        },
+                    )
+                    Switch(
+                        checked = prettyJson,
+                        onCheckedChange = { onPrettyJsonToggle() },
+                        enabled = formattedJson?.text != null && !jsonUnavailable,
+                        modifier = Modifier.testTag(HttpProbeScreenTestTags.PRETTY_JSON_SWITCH),
+                    )
+                }
             }
             Box(
                 modifier = Modifier
@@ -1324,7 +1312,7 @@ private fun BodyTabContent(result: HttpProbeResult, prettyJson: Boolean, onPrett
                     .padding(12.dp)
             ) {
                 Text(
-                    text = if (prettyJson) formattedJson ?: responseBody else responseBody,
+                    text = (if (prettyJson) formattedJson?.text else null) ?: preview.text.orEmpty(),
                     style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1342,11 +1330,13 @@ private fun SecurityTabContent(checks: List<SecurityHeaderCheck>) {
         val passCount = checks.count { it.rating == SecurityRating.PASS }
         val warnCount = checks.count { it.rating == SecurityRating.WARN }
         val failCount = checks.count { it.rating == SecurityRating.FAIL }
+        val infoCount = checks.count { it.rating == SecurityRating.INFO }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SecuritySummaryChip(count = passCount, label = stringResource(R.string.security_rating_pass), color = StatusGoodDeep)
             SecuritySummaryChip(count = warnCount, label = stringResource(R.string.security_rating_warn), color = StatusWarnDeep)
             SecuritySummaryChip(count = failCount, label = stringResource(R.string.security_rating_fail), color = MaterialTheme.colorScheme.error)
+            SecuritySummaryChip(count = infoCount, label = stringResource(R.string.security_rating_info), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
         HorizontalDivider()
@@ -1435,6 +1425,14 @@ private fun SecurityCheckRow(check: SecurityHeaderCheck) {
 }
 
 @Composable
+private fun redirectPlaceholders(): RedirectPlaceholders =
+    RedirectPlaceholders(
+        address = stringResource(R.string.httprobe_redirect_address_omitted),
+        path = stringResource(R.string.httprobe_path_omitted),
+        query = stringResource(R.string.httprobe_query_omitted),
+    )
+
+@Composable
 private fun securityDescription(check: SecurityHeaderCheck): String = when (check.descriptionKey) {
     "httprobe_sec_hsts_pass_strong" -> stringResource(R.string.httprobe_sec_hsts_pass_strong)
     "httprobe_sec_hsts_short" -> stringResource(R.string.httprobe_sec_hsts_short)
@@ -1446,6 +1444,7 @@ private fun securityDescription(check: SecurityHeaderCheck): String = when (chec
     "httprobe_sec_xfo_via_csp" -> stringResource(R.string.httprobe_sec_xfo_via_csp)
     "httprobe_sec_xss_protection_absent" -> stringResource(R.string.httprobe_sec_xss_protection_absent)
     "httprobe_sec_xss_protection_deprecated" -> stringResource(R.string.httprobe_sec_xss_protection_deprecated)
+    "httprobe_sec_document_header_not_applicable" -> stringResource(R.string.httprobe_sec_document_header_not_applicable)
     "httprobe_sec_cookie_flags_complete" -> stringResource(R.string.httprobe_sec_cookie_flags_complete)
     "httprobe_sec_cookie_missing_secure" -> stringResource(R.string.httprobe_sec_cookie_missing_secure)
     "httprobe_sec_cookie_missing_httponly" -> stringResource(R.string.httprobe_sec_cookie_missing_httponly)
@@ -1476,7 +1475,7 @@ private fun SecurityRatingBadge(rating: SecurityRating) {
         SecurityRating.FAIL -> Triple(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.error, stringResource(R.string.security_rating_fail))
         SecurityRating.INFO -> Triple(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant, stringResource(R.string.security_rating_info))
     }
-    val badgeLabel = label.uppercase()
+    val badgeLabel = label
     Surface(shape = MaterialTheme.shapes.small, color = bg) {
         Text(
             text = badgeLabel,
@@ -1565,22 +1564,22 @@ private fun timingColor(ms: Long): Color = when {
 }
 
 /**
- * A bounded read never sees past the cap, so the buffered count is the true
- * total only when nothing was truncated. Once it was, fall back to the server's
- * Content-Length, and otherwise say "at least N" rather than presenting a
- * buffered prefix as if it were the whole body.
+ * A bounded read never sees past the cap, so the buffered count is the true total only when nothing
+ * was truncated. Once it was, the server's Content-Length is used only for an uncompressed body; a
+ * compressed body's Content-Length counts wire bytes, so the size is shown as "at least" instead.
  */
-private fun responseSizeText(result: HttpProbeResult, atLeastFormat: String): String {
-    val declared = result.declaredBodyBytes
-    return when {
-        // A complete read counted every byte, so it is exact. Content-Length is
-        // not: HttpURLConnection gunzips transparently, so on a compressed
-        // response the header describes the wire size, not what was decoded.
-        !result.responseBodyTruncated -> formatBytes(result.responseBodyBytes)
-        declared != null -> formatBytes(declared)
-        else -> atLeastFormat.format(formatBytes(result.responseBodyBytes))
+private fun responseSizeText(result: HttpProbeResult, atLeastFormat: String): String =
+    when (
+        responseSizeKind(
+            truncated = result.responseBodyTruncated,
+            declaredBytes = result.declaredBodyBytes,
+            contentEncoded = hasContentEncoding(result.responseHeaders),
+        )
+    ) {
+        ResponseSizeKind.EXACT -> formatBytes(result.responseBodyBytes)
+        ResponseSizeKind.DECLARED -> formatBytes(result.declaredBodyBytes ?: result.responseBodyBytes)
+        ResponseSizeKind.AT_LEAST -> atLeastFormat.format(formatBytes(result.responseBodyBytes))
     }
-}
 
 /** Shown while the URL is plain http://, because the request and response are readable on the network. */
 @Composable

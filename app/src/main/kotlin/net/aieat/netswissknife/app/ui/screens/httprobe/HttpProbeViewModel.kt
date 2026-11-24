@@ -81,6 +81,8 @@ data class HttpProbeUiState(
     val selectedTab: Int = 0,
     val headersExpanded: Boolean = false,
     val prettyJson: Boolean = false,
+    /** True when [result] was restored from session memory, which keeps no request headers or body. */
+    val resultFromSession: Boolean = false,
 )
 
 /** [ToolSessionMemory] slot for the HTTP Probe URL, method, redirect flag and last finished result. */
@@ -169,6 +171,7 @@ class HttpProbeViewModel @Inject constructor(
                 method = restoredSession?.method ?: HttpMethod.GET,
                 followRedirects = restoredSession?.followRedirects ?: true,
                 result = restoredSession?.takeIf { it.url == initialUrl }?.result,
+                resultFromSession = restoredSession?.takeIf { it.url == initialUrl }?.result != null,
             ),
         )
     val uiState: StateFlow<HttpProbeUiState> = _uiState.asStateFlow()
@@ -257,7 +260,11 @@ class HttpProbeViewModel @Inject constructor(
     fun onPrettyJsonToggle() = _uiState.update { it.copy(prettyJson = !it.prettyJson) }
 
     /** Returns a shell-safe command for the current successful request, if one is available. */
-    fun copyAsCurl(): String? = _uiState.value.result?.let { CurlExporter.build(it.request) }
+    fun copyAsCurl(): String? {
+        val state = _uiState.value
+        if (state.resultFromSession) return null
+        return state.result?.let { CurlExporter.build(it.request) }
+    }
 
     fun respondToEntityReplayApproval(runId: String, approvalId: String, approved: Boolean) {
         val active = activeReplayDecision ?: return
@@ -274,7 +281,7 @@ class HttpProbeViewModel @Inject constructor(
     }
 
     fun addHeader() {
-        updateRequestInput { it.copy(customHeaders = it.customHeaders + HeaderEntry()) }
+        updateRequestInput { it.copy(customHeaders = it.customHeaders + HeaderEntry(), headersExpanded = true) }
     }
 
     fun removeHeader(index: Int) {
@@ -326,6 +333,7 @@ class HttpProbeViewModel @Inject constructor(
                 isCanceling = false,
                 isCanceled = false,
                 result = null,
+                resultFromSession = false,
                 error = null,
                 errorInfo = null,
                 blockedRedirectWarning = null,
@@ -481,6 +489,7 @@ class HttpProbeViewModel @Inject constructor(
                 isCanceling = false,
                 isCanceled = false,
                 result = null,
+                resultFromSession = false,
                 error = null,
                 errorInfo = null,
                 blockedRedirectWarning = null,
