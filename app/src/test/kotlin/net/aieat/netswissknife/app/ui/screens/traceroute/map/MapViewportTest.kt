@@ -199,4 +199,37 @@ class MapViewportTest {
             assertNull(nearestPointIndex(emptyList(), 0f, 0f, radiusPx = 24f))
         }
     }
+
+    @Nested
+    @DisplayName("following a live route")
+    inner class Follow {
+        // 400 x 200 px at 2 px per degree: 200 degrees across, 100 degrees down, centred on 0, 0.
+        private val view = MapViewport(centerLon = 0.0, centerLat = 0.0, pxPerDegree = 2.0)
+
+        @Test
+        fun `a point well inside the view is shown`() {
+            assertTrue(view.shows(lat = 10.0, lon = 20.0, widthPx = 400f, heightPx = 200f, marginFraction = 0.1))
+        }
+
+        @Test
+        fun `a point outside the view, or inside its margin, is not shown`() {
+            assertFalse(view.shows(lat = 0.0, lon = 120.0, widthPx = 400f, heightPx = 200f, marginFraction = 0.1))
+            assertFalse(view.shows(lat = 60.0, lon = 0.0, widthPx = 400f, heightPx = 200f, marginFraction = 0.0))
+            // 95 degrees east is inside the view but within its 10% margin.
+            assertFalse(view.shows(lat = 0.0, lon = 95.0, widthPx = 400f, heightPx = 200f, marginFraction = 0.1))
+        }
+
+        @Test
+        fun `moving between two views starts at one, ends at the other and zooms evenly`() {
+            val target = MapViewport(centerLon = 100.0, centerLat = -20.0, pxPerDegree = 8.0)
+
+            assertEquals(view, view.lerp(target, 0f))
+            assertEquals(target, view.lerp(target, 1f))
+            val halfway = view.lerp(target, 0.5f)
+            assertEquals(50.0, halfway.centerLon, eps)
+            assertEquals(-10.0, halfway.centerLat, eps)
+            // Zoom is interpolated on a log scale: halfway between 2x and 8x is 4x.
+            assertEquals(4.0, halfway.pxPerDegree, eps)
+        }
+    }
 }

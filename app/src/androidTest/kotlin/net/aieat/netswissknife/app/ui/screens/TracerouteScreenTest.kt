@@ -598,4 +598,48 @@ class TracerouteScreenTest {
             .assertIsDisplayed()
         composeRule.mainClock.autoAdvance = false
     }
+
+    @Test
+    fun finishedState_foldsSilentHopsAndSaysWhereRepliesStopped() {
+        val silent = (2..4).map { HopResult(it, null, null, null, HopStatus.TIMEOUT) }
+        showFinished(TracerouteUiState.Finished(mapResult(listOf(fakeHop(1, "10.0.0.1")) + silent)))
+
+        composeRule.onNodeWithTag("traceroute_no_reply_run").performScrollTo().assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.traceroute_summary_silent_after, 1, 2, 4))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.mainClock.autoAdvance = false
+    }
+
+    @Test
+    fun runningState_mapTabDrawsTheRouteSoFar() {
+        val hops = listOf(locatedHop(2, "London", 51.5074, -0.1278, 12), locatedHop(3, "Manchester", 53.4808, -2.2426, 18))
+        showFinished(TracerouteUiState.Running(host = "example.com", hops = hops, viewMode = mapMode))
+
+        composeRule.onNodeWithTag("traceroute_map_canvas").performScrollTo().assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.traceroute_map_marker_head))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.mainClock.autoAdvance = false
+    }
+
+    @Test
+    fun finishingTrace_keepsTheMapTabAndDropsTheLiveMarker() {
+        val hops = listOf(locatedHop(2, "London", 51.5074, -0.1278, 12), locatedHop(3, "Manchester", 53.4808, -2.2426, 18))
+        val stateFlow =
+            MutableStateFlow<TracerouteUiState>(
+                TracerouteUiState.Running(host = "example.com", hops = hops, viewMode = mapMode, traceId = 7),
+            )
+        showScreen(fakeViewModel(flow = stateFlow))
+        composeRule.onNodeWithTag("traceroute_map_canvas").performScrollTo().assertIsDisplayed()
+
+        stateFlow.value = TracerouteUiState.Finished(mapResult(hops), viewMode = mapMode, traceId = 7)
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("traceroute_map_canvas").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.traceroute_map_marker_head)).assertDoesNotExist()
+        composeRule.mainClock.autoAdvance = false
+    }
 }

@@ -659,7 +659,7 @@
     <string name="traceroute_screen_subtitle">Trace the network path hop by hop to any host</string>
 
     <!-- Traceroute Input -->
-    <string name="traceroute_config_title">Trace Configuration</string>
+    <string name="traceroute_config_title">Trace configuration</string>
     <string name="traceroute_host_label">Host or IP address</string>
     <string name="traceroute_host_placeholder">e.g. google.com or 8.8.8.8</string>
     <string name="traceroute_max_hops_label">Max hops</string>
@@ -670,8 +670,10 @@
     <string name="traceroute_probes_per_hop_label">Probes per hop</string>
     <string name="traceroute_mtu_discovery_label">MTU discovery (auto packet size)</string>
     <string name="traceroute_packet_size_label">Packet size</string>
-    <string name="traceroute_start_button">Start Trace</string>
-    <string name="traceroute_start_disabled_hint">Enter a host to enable Start Trace.</string>
+    <string name="traceroute_packet_size_value">%1$d B</string>
+    <string name="traceroute_timeout_value">%1$.1f s</string>
+    <string name="traceroute_start_button">Start trace</string>
+    <string name="traceroute_start_disabled_hint">Enter a host to enable Start trace.</string>
     <string name="traceroute_stop_button">Stop</string>
     <string name="traceroute_canceling_button">Stopping…</string>
     <string name="traceroute_retry_button">Retry</string>
@@ -679,7 +681,7 @@
 
     <!-- Traceroute States -->
     <string name="traceroute_idle_title">Enter a host to trace</string>
-    <string name="traceroute_idle_subtitle">Supports hostnames and IPv4 addresses. Shows each hop with geolocation and journey statistics.</string>
+    <string name="traceroute_idle_subtitle">Supports hostnames and IPv4 addresses. Shows each hop that replies, where it is when its location is known, and the route on a map.</string>
     <string name="traceroute_running_title">Tracing to %1$s…</string>
     <string name="traceroute_canceling_title">Stopping trace…</string>
     <string name="traceroute_canceling_subtitle">Waiting for probe cleanup. Any hops found will be kept.</string>
@@ -703,30 +705,46 @@
         <item quantity="other">%1$d hops discovered so far</item>
     </plurals>
     <string name="traceroute_error_title">Trace failed</string>
+    <string name="traceroute_error_no_route">No network is available. Connect to a network, then try again.</string>
+    <string name="traceroute_error_local_permission">Traceroute needs the local network permission to send probes.</string>
+    <string name="traceroute_error_unavailable">Traceroute cannot run on this network right now.</string>
+    <string name="traceroute_error_too_long">This trace could take more than 20 minutes. Lower max hops, probes per hop or the timeout.</string>
+    <string name="traceroute_error_host_not_found">Could not find an address for %1$s. Check the name, then try again.</string>
+    <string name="traceroute_error_lookup_timeout">Looking up %1$s took too long. Try again.</string>
+    <string name="traceroute_error_engine_unavailable">The probe engine could not start on this device.</string>
+    <string name="traceroute_error_generic">The trace could not be completed.</string>
+    <string name="traceroute_error_timed_out">The trace timed out.</string>
+    <string name="traceroute_error_interrupted">The trace was interrupted.</string>
+    <string name="traceroute_error_no_hops">No hop replied on the way to %1$s.</string>
 
     <!-- Traceroute Results -->
-    <string name="traceroute_result_header">Trace Results</string>
-    <!-- Traceroute Journey Statistics -->
-    <string name="traceroute_stats_title">Journey Intelligence</string>
-    <string name="traceroute_stats_geo_section">GEOGRAPHIC JOURNEY</string>
-    <string name="traceroute_stats_rtt_section">RTT ANALYSIS</string>
+    <string name="traceroute_result_header">Trace results</string>
+    <string name="traceroute_summary_destination_rtt">Destination RTT: %1$d ms at hop %2$d</string>
+    <string name="traceroute_summary_last_reply">Last reply: hop %1$d, %2$d ms</string>
+    <string name="traceroute_summary_silent_after">No replies after hop %1$d. Hops %2$d to %3$d were probed and did not answer.</string>
+    <string name="traceroute_summary_silent_after_one">No reply after hop %1$d. Hop %2$d was probed and did not answer.</string>
+    <plurals name="traceroute_summary_none_replied">
+        <item quantity="one">No hop replied. Hop %1$d was probed.</item>
+        <item quantity="other">No hop replied. Hops 1 to %1$d were probed.</item>
+    </plurals>
+    <string name="traceroute_run_one">Hop %1$d</string>
+    <string name="traceroute_run_range">Hops %1$d to %2$d</string>
+    <plurals name="traceroute_run_no_reply">
+        <item quantity="one">No reply from this hop</item>
+        <item quantity="other">No reply from any of these %1$d hops</item>
+    </plurals>
+    <string name="traceroute_run_after_last_reply">No reply. Probed after the last hop that answered, so these may not be on the route.</string>
+    <!-- Traceroute route geography -->
+    <string name="traceroute_stats_title">Route geography</string>
     <string name="traceroute_stats_distance">Distance</string>
     <string name="traceroute_stats_countries">Countries</string>
-    <string name="traceroute_stats_isps">ISPs</string>
-    <string name="traceroute_stats_packet_speed">Speed vs light</string>
-    <string name="traceroute_stats_packet_speed_value">~%1$d%% of light speed in fibre</string>
-    <string name="traceroute_stats_avg_rtt">Avg RTT</string>
-    <string name="traceroute_stats_min_rtt">Fastest</string>
-    <string name="traceroute_stats_max_rtt">Slowest</string>
-    <string name="traceroute_stats_timeout_rate">Timeouts</string>
-    <string name="traceroute_stats_hop_label">hop %1$d</string>
+    <string name="traceroute_stats_isps">Networks</string>
     <string name="traceroute_stats_country_path">Route: %1$s</string>
     <string name="traceroute_stats_geo_approximate">Locations come from GeoIP data and are approximate. Anycast and cloud addresses can be placed in the wrong country.</string>
     <string name="traceroute_stats_geo_conflict">Some hop locations conflict with the measured round-trip times, so distance, route and speed are hidden.</string>
-    <string name="traceroute_stats_no_geo">No public IPs resolved - geographic stats unavailable</string>
-    <string name="traceroute_stats_light_speed_note">Estimate based on speed of light in fibre ≈ 200 km/ms</string>
-    <string name="traceroute_tab_hops">Hop Details</string>
-    <string name="traceroute_tab_raw">Raw Output</string>
+    <string name="traceroute_stats_no_geo">No hop has a public address with a known location, so there is no route geography to show.</string>
+    <string name="traceroute_tab_hops">Hop details</string>
+    <string name="traceroute_tab_raw">Raw output</string>
     <string name="traceroute_tab_map">Map</string>
     <!-- Traceroute route map -->
     <string name="traceroute_map_starts_at">The route starts at hop %1$d, the first hop with a known location. Your device\'s own location is not shown.</string>
@@ -747,25 +765,40 @@
     <string name="traceroute_map_width_fast">Thick: %1$d%% of light speed or more</string>
     <string name="traceroute_map_width_medium">Medium: %1$d to %2$d%%, or not measurable (under %3$d km, or no RTT increase)</string>
     <string name="traceroute_map_width_slow">Thin: under %1$d%%</string>
-    <string name="traceroute_map_legend_line">Line: how steady the arriving hop\'s replies were</string>
+    <string name="traceroute_map_legend_line">Line pattern: one meaning each</string>
     <string name="traceroute_map_line_solid">Solid: every probe answered and jitter was low</string>
-    <string name="traceroute_map_line_dashed">Dashed: a probe was lost, or jitter was %1$d ms or more and at least %2$d%% of the RTT</string>
-    <string name="traceroute_map_line_dotted">Dotted: path inferred across hops with no reply, no location or a disputed location</string>
-    <string name="traceroute_map_stability_needs_probes">Stability needs 2 or more probes per hop. This trace sent 1, so a solid line here does not mean steady.</string>
+    <string name="traceroute_map_line_dotted">Dotted: a probe was lost, or jitter was %1$d ms or more and at least %2$d%% of the RTT</string>
+    <string name="traceroute_map_line_dash_dot">Dash and dot: one probe answered, so stability is not known</string>
+    <string name="traceroute_map_line_dashed">Grey dashes: hops in between sent no reply or have no reliable location. The path, latency and speed here are unknown.</string>
+    <string name="traceroute_map_stability_needs_probes">Stability needs 2 or more probes per hop. This trace sent 1.</string>
+    <string name="traceroute_map_marker_head">Pulsing ring: the newest located hop while the trace runs</string>
+    <string name="traceroute_map_waiting">No hop located yet. Hops with a public address appear here as their locations arrive.</string>
+    <plurals name="traceroute_map_not_located">
+        <item quantity="one">%1$d hop not yet located</item>
+        <item quantity="other">%1$d hops not yet located</item>
+    </plurals>
+    <plurals name="traceroute_map_off_map">
+        <item quantity="one">%1$d hop after the last located one is not on the map: it sent no reply or has no known location.</item>
+        <item quantity="other">%1$d hops after the last located one are not on the map: they sent no reply or have no known location.</item>
+    </plurals>
+    <string name="traceroute_map_live_description">Trace running</string>
+    <string name="traceroute_map_live_head">newest located hop %1$s</string>
     <string name="traceroute_map_marker_destination">Double ring: the destination answered here</string>
     <string name="traceroute_map_marker_disputed">Hollow marker: GeoIP location contradicted by the measured RTT; not on the drawn route</string>
     <string name="traceroute_map_attribution">Base map: Natural Earth (public domain)</string>
     <string name="traceroute_map_attribution_title">Traceroute map: Natural Earth</string>
     <string name="traceroute_map_attribution_body">The Traceroute route map draws land from Natural Earth 1:110m data, which is in the public domain. The map ships with the app and works offline; no map tiles are downloaded.</string>
-    <string name="traceroute_raw_title">Raw Trace Output</string>
-    <string name="traceroute_stat_hops">Hops</string>
+    <string name="traceroute_raw_title">Raw trace output</string>
+    <string name="traceroute_stat_replied">Hops replied</string>
+    <string name="traceroute_stat_replied_value">%1$d of %2$d</string>
     <string name="traceroute_stat_time">Time</string>
+    <string name="traceroute_stat_time_unknown">Not measured</string>
     <string name="traceroute_stat_reached">Reached</string>
     <string name="traceroute_stat_yes">Yes</string>
     <string name="traceroute_stat_no">No</string>
     <string name="traceroute_resolved_ip">Resolved IP: %1$s</string>
-    <string name="traceroute_hop_timeout">No response (timeout)</string>
-    <string name="traceroute_hop_detail_ip">IP Address</string>
+    <string name="traceroute_hop_timeout">No reply</string>
+    <string name="traceroute_hop_detail_ip">IP address</string>
     <string name="traceroute_hop_detail_hostname">Hostname</string>
     <string name="traceroute_hop_detail_rtt">RTT</string>
     <string name="traceroute_hop_probe_rtts">Probes:</string>
@@ -1341,7 +1374,7 @@
     <!-- Share subjects per tool -->
     <string name="share_subject_ping">Ping – %1$s</string>
     <string name="share_file_unavailable">Unable to share this file.</string>
-    <string name="share_subject_traceroute">Traceroute – %1$s</string>
+    <string name="share_subject_traceroute">Traceroute: %1$s</string>
     <string name="share_subject_ports">Port scan – %1$s</string>
     <string name="share_subject_tls">TLS: %1$s:%2$d</string>
     <string name="share_subject_whois">WHOIS: %1$s</string>
@@ -1499,23 +1532,25 @@
     <!-- Traceroute help -->
     <string name="help_traceroute_title">Traceroute</string>
     <string name="help_traceroute_concept_heading">What is a traceroute?</string>
-    <string name="help_traceroute_concept_body">Every packet carries a small "hop counter" (TTL, or Time To Live) that starts at a number and drops by 1 at every router it passes through. When a router sees the counter hit 0, it discards the packet and sends back a "time exceeded" message - revealing itself. Traceroute exploits this: it sends packets with the counter set to 1, then 2, then 3 and so on, so each router along the path replies in turn, mapping the route your data takes, hop by hop.</string>
+    <string name="help_traceroute_concept_body">Every packet carries a small "hop counter" (TTL, or Time To Live) that starts at a number and drops by 1 at every router it passes through. When a router sees the counter hit 0, it discards the packet and sends back a "time exceeded" message, revealing itself. Traceroute exploits this: it sends packets with the counter set to 1, then 2, then 3 and so on, so each router along the path replies in turn, mapping the route your data takes, hop by hop.</string>
     <string name="help_traceroute_what_heading">What it does</string>
     <string name="help_traceroute_what_body">Discovers the path packets take from your device to a destination by incrementing the IP TTL and recording each router that responds.</string>
     <string name="help_traceroute_params_heading">Key parameters</string>
     <string name="help_traceroute_results_heading">Reading the results</string>
     <string-array name="help_traceroute_params_bullets">
-        <item>Max hops - the highest hop count to try before giving up.</item>
-        <item>Probe protocol - ICMP is more likely to get a reply; UDP mimics the traditional traceroute tool.</item>
-        <item>Probes per hop - how many probes to send at each hop count, to average out inconsistent replies.</item>
+        <item>Max hops: the highest hop count to try before giving up.</item>
+        <item>Probe protocol: ICMP is more likely to get a reply; UDP mimics the traditional traceroute tool.</item>
+        <item>Probes per hop: how many probes to send at each hop count, 3 by default. With 2 or more, each hop shows whether its replies were steady.</item>
+        <item>Timeout per hop: how long to wait for each reply, in steps of 0.5 s.</item>
     </string-array>
     <string-array name="help_traceroute_results_bullets">
-        <item>Each row is one router hop along the path.</item>
-        <item>\'*\' means that router didn\'t respond - common with routers configured to ignore these probes, not necessarily a problem.</item>
-        <item>Journey Intelligence - for public IPs, shows geographic location, RTT analysis, and which ISP owns that hop.</item>
-        <item>Map - draws the route between hops with a known location as arcs on an offline world map. It starts at the first located hop, because your own location is not known.</item>
+        <item>Each row is one hop count, from 1 to the destination. Rows appear as replies arrive, and stay in hop order.</item>
+        <item>\'* * *\' means that hop sent no reply. Many routers are set to ignore these probes, so this is not necessarily a problem. Runs of silent hops are shown as one row.</item>
+        <item>The summary counts the hops that replied out of the hops probed, and says where replies stopped if the destination did not answer.</item>
+        <item>Route geography: for hops with a public address, the country, network and approximate distance. Locations come from GeoIP data and can be wrong.</item>
+        <item>Map: draws the route between located hops on an offline world map, and grows while the trace runs. It starts at the first located hop, because your own location is not known.</item>
         <item>Arc colour is the RTT of the hop it arrives at, the same colours as the hop list. A thicker arc covered more distance per ms of added RTT.</item>
-        <item>A solid arc had every probe answered with low jitter; dashed means lost probes or high jitter; dotted means hops in between did not answer or had no reliable location. Judging stability needs 2 or more probes per hop.</item>
+        <item>Line patterns: solid means every probe answered with low jitter; dotted means lost probes or high jitter; dash and dot means one probe, so stability is not known; grey dashes mean the hops in between are unknown, with no latency or speed shown.</item>
         <item>A hollow marker is a hop whose GeoIP location the measured RTT rules out; it is shown but not joined into the route.</item>
     </string-array>
 

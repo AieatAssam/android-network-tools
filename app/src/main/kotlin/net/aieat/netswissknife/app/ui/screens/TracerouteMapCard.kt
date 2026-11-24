@@ -29,12 +29,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.screens.traceroute.TracerouteViewMode
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.RouteStop
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.TraceRouteMap
+import net.aieat.netswissknife.app.ui.screens.traceroute.map.TrailingHops
 import net.aieat.netswissknife.core.network.traceroute.CountryFlags
 import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
 import net.aieat.netswissknife.core.network.traceroute.HopResult
@@ -67,12 +69,14 @@ internal fun tracerouteViewTabs(modes: List<TracerouteViewMode>): List<Pair<Imag
 
 /**
  * World map of the route: arcs between located hops in hop order, coloured by the arriving
- * hop's RTT, thickened by speed against light in fibre and dashed by reply stability.
- * [colorFor] is the hop list's RTT colour, so both views always agree.
+ * hop's RTT, thickened by speed against light in fibre, with a line pattern for reply stability.
+ * While [live], the map grows as hops arrive. [colorFor] is the hop list's RTT colour, so both
+ * views always agree.
  */
 @Composable
 internal fun TracerouteMapCard(
     hops: List<HopResult>,
+    live: Boolean,
     colorFor: (Long?) -> Color,
     modifier: Modifier = Modifier,
 ) {
@@ -80,7 +84,7 @@ internal fun TracerouteMapCard(
     ElevatedCard(modifier = modifier.fillMaxWidth().testTag("traceroute_map_card")) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (map.isEmpty) {
-                MapEmptyState()
+                MapEmptyState(live)
                 return@Column
             }
             map.firstLocatedHop?.let { first ->
@@ -90,8 +94,15 @@ internal fun TracerouteMapCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            var selectedHop by remember(map) { mutableStateOf<Int?>(null) }
-            RouteMapCanvas(map = map, colorFor = colorFor, selectedHop = selectedHop, onSelect = { selectedHop = it })
+            var selectedHop by remember { mutableStateOf<Int?>(null) }
+            RouteMapCanvas(
+                map = map,
+                live = live,
+                colorFor = colorFor,
+                selectedHop = selectedHop,
+                onSelect = { selectedHop = it },
+            )
+            map.trailing?.let { TrailingHopsNote(it, live) }
             (map.stops + map.disputedStops)
                 .firstOrNull { selectedHop in it.hopNumbers }
                 ?.let { StopCallout(stop = it, colorFor = colorFor) }
@@ -100,7 +111,7 @@ internal fun TracerouteMapCard(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            MapLegend(map = map, colorFor = colorFor)
+            MapLegend(map = map, live = live, colorFor = colorFor)
             Text(
                 text = stringResource(R.string.traceroute_map_attribution),
                 style = MaterialTheme.typography.labelSmall,
@@ -111,8 +122,7 @@ internal fun TracerouteMapCard(
 }
 
 @Composable
-private fun MapEmptyState() {
-    // Same fact, same words as the Journey Intelligence card.
+private fun MapEmptyState(live: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.testTag("traceroute_map_empty")) {
         Icon(
             Icons.Default.FmdGood,
@@ -122,11 +132,43 @@ private fun MapEmptyState() {
         )
         Spacer(Modifier.width(8.dp))
         Text(
-            stringResource(R.string.traceroute_stats_no_geo),
+            stringResource(if (live) R.string.traceroute_map_waiting else R.string.traceroute_stats_no_geo),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/**
+ * Hops after the last stop: those still waiting for a location while the trace runs, and all of them
+ * once it is done.
+ */
+@Composable
+private fun TrailingHopsNote(
+    trailing: TrailingHops,
+    live: Boolean,
+) {
+    val offMap = trailing.notLocated + trailing.noReply
+    val text =
+        when {
+            live && trailing.notLocated > 0 -> {
+                pluralStringResource(R.plurals.traceroute_map_not_located, trailing.notLocated, trailing.notLocated)
+            }
+
+            live || offMap == 0 -> {
+                return
+            }
+
+            else -> {
+                pluralStringResource(R.plurals.traceroute_map_off_map, offMap, offMap)
+            }
+        }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.testTag("traceroute_map_trailing"),
+    )
 }
 
 /** An RTT in the same format as the hop list's RTT badge. */
@@ -145,11 +187,22 @@ private fun stopDescription(stop: RouteStop): String =
         rttText(stop.hops.first().rtTimeMs),
     )
 
-/** Spoken summary of every stop, for the canvas's content description. */
+/** Spoken summary of every stop, and while [live] of the trace's progress, for the canvas description. */
 @Composable
-internal fun mapDescription(map: TraceRouteMap): String {
+internal fun mapDescription(
+    map: TraceRouteMap,
+    live: Boolean,
+): String {
     val parts =
         map.stops.map { stopDescription(it) } +
             map.disputedStops.map { stringResource(R.string.traceroute_map_disputed_description, stopDescription(it)) }
-    return stringResource(R.string.traceroute_map_description, parts.joinToString("; "))
+    val route = stringResource(R.string.traceroute_map_description, parts.joinToString("; "))
+    if (!live) return route
+    val head = map.head?.let { stringResource(R.string.traceroute_map_live_head, it.label) }
+    val pending =
+        map.trailing?.notLocated?.takeIf { it > 0 }?.let {
+            pluralStringResource(R.plurals.traceroute_map_not_located, it, it)
+        }
+    val running = stringResource(R.string.traceroute_map_live_description)
+    return listOfNotNull(running, route, head, pending).joinToString(". ")
 }

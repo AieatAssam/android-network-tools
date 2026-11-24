@@ -26,6 +26,7 @@ import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapViewport
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.RouteSegment
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.RouteStop
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.ScreenPoint
+import net.aieat.netswissknife.app.ui.screens.traceroute.map.SegmentKey
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.SpeedBand
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.Stability
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.TraceRouteMap
@@ -48,6 +49,7 @@ private val MarkerRingWidth = 1.5.dp
 private val DestinationRingRadius = 10.dp
 private val SelectedRingRadius = 13.dp
 private val SelectedRingWidth = 2.dp
+private val HeadRingGrowth = 10.dp
 private val LabelOffset = 8.dp
 private val LabelPadding = 3.dp
 
@@ -125,20 +127,32 @@ internal fun arcWidth(speed: SpeedBand) =
         SpeedBand.SLOW -> ArcWidthSlow
     }
 
+/**
+ * The line pattern of [stability], one meaning each: solid for stable, dotted for unstable, dash-dot for
+ * a single probe, dashed for an unknown path. [patternWidthPx] sets the gaps, so an arc's casing, drawn
+ * wider underneath it, keeps the same rhythm.
+ */
 internal fun arcStroke(
     density: Density,
     widthPx: Float,
     stability: Stability,
+    patternWidthPx: Float = widthPx,
 ): Stroke =
     with(density) {
-        val effect =
+        val gap = patternWidthPx + DotGap.toPx()
+        val intervals =
             when (stability) {
-                Stability.STABLE, Stability.NOT_MEASURED -> null
-                Stability.UNSTABLE -> PathEffect.dashPathEffect(floatArrayOf(DashOn.toPx(), DashOff.toPx()))
-                Stability.INFERRED -> PathEffect.dashPathEffect(floatArrayOf(DOT_DASH_PX, widthPx + DotGap.toPx()))
+                Stability.STABLE -> null
+                Stability.UNSTABLE -> floatArrayOf(DOT_DASH_PX, gap)
+                Stability.NOT_MEASURED -> floatArrayOf(DashOn.toPx(), gap, DOT_DASH_PX, gap)
+                Stability.UNKNOWN -> floatArrayOf(DashOn.toPx(), DashOff.toPx())
             }
-        val cap = if (stability == Stability.INFERRED) StrokeCap.Round else StrokeCap.Butt
-        Stroke(width = widthPx, cap = cap, pathEffect = effect)
+        val round = stability == Stability.UNSTABLE || stability == Stability.NOT_MEASURED
+        Stroke(
+            width = widthPx,
+            cap = if (round) StrokeCap.Round else StrokeCap.Butt,
+            pathEffect = intervals?.let { PathEffect.dashPathEffect(it) },
+        )
     }
 
 private fun arcStyle(
@@ -151,7 +165,7 @@ private fun arcStyle(
     return ArcStyle(
         color = color,
         stroke = arcStroke(density, width, segment.stability),
-        casing = arcStroke(density, casingWidth, segment.stability),
+        casing = arcStroke(density, casingWidth, segment.stability, patternWidthPx = width),
     )
 }
 
@@ -174,34 +188,60 @@ internal fun DrawScope.drawLand(
     }
 }
 
-/** Arcs up to [shown] (one unit per segment), then the stops they have reached. */
+/**
+ * Each arc as far as [shown] has drawn it, then the stops the arcs have reached. [headPulse] is the
+ * phase of the ring around the newest stop while the trace runs, or null once it has finished.
+ */
 internal fun DrawScope.drawRoute(
     drawing: RouteDrawing,
     geometry: MapGeometry,
-    shown: Float,
+    shown: (SegmentKey) -> Float,
     selectedHop: Int?,
+    headPulse: Float?,
 ) {
-    drawArcs(drawing, geometry.arcs, shown)
     val map = drawing.map
+    // The drawing and geometry of one map are replaced together; skip a frame that pairs them across maps.
+    if (geometry.arcs.size != map.segments.size || geometry.stopPoints.size != map.stops.size) return
+    drawArcs(drawing, geometry.arcs, shown)
     map.stops.forEachIndexed { index, stop ->
         // A stop appears once the arc arriving at it has been drawn.
-        if (index > 0 && shown < index) return@forEachIndexed
+        val arriving = map.segments.getOrNull(index - 1)
+        if (arriving != null && shown(arriving.key) < 1f) return@forEachIndexed
         drawStop(stop, geometry.stopPoints[index], index, drawing, selectedHop)
     }
     map.disputedStops.forEachIndexed { index, stop ->
         drawStop(stop, geometry.disputedPoints[index], map.stops.size + index, drawing, selectedHop)
     }
+    val head = map.stops.lastIndex
+    val headDrawn = map.segments.getOrNull(head - 1)?.let { shown(it.key) >= 1f } ?: true
+    if (headPulse != null && head >= 0 && headDrawn) {
+        drawHeadRing(geometry.stopPoints[head], headPulse, drawing.colors.selected)
+    }
+}
+
+private fun DrawScope.drawHeadRing(
+    point: ScreenPoint,
+    pulse: Float,
+    color: Color,
+) {
+    val radius = MarkerRadius.toPx() + HeadRingGrowth.toPx() * pulse
+    drawCircle(
+        color = color.copy(alpha = 1f - pulse),
+        radius = radius,
+        center = Offset(point.x, point.y),
+        style = Stroke(SelectedRingWidth.toPx()),
+    )
 }
 
 private fun DrawScope.drawArcs(
     drawing: RouteDrawing,
     arcs: List<ArcCurve>,
-    shown: Float,
+    shown: (SegmentKey) -> Float,
 ) {
     val path = drawing.arcPath
     val casingColor = drawing.colors.surface.copy(alpha = CASING_ALPHA)
     arcs.forEachIndexed { index, arc ->
-        val fraction = (shown - index).coerceIn(0f, 1f)
+        val fraction = shown(drawing.map.segments[index].key).coerceIn(0f, 1f)
         if (fraction <= 0f) return@forEachIndexed
         val curve = if (fraction < 1f) arc.truncated(fraction) else arc
         path.reset()

@@ -28,7 +28,7 @@ import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.app.platform.OperationAvailability
-import net.aieat.netswissknife.app.platform.denialMessage
+import net.aieat.netswissknife.app.ui.i18n.UiText
 import net.aieat.netswissknife.app.util.enumFromSavedName
 import net.aieat.netswissknife.core.domain.TracerouteFlowResult
 import net.aieat.netswissknife.core.domain.TracerouteParams
@@ -37,8 +37,8 @@ import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationRequirement
 import net.aieat.netswissknife.core.network.operation.OperationSession
-import net.aieat.netswissknife.core.network.resolverErrorMessage
 import net.aieat.netswissknife.core.network.traceroute.HopResult
+import net.aieat.netswissknife.core.network.traceroute.TracerouteHops
 import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
 import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
 import net.aieat.netswissknife.core.network.traceroute.TracerouteResult
@@ -50,9 +50,16 @@ enum class TracerouteViewMode { Visual, Map, Raw }
 sealed interface TracerouteUiState {
     object Idle : TracerouteUiState
 
+    /**
+     * A trace in progress. [hops] are in TTL order and end at the destination; [traceId] stays the same
+     * when this trace moves on to [Canceling], [Canceled] or [Finished], so its view is not rebuilt.
+     */
     data class Running(
         val host: String,
         val hops: List<HopResult>,
+        val viewMode: TracerouteViewMode = TracerouteViewMode.Visual,
+        val rawOutput: String = "",
+        val traceId: Int = 0,
     ) : TracerouteUiState
 
     data class Canceling(
@@ -60,6 +67,9 @@ sealed interface TracerouteUiState {
         val hops: List<HopResult>,
         val operationId: Int,
         val elapsedMs: Long,
+        val viewMode: TracerouteViewMode = TracerouteViewMode.Visual,
+        val rawOutput: String = "",
+        val traceId: Int = 0,
     ) : TracerouteUiState
 
     data class Canceled(
@@ -67,17 +77,23 @@ sealed interface TracerouteUiState {
         val viewMode: TracerouteViewMode = TracerouteViewMode.Visual,
         /** True when the trace stopped because the user left the screen, not because they pressed Stop. */
         val stoppedWhenLeft: Boolean = false,
+        val traceId: Int = 0,
     ) : TracerouteUiState
 
     data class Finished(
         val result: TracerouteResult,
         val viewMode: TracerouteViewMode = TracerouteViewMode.Visual,
         val timeLimitReached: Boolean = false,
+        val traceId: Int = 0,
     ) : TracerouteUiState
 
     data class Error(
+        val text: UiText,
+        /** Developer-facing copy for logs and tests. */
         val message: String,
-    ) : TracerouteUiState
+    ) : TracerouteUiState {
+        constructor(message: String) : this(UiText.Plain(message), message)
+    }
 }
 
 /**
@@ -122,6 +138,12 @@ class TracerouteViewModel
 
             /** [ToolSessionMemory] slot for the form and last terminal result when the tool is left. */
             private const val SESSION_KEY = "traceSession"
+
+            /** Three probes per hop let the map and hop list show loss and jitter. */
+            const val DEFAULT_PROBES_PER_HOP = 3
+
+            /** The timeout moves in half-second steps. */
+            const val TIMEOUT_STEP_MS = 500
         }
 
         // Restore order: a SavedStateHandle value (rotation) wins over the snapshot kept when the tool
@@ -150,7 +172,9 @@ class TracerouteViewModel
         val timeoutMs: StateFlow<Int> = _timeoutMs.asStateFlow()
 
         private val _probesPerHop =
-            MutableStateFlow(savedStateHandle.get<Int>(PROBES_KEY) ?: restoredSession?.probesPerHop ?: 1)
+            MutableStateFlow(
+                savedStateHandle.get<Int>(PROBES_KEY) ?: restoredSession?.probesPerHop ?: DEFAULT_PROBES_PER_HOP,
+            )
         val probesPerHop: StateFlow<Int> = _probesPerHop.asStateFlow()
 
         private val _probeType =
@@ -213,7 +237,8 @@ class TracerouteViewModel
         }
 
         fun onTimeoutChange(value: Int) {
-            _timeoutMs.value = value.coerceIn(500, 30_000)
+            val stepped = (value + TIMEOUT_STEP_MS / 2) / TIMEOUT_STEP_MS * TIMEOUT_STEP_MS
+            _timeoutMs.value = stepped.coerceIn(500, 30_000)
             savedStateHandle[TIMEOUT_KEY] = _timeoutMs.value
         }
 
@@ -241,14 +266,20 @@ class TracerouteViewModel
             savedStateHandle[PACKET_SIZE_KEY] = _packetSize.value
         }
 
-        /** Show [mode] for the current finished or stopped trace; ignored while there is no result. */
+        /** The view the user last picked. A trace keeps it when it finishes, and the next trace opens in it. */
+        private var selectedViewMode = TracerouteViewMode.Visual
+
+        /** Show [mode] for the current trace, running or done; ignored while there is no trace. */
         fun onSelectViewMode(mode: TracerouteViewMode) {
             _uiState.value =
                 when (val current = _uiState.value) {
+                    is TracerouteUiState.Running -> current.copy(viewMode = mode)
+                    is TracerouteUiState.Canceling -> current.copy(viewMode = mode)
                     is TracerouteUiState.Finished -> current.copy(viewMode = mode)
                     is TracerouteUiState.Canceled -> current.copy(viewMode = mode)
                     else -> return
                 }
+            selectedViewMode = mode
         }
 
         fun onStop() {
@@ -276,6 +307,9 @@ class TracerouteViewModel
                     hops = current.hops,
                     operationId = operationId,
                     elapsedMs = elapsedMs,
+                    viewMode = current.viewMode,
+                    rawOutput = current.rawOutput,
+                    traceId = current.traceId,
                 )
             cancelActiveTrace(reason)
         }
@@ -333,7 +367,7 @@ class TracerouteViewModel
                     localNetworkPermissionAllowed = localPermission,
                 )
             if (!availability.allowed) {
-                _uiState.value = TracerouteUiState.Error(availability.denialMessage())
+                _uiState.value = TracerouteErrorText.unavailable(availability)
                 return
             }
 
@@ -343,10 +377,7 @@ class TracerouteViewModel
                     _probesPerHop.value,
                 ) == null
             ) {
-                _uiState.value =
-                    TracerouteUiState.Error(
-                        "Requested trace exceeds the 20-minute time limit; reduce max hops, probes per hop, or timeout",
-                    )
+                _uiState.value = TracerouteErrorText.tooLong()
                 return
             }
 
@@ -364,14 +395,27 @@ class TracerouteViewModel
             val trimmedHost = params.host
             val startedAtNanos = monotonicTimeNs()
             traceStartedAtNanos = startedAtNanos
-            val accumulated = mutableListOf<HopResult>()
-            var terminalError: String? = null
+            var accumulated = emptyList<HopResult>()
+            var terminalError: TracerouteUiState.Error? = null
             var terminalEventReceived = false
             var unreachableFromThisDevice = false
 
             // Transition to Running immediately so the UI responds before the first hop
             // arrives.  If validation fails the first emission will overwrite this with Error.
-            _uiState.value = TracerouteUiState.Running(host = trimmedHost, hops = emptyList())
+            _uiState.value =
+                TracerouteUiState.Running(
+                    host = trimmedHost,
+                    hops = emptyList(),
+                    viewMode = selectedViewMode,
+                    rawOutput = rawOutputOf(trimmedHost, emptyList()),
+                    traceId = generation,
+                )
+
+            fun showRunning() {
+                val current = _uiState.value as? TracerouteUiState.Running ?: return
+                val ordered = TracerouteHops.ordered(accumulated)
+                _uiState.value = current.copy(hops = ordered, rawOutput = rawOutputOf(current.host, ordered))
+            }
 
             traceJob =
                 viewModelScope.launch {
@@ -383,15 +427,12 @@ class TracerouteViewModel
                             when (result) {
                                 is TracerouteFlowResult.ValidationError -> {
                                     terminalEventReceived = true
-                                    terminalError = result.message
+                                    terminalError = TracerouteErrorText.validation(result)
                                 }
 
                                 is TracerouteFlowResult.Hop -> {
-                                    accumulated.add(result.hop)
-                                    val current = _uiState.value
-                                    if (current is TracerouteUiState.Running) {
-                                        _uiState.value = current.copy(hops = accumulated.toList())
-                                    }
+                                    accumulated = TracerouteHops.merge(accumulated, result.hop)
+                                    showRunning()
                                     if (!recentSaved && validatedHost != null) {
                                         saveRecentHostAfterHop(validatedHost)
                                         recentSaved = true
@@ -403,18 +444,16 @@ class TracerouteViewModel
                                 }
 
                                 is TracerouteFlowResult.HopEnriched -> {
-                                    val index = accumulated.indexOfFirst { it.hopNumber == result.hopNumber }
-                                    if (index < 0) return@collect
-                                    val previous = accumulated[index]
-                                    accumulated[index] =
-                                        previous.copy(
-                                            hostname = result.hostname ?: previous.hostname,
-                                            geoLocation = result.geoLocation ?: previous.geoLocation,
-                                        )
-                                    val current = _uiState.value
-                                    if (current is TracerouteUiState.Running) {
-                                        _uiState.value = current.copy(hops = accumulated.toList())
-                                    }
+                                    if (accumulated.none { it.hopNumber == result.hopNumber }) return@collect
+                                    accumulated =
+                                        accumulated.map { previous ->
+                                            if (previous.hopNumber != result.hopNumber) return@map previous
+                                            previous.copy(
+                                                hostname = result.hostname ?: previous.hostname,
+                                                geoLocation = result.geoLocation ?: previous.geoLocation,
+                                            )
+                                        }
+                                    showRunning()
                                 }
                             }
                         }
@@ -422,7 +461,7 @@ class TracerouteViewModel
                         // Cancellation is resolved from the operation reason after collection cleanup.
                         throw e
                     } catch (e: Exception) {
-                        terminalError = resolverErrorMessage(e, trimmedHost) ?: e.message ?: "Traceroute failed"
+                        terminalError = TracerouteErrorText.failure(e, trimmedHost)
                     } finally {
                         val cancellationReason = session.cancellationReason
                         val current = _uiState.value
@@ -431,12 +470,7 @@ class TracerouteViewModel
                             traceJob = null
                             traceStartedAtNanos = null
                         }
-                        val errorMessage =
-                            terminalError ?: when (cancellationReason) {
-                                CancellationReason.DEADLINE_EXCEEDED -> "Traceroute timed out"
-                                null, CancellationReason.USER_STOP, CancellationReason.LIFECYCLE_PAUSE -> null
-                                else -> "Traceroute was interrupted"
-                            }
+                        val errorMessage = terminalError ?: TracerouteErrorText.interrupted(cancellationReason)
                         when {
                             cancellationReason == CancellationReason.DEADLINE_EXCEEDED -> {
                                 val resultHost =
@@ -445,7 +479,7 @@ class TracerouteViewModel
                                         is TracerouteUiState.Canceling -> current.host
                                         else -> trimmedHost
                                     }
-                                val partialHops = accumulated.toList()
+                                val partialHops = TracerouteHops.ordered(accumulated)
                                 _uiState.value =
                                     TracerouteUiState.Finished(
                                         result =
@@ -454,7 +488,9 @@ class TracerouteViewModel
                                                 partialHops,
                                                 elapsedMsSince(startedAtNanos),
                                             ),
+                                        viewMode = selectedViewMode,
                                         timeLimitReached = true,
+                                        traceId = generation,
                                     )
                             }
 
@@ -466,13 +502,15 @@ class TracerouteViewModel
                                 _uiState.value =
                                     TracerouteUiState.Canceled(
                                         result = buildResult(current.host, current.hops, current.elapsedMs),
+                                        viewMode = current.viewMode,
                                         stoppedWhenLeft = cancellationReason == CancellationReason.LIFECYCLE_PAUSE,
+                                        traceId = current.traceId,
                                     )
                             }
 
                             cancellationReason != CancellationReason.LIFECYCLE_PAUSE &&
                                 cancellationReason != CancellationReason.USER_STOP && errorMessage != null -> {
-                                _uiState.value = TracerouteUiState.Error(errorMessage)
+                                _uiState.value = errorMessage
                             }
 
                             cancellationReason == null && traceGeneration == generation &&
@@ -480,21 +518,23 @@ class TracerouteViewModel
                                 _uiState.value =
                                     when {
                                         errorMessage != null -> {
-                                            TracerouteUiState.Error(errorMessage)
+                                            errorMessage
                                         }
 
                                         current.hops.isEmpty() -> {
-                                            TracerouteUiState.Error("No route found to ${current.host}")
+                                            TracerouteErrorText.noHops(current.host)
                                         }
 
                                         else -> {
                                             TracerouteUiState.Finished(
                                                 buildResult(
                                                     current.host,
-                                                    current.hops,
+                                                    TracerouteHops.complete(accumulated),
                                                     elapsedMsSince(startedAtNanos),
                                                     unreachableFromThisDevice,
                                                 ),
+                                                viewMode = current.viewMode,
+                                                traceId = current.traceId,
                                             )
                                         }
                                     }
@@ -568,37 +608,16 @@ class TracerouteViewModel
                 host = host,
                 resolvedIp = ordered.firstNotNullOfOrNull { it.resolvedDestinationIp },
                 hops = ordered,
-                rawOutput = buildRawOutput(host, ordered),
+                rawOutput = rawOutputOf(host, ordered),
                 totalTimeMs = totalMs,
                 unreachableFromThisDevice = unreachableFromThisDevice,
             )
         }
 
-        private fun buildRawOutput(
+        private fun rawOutputOf(
             host: String,
             hops: List<HopResult>,
-        ): String =
-            buildString {
-                val probeLabel =
-                    when (_probeType.value) {
-                        TracerouteProbeType.ICMP -> "ICMP"
-                        TracerouteProbeType.UDP -> "UDP"
-                    }
-                val sizeLabel = if (_packetSize.value == 0) "MTU discovery" else "${_packetSize.value} bytes"
-                appendLine("traceroute to $host, ${_maxHops.value} hops max, $probeLabel, $sizeLabel")
-                hops.forEach { hop ->
-                    val num = "${hop.hopNumber}".padStart(3)
-                    // Same representation as the Hop Details row for a timed-out hop.
-                    if (hop.ip == null) {
-                        appendLine("$num  * * *")
-                        return@forEach
-                    }
-                    val host2 = if (hop.hostname != null) " (${hop.hostname})" else ""
-                    val rtt = if (hop.rtTimeMs != null) " ${hop.rtTimeMs} ms" else " *"
-                    val geo = hop.geoLocation?.let { gl -> " [${gl.city.ifBlank { gl.country }}]" } ?: ""
-                    appendLine("$num  ${hop.ip}$host2$rtt$geo")
-                }
-            }
+        ): String = tracerouteRawOutput(host, hops, _maxHops.value, _probeType.value, _packetSize.value)
 
         private fun elapsedSinceStartMs(): Long = traceStartedAtNanos?.let(::elapsedMsSince) ?: 0L
 
