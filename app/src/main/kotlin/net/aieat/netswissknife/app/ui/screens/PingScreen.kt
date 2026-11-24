@@ -128,6 +128,7 @@ import net.aieat.netswissknife.app.ui.screens.ping.pingAxisLabel
 import net.aieat.netswissknife.app.ui.screens.ping.pingBarFraction
 import net.aieat.netswissknife.app.ui.screens.ping.pingChartSuccessSegments
 import net.aieat.netswissknife.app.ui.screens.ping.pingLossLabel
+import net.aieat.netswissknife.app.ui.screens.ping.pingStartHintVisible
 import net.aieat.netswissknife.app.ui.screens.ping.pingTimeoutLabel
 import net.aieat.netswissknife.app.ui.screens.ping.pingTimeoutOptions
 import net.aieat.netswissknife.app.ui.theme.AppMotion
@@ -562,7 +563,7 @@ private fun PingInputCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(stringResource(R.string.ping_start_button))
                 }
-                if (!canStart) {
+                if (pingStartHintVisible(host)) {
                     // A disabled button needs its reason next to it (PHA-12, V6A-12).
                     DisabledActionHint(stringResource(R.string.ping_start_disabled_hint))
                 }
@@ -693,6 +694,7 @@ private fun PingSliderRow(
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .semantics { contentDescription = label }
                     .then(if (sliderTestTag == null) Modifier else Modifier.testTag(sliderTestTag)),
         )
     }

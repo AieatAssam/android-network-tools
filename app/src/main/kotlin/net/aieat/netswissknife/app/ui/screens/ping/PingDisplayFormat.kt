@@ -6,10 +6,11 @@ import kotlin.math.roundToInt
 /** Packets kept for the live list and the RTT chart of a continuous session. */
 internal const val PING_ROLLING_WINDOW = 100
 
-internal val PING_TIMEOUT_PRESETS_MS = listOf(1_000, 2_000, 3_000, 5_000)
+internal val PING_TIMEOUT_PRESETS_MS = listOf(1_000, 2_000, 3_000, 5_000, 10_000)
 
 private const val MIN_VISIBLE_LOSS_PERCENT = 0.1f
 private const val MILLIS_PER_SECOND = 1_000
+private const val MILLIS_PER_DECISECOND = 100
 
 /** Packet loss as a percentage; a non-zero loss never reads as 0%. */
 internal fun pingLossLabel(lossPercent: Float): String =
@@ -31,10 +32,16 @@ internal fun pingAxisLabel(
         else -> "${rttMs.roundToInt()} $unit"
     }
 
-internal fun pingTimeoutLabel(timeoutMs: Int): String {
-    val seconds = timeoutMs / MILLIS_PER_SECOND
-    return if (timeoutMs % MILLIS_PER_SECOND == 0) "$seconds s" else "$timeoutMs ms"
-}
+/** Timeout in seconds with one decimal place (for example "5.5 s"); milliseconds only for odd values. */
+internal fun pingTimeoutLabel(timeoutMs: Int): String =
+    when {
+        timeoutMs % MILLIS_PER_SECOND == 0 -> "${timeoutMs / MILLIS_PER_SECOND} s"
+        timeoutMs % MILLIS_PER_DECISECOND == 0 -> "%.1f s".format(timeoutMs.toFloat() / MILLIS_PER_SECOND)
+        else -> "$timeoutMs ms"
+    }
+
+/** The start hint explains an empty host only; an invalid host has its own message on the field. */
+internal fun pingStartHintVisible(host: String): Boolean = host.isBlank()
 
 /** Preset timeouts plus the current value, so the selected chip always matches the setting. */
 internal fun pingTimeoutOptions(currentMs: Int): List<Int> = (PING_TIMEOUT_PRESETS_MS + currentMs).distinct().sorted()

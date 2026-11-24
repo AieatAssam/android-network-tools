@@ -14,6 +14,9 @@ val Context.appPreferences: DataStore<Preferences> by preferencesDataStore(name 
 
 /** Values a screen uses when a preference has never been saved. */
 object AppPreferenceDefaults {
+    /** Ping count the Settings screen shows for an unsaved default. */
+    const val PING_COUNT = 10
+
     /** Timeout the Settings screen shows for an unsaved default. */
     const val TIMEOUT_MS = 2_000
 }

@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -122,10 +123,12 @@ import net.aieat.netswissknife.app.ui.i18n.uiLabel
 import net.aieat.netswissknife.app.ui.screens.dns.DnsResponseTone
 import net.aieat.netswissknife.app.ui.screens.dns.DnsUiState
 import net.aieat.netswissknife.app.ui.screens.dns.DnsViewModel
+import net.aieat.netswissknife.app.ui.screens.dns.customServerShowsError
 import net.aieat.netswissknife.app.ui.screens.dns.dnsPullRefreshActive
 import net.aieat.netswissknife.app.ui.screens.dns.dnsRecordIconLabel
 import net.aieat.netswissknife.app.ui.screens.dns.dnsResponseTone
 import net.aieat.netswissknife.app.ui.screens.dns.dnsShowsOwner
+import net.aieat.netswissknife.app.ui.screens.dns.dnsServerAcceptsLookup
 import net.aieat.netswissknife.app.ui.screens.dns.dnsTtlLabel
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
@@ -409,11 +412,7 @@ private fun DnsInputCard(
     val dismissKeyboard = rememberDismissKeyboard()
 
     val isBusy = isLoading || isCanceling
-    val isCustomServerValid =
-        selectedServer !is DnsServer.Custom ||
-            customServerAddress.trim().let {
-                HostValidator.isValidIpv4(it) || HostValidator.isValidIpv6(it)
-            }
+    val isCustomServerValid = dnsServerAcceptsLookup(selectedServer, customServerAddress)
     val domainProblem = domainProblemOf(domain, recordType)
     val domainProblemText = domainProblem?.let { stringResource(dnsNameProblemRes(it, domain)) }
     val domainSupporting: (@Composable () -> Unit)? = domainProblemText?.let { message -> { Text(message) } }
@@ -532,6 +531,8 @@ private fun DnsInputCard(
 
 /** First char code outside 7-bit ASCII; IDN input containing these needs punycode. */
 private const val NON_ASCII_CHAR_CODE = 128
+private const val RECORD_BADGE_SIZE_DP = 36
+private const val RECORD_BADGE_PADDING_DP = 6
 
 /** Pre-submit check for the domain field; null when the lookup may proceed. */
 private fun domainProblemOf(
@@ -654,12 +655,14 @@ private fun DnsServerSelector(
             selectedServer.uiLabel().asString()
         }
 
-    // Custom server addresses must be literal IPs (IPv4 or IPv6).
-    val trimmedCustomAddress = customServerAddress.trim()
-    val isCustomInvalid =
-        selectedServer is DnsServer.Custom &&
-            !HostValidator.isValidIpv4(trimmedCustomAddress) &&
-            !HostValidator.isValidIpv6(trimmedCustomAddress)
+    val isCustomInvalid = customServerShowsError(selectedServer, customServerAddress)
+    val isCustomSelected = selectedServer is DnsServer.Custom
+    val anchorType =
+        if (isCustomSelected) {
+            ExposedDropdownMenuAnchorType.PrimaryEditable
+        } else {
+            ExposedDropdownMenuAnchorType.PrimaryNotEditable
+        }
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -697,7 +700,7 @@ private fun DnsServerSelector(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, enabled = enabled)
+                    .menuAnchor(anchorType, enabled = enabled)
                     .scrollIntoViewOnFocus(),
             shape = AppShapes.medium,
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
@@ -743,8 +746,7 @@ private fun DnsServerSelector(
                     contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
                 )
             }
-            // "Custom…" sentinel at the bottom of the list
-            val isCustomSelected = selectedServer is DnsServer.Custom
+            // "Custom…" opens an empty custom address field.
             DropdownMenuItem(
                 text = {
                     Text(
@@ -761,7 +763,7 @@ private fun DnsServerSelector(
                 },
                 enabled = enabled,
                 onClick = {
-                    onCustomAddressChange("")
+                    onServerChange(DnsServer.Custom(""))
                     expanded = false
                 },
                 contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
@@ -1246,15 +1248,19 @@ private fun RecordTypeIcon(
     Box(
         modifier =
             Modifier
-                .size(36.dp)
+                .height(RECORD_BADGE_SIZE_DP.dp)
+                .widthIn(min = RECORD_BADGE_SIZE_DP.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(bgColor),
+                .background(bgColor)
+                .padding(horizontal = RECORD_BADGE_PADDING_DP.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
             color = iconTint,
+            maxLines = 1,
+            softWrap = false,
         )
     }
 }

@@ -20,14 +20,18 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedSendChannelException
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.app.data.AppPreferenceDefaults
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.data.ToolSessionMemory
@@ -326,13 +330,11 @@ class PingViewModel
                 }
                 savedStateHandle[HANDOFF_CONSUMED_KEY] = true
             }
+            // Settings defaults follow the store while this screen is alive, not only at creation.
             viewModelScope.launch {
-                val prefs = dataStore.data.first()
-                // A kept or saved slider value beats the DataStore default, which would otherwise overwrite it.
-                sliders.applyDefaults(
-                    prefs[AppPreferenceKeys.DEFAULT_PING_COUNT] ?: 10,
-                    prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 2_000,
-                )
+                combine(settingsDefaults(), _uiState) { defaults, state ->
+                    Triple(defaults.first, defaults.second, state is PingUiState.Running)
+                }.collect { (count, timeoutMs, running) -> sliders.applyDefaults(count, timeoutMs, running) }
             }
         }
 
@@ -358,11 +360,11 @@ class PingViewModel
         }
 
         fun onCountChange(value: Int) {
-            _count.setKept(savedStateHandle, COUNT_KEY, value.coerceIn(1, 100))
+            sliders.setCount(value.coerceIn(1, 100))
         }
 
         fun onTimeoutChange(value: Int) {
-            _timeoutMs.setKept(savedStateHandle, TIMEOUT_KEY, value.coerceIn(100, 30_000))
+            sliders.setTimeoutMs(value.coerceIn(100, 30_000))
         }
 
         fun onPayloadSizeChange(value: Int) {
@@ -731,6 +733,12 @@ class PingViewModel
             logAvailable: Boolean,
         ) {
             if (continuousSession !== session) return
+            if (isUnresolvedHostRun(current.packets)) {
+                continuousSession = null
+                session.file.deleteSessionLog()
+                _uiState.value = unresolvedHostState(current.host, current.packets)
+                return
+            }
             val pingsSent = current.pingsSent
             val result =
                 resultBuilder.build(
@@ -773,16 +781,7 @@ class PingViewModel
 
         override fun onCleared() {
             // Only the slider values are kept for Back and return; ping results are not kept.
-            sessionMemory.put(
-                SLIDERS_SESSION_KEY,
-                SliderSnapshot(
-                    count = _count.value,
-                    timeoutMs = _timeoutMs.value,
-                    payloadBytes = _payloadBytes.value,
-                    ttl = _ttl.value,
-                    intervalMs = _intervalMs.value,
-                ),
-            )
+            sessionMemory.put(SLIDERS_SESSION_KEY, sliders.snapshot())
             pingOperationSession?.cancel(CancellationReason.LIFECYCLE_PAUSE)
             pingOperationSession = null
             val sessions = retiringSessions.toList() + listOfNotNull(continuousSession)
@@ -795,6 +794,13 @@ class PingViewModel
             }
             retiringSessions.clear()
         }
+
+        private fun settingsDefaults(): Flow<Pair<Int, Int>> =
+            dataStore.data
+                .map { prefs ->
+                    (prefs[AppPreferenceKeys.DEFAULT_PING_COUNT] ?: AppPreferenceDefaults.PING_COUNT) to
+                        (prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: AppPreferenceDefaults.TIMEOUT_MS)
+                }.distinctUntilChanged()
 
         private fun stopContinuousPing(reason: CancellationReason) {
             val current = _uiState.value

@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
@@ -226,8 +227,9 @@ private fun NavigationSuiteScope.appNavigationSuiteItems(
         item(
             selected = currentRoute == tool.route,
             onClick = { onNavigate(tool.route) },
-            icon = { Icon(tool.icon, contentDescription = null) },
-            label = { Text(stringResource(tool.shortLabelRes)) },
+            // The short label is too terse to announce on its own; the icon carries the full tool name.
+            icon = { Icon(tool.icon, contentDescription = stringResource(tool.labelRes)) },
+            label = { Text(stringResource(tool.shortLabelRes), modifier = Modifier.clearAndSetSemantics { }) },
         )
     }
 
