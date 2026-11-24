@@ -6,9 +6,11 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.Resources
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -51,6 +53,8 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
@@ -160,9 +164,12 @@ import net.aieat.netswissknife.app.ui.theme.StatusGood
 import net.aieat.netswissknife.app.ui.theme.StatusOk
 import net.aieat.netswissknife.app.ui.theme.StatusWarn
 import net.aieat.netswissknife.app.util.shareText
+import net.aieat.netswissknife.core.network.wifi.SignalLevel
 import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
 import net.aieat.netswissknife.core.network.wifi.WifiBand
 import net.aieat.netswissknife.core.network.wifi.WifiNetwork
+import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
+import net.aieat.netswissknife.core.network.wifi.WifiScanResult
 import net.aieat.netswissknife.core.network.wifi.WifiSecurity
 import kotlin.math.roundToInt
 

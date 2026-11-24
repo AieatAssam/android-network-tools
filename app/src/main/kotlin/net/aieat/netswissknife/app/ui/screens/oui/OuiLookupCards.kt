@@ -81,6 +81,7 @@ internal fun OuiResultsContent(
             lowercase = lowercase,
             onLowercaseChange = onLowercaseChange,
             onClear = onClear,
+            onEditInput = onEditInput,
         )
         results.entries.forEach { entry ->
             when (entry) {
@@ -104,6 +105,7 @@ private fun OuiResultsHeader(
     lowercase: Boolean,
     onLowercaseChange: (Boolean) -> Unit,
     onClear: () -> Unit,
+    onEditInput: () -> Unit,
 ) {
     val count = results.entries.size
     ElevatedCard(shape = AppShapes.large, modifier = modifier.fillMaxWidth()) {

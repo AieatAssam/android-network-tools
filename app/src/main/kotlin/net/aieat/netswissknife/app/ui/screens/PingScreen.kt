@@ -764,8 +764,8 @@ private fun PingRunningPanel(state: PingUiState.Running) {
         // Live packet list, bounded to the rolling window in continuous mode
         if (state.packets.isNotEmpty()) {
             val displayLimit = PING_ROLLING_WINDOW
-            val maxRtt = displayPackets.mapNotNull { it.rtTimeMs }.maxOrNull() ?: 0L
             val displayPackets = if (state.isContinuous) state.packets.takeLast(displayLimit) else state.packets
+            val maxRtt = displayPackets.mapNotNull { it.rtTimeMs }.maxOrNull() ?: 0L
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(

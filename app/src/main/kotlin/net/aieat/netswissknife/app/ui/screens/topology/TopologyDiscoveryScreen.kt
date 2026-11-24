@@ -1439,7 +1439,7 @@ private fun TopologyCanvas(
                 for (ip in reportedIps) {
                     val pos = positions[ip] ?: continue
                     val screen = labelPosition(pos)
-                    val radius = TopologyCanvasGeometry.REPORTED_NODE_RADIUS_DP.dp.toPx() * graphScale
+                    val radius = TopologyCanvasGeometry.REPORTED_NODE_RADIUS_DP * pxPerDp * graphScale
 
                     Text(
                         text = stringResource(R.string.topology_reported_neighbor_label, ip),
