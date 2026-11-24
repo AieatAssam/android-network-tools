@@ -27,10 +27,10 @@ private val REGISTRY_SIDE_PREFIXES = setOf("client", "server")
 
 private val KNOWN_LABELS =
     mapOf(
-        "clienttransferprohibited" to "Transfer Locked",
-        "clientdeleteprohibited" to "Delete Locked",
-        "clientupdateprohibited" to "Update Locked",
-        "servertransferprohibited" to "Server Transfer Locked",
+        "clienttransferprohibited" to "Transfer locked",
+        "clientdeleteprohibited" to "Delete locked",
+        "clientupdateprohibited" to "Update locked",
+        "servertransferprohibited" to "Server transfer locked",
         "clienthold" to "Client Hold",
         "pendingdelete" to "Pending Delete",
     )

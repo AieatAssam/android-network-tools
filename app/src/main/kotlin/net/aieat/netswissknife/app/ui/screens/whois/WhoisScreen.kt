@@ -2,20 +2,16 @@ package net.aieat.netswissknife.app.ui.screens.whois
 
 import android.app.Activity
 import android.content.Intent
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Surface
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.core.net.toUri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.InfiniteTransition
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -62,25 +58,20 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -111,11 +102,9 @@ import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.whois.WhoisProtocol
 import net.aieat.netswissknife.core.network.whois.WhoisQueryType
 import net.aieat.netswissknife.core.network.whois.WhoisResult
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import android.text.format.DateUtils
 import java.util.concurrent.TimeUnit
+import net.aieat.netswissknife.core.network.whois.WhoisServerRole
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -290,18 +279,6 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                                 CircularProgressIndicator(modifier = Modifier.size(32.dp))
                             }
                         }
-                        if (uiState.isLoading && !uiState.isCanceling) {
-                            val currentServer = uiState.hopStates
-                                .lastOrNull { it.status == HopStatus.QUERYING || it.status == HopStatus.DONE }
-                                ?.server?.host ?: ""
-                            if (currentServer.isNotBlank()) {
-                                Text(
-                                    text = stringResource(R.string.whois_querying_server, currentServer),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
                     }
                 }
             }
@@ -349,8 +326,7 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                     error != null -> {
                         ErrorCard(
                                 message = error,
-                            onRetry = viewModel::lookup,
-                            hopStates = uiState.hopStates
+                            onRetry = viewModel::lookup
                         )
                     }
                     isLoading -> {
@@ -436,7 +412,6 @@ private val HopConnectorStroke = 2.dp
 fun RelayChainVisualiser(hopStates: List<HopUiState>) {
     if (hopStates.isEmpty()) return
 
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val connectorColor = MaterialTheme.colorScheme.outlineVariant
 
     Column(
@@ -477,7 +452,6 @@ fun RelayChainVisualiser(hopStates: List<HopUiState>) {
                 hopStates.forEach { hop ->
                     HopNodeCircle(
                         hop = hop,
-                        infiniteTransition = infiniteTransition,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
@@ -502,24 +476,16 @@ fun RelayChainVisualiser(hopStates: List<HopUiState>) {
 @Composable
 private fun HopNodeCircle(
     hop: HopUiState,
-    infiniteTransition: InfiniteTransition,
     modifier: Modifier = Modifier
 ) {
     // Every completed hop uses the same success colour; the role is shown in the label below.
     val doneColor = MaterialTheme.colorScheme.primaryContainer
     val doneOnColor = MaterialTheme.colorScheme.onPrimaryContainer
 
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.9f,
-        targetValue = 1.1f,
-        animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse),
-        label = "pulse_scale"
-    )
 
     val bgColor by animateColorAsState(
         targetValue = when (hop.status) {
             HopStatus.PENDING -> MaterialTheme.colorScheme.surface
-            HopStatus.QUERYING -> MaterialTheme.colorScheme.primaryContainer
             HopStatus.DONE -> doneColor
             HopStatus.FAILED -> MaterialTheme.colorScheme.errorContainer
             HopStatus.SKIPPED -> MaterialTheme.colorScheme.surface
@@ -531,7 +497,6 @@ private fun HopNodeCircle(
         Box(
             modifier = Modifier
                 .size(HopNodeSize)
-                .scale(if (hop.status == HopStatus.QUERYING) pulseScale else 1f)
                 .clip(CircleShape)
                 .background(bgColor),
             contentAlignment = Alignment.Center
@@ -547,12 +512,6 @@ private fun HopNodeCircle(
                         Icons.Default.Close, contentDescription = null,
                         modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                HopStatus.QUERYING ->
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary
                     )
                 else -> {}
             }
@@ -576,7 +535,7 @@ private fun HopNodeLabels(hop: HopUiState, modifier: Modifier = Modifier) {
         )
 
         Text(
-            text = hop.server.role.name,
+            text = whoisRoleLabel(hop.server.role),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             textAlign = TextAlign.Center
@@ -640,13 +599,8 @@ fun IdleCard(onExampleSelected: (String) -> Unit) {
 // ── Error Card ────────────────────────────────────────────────────────────────
 
 @Composable
-fun ErrorCard(message: String, onRetry: () -> Unit, hopStates: List<HopUiState>) {
+fun ErrorCard(message: String, onRetry: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (hopStates.isNotEmpty()) {
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                RelayChainVisualiser(hopStates = hopStates)
-            }
-        }
         ElevatedCard(
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -809,10 +763,17 @@ fun DomainResultCard(result: WhoisResult, onOpenUrl: (String) -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         result.statusCodes.forEach { status ->
-                            SuggestionChip(
-                                onClick = {},
-                                label = { Text(whoisStatusLabel(status), style = MaterialTheme.typography.labelSmall) }
-                            )
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ) {
+                                Text(
+                                    whoisStatusLabel(status),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -991,7 +952,7 @@ fun DateColumn(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        val formatted = epochMs?.let { formatDate(it) } ?: "–"
+        val formatted = epochMs?.let { formatWhoisDate(it) } ?: stringResource(R.string.whois_date_unknown)
         Text(
             text = formatted,
             style = MaterialTheme.typography.bodyMedium,
@@ -1033,8 +994,6 @@ fun LabeledRow(label: String, value: String) {
 
 // ── Utility functions ─────────────────────────────────────────────────────────
 
-private fun formatDate(epochMs: Long): String =
-    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(epochMs))
 
 private fun relativeDate(epochMs: Long): String =
     DateUtils.getRelativeTimeSpanString(
@@ -1066,12 +1025,16 @@ private fun flagEmoji(countryCode: String): String {
 }
 
 internal fun buildWhoisShareText(result: net.aieat.netswissknife.core.network.whois.WhoisResult): String = buildString {
-    appendLine("WHOIS – ${result.query}")
+    appendLine("WHOIS: ${result.query}")
     appendLine()
     result.registrar?.let { appendLine("Registrar: $it") }
-    result.registeredOn?.let { appendLine("Created: ${formatDate(it)}") }
-    result.updatedOn?.let { appendLine("Updated: ${formatDate(it)}") }
-    result.expiresOn?.let { appendLine("Expires: ${formatDate(it)}") }
+    result.netName?.let { appendLine("Network: $it") }
+    result.netRange?.let { appendLine("Range: ${netRangeDisplay(it)}") }
+    result.orgName?.let { appendLine("Organization: $it") }
+    result.country?.let { appendLine("Country: $it") }
+    result.registeredOn?.let { appendLine("Created: ${formatWhoisDate(it)}") }
+    result.updatedOn?.let { appendLine("Updated: ${formatWhoisDate(it)}") }
+    result.expiresOn?.let { appendLine("Expires: ${formatWhoisDate(it)}") }
     if (result.nameServers.isNotEmpty()) {
         appendLine("Name Servers: ${result.nameServers.joinToString(", ")}")
     }
@@ -1097,3 +1060,15 @@ private fun dnssecText(raw: String): String {
         is WhoisDnssecLabel.Known -> if (label.state == WhoisDnssecState.SIGNED) signed else unsigned
     }
 }
+
+@Composable
+private fun whoisRoleLabel(role: WhoisServerRole): String =
+    stringResource(
+        when (role) {
+            WhoisServerRole.IANA -> R.string.whois_role_iana
+            WhoisServerRole.REGISTRY -> R.string.whois_role_registry
+            WhoisServerRole.REGISTRAR -> R.string.whois_role_registrar
+            WhoisServerRole.RIR -> R.string.whois_role_rir
+            WhoisServerRole.RDAP -> R.string.whois_role_rdap
+        },
+    )

@@ -19,6 +19,7 @@ import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
+import net.aieat.netswissknife.app.data.ToolSessionMemory
 import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.speedtest.LatencySample
 import net.aieat.netswissknife.core.network.speedtest.LatencyStats
@@ -84,9 +85,18 @@ class SpeedTestViewModel @Inject constructor(
     private val speedTestUseCase: SpeedTestUseCase,
     private val dataStore: DataStore<Preferences>,
     private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+    // Activity-retained, so the last finished result survives leaving and returning to the tool.
+    private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<SpeedTestUiState>(SpeedTestUiState.Idle())
+    companion object {
+        /** [ToolSessionMemory] slot holding the last finished speed test. */
+        internal const val SESSION_RESULT_KEY = "speedTestLastResult"
+    }
+
+    private val _uiState = MutableStateFlow<SpeedTestUiState>(
+        sessionMemory.get<SpeedTestUiState.Finished>(SESSION_RESULT_KEY) ?: SpeedTestUiState.Idle(),
+    )
     val uiState: StateFlow<SpeedTestUiState> = _uiState.asStateFlow()
     val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
@@ -196,7 +206,7 @@ class SpeedTestViewModel @Inject constructor(
                             val download = checkNotNull(current.downloadResult) {
                                 "UploadFinished received before DownloadFinished"
                             }
-                            _uiState.value = SpeedTestUiState.Finished(
+                            publishFinished(
                                 SpeedTestResult(
                                     latency = current.latencyStats,
                                     download = download,
@@ -234,13 +244,30 @@ class SpeedTestViewModel @Inject constructor(
         }
     }
 
-    fun onCancel() {
+    fun onCancel() = stopTest(CancellationReason.USER_STOP)
+
+    /**
+     * Stops the transfer when the screen leaves the foreground, so it does not keep sending data in
+     * the background. A configuration change (rotation) only pauses the Activity and keeps the run.
+     */
+    fun onLifecyclePause(configurationChange: Boolean = false) {
+        if (configurationChange || _uiState.value !is SpeedTestUiState.Running) return
+        stopTest(CancellationReason.LIFECYCLE_PAUSE)
+    }
+
+    private fun stopTest(reason: CancellationReason) {
         val partial = (_uiState.value as? SpeedTestUiState.Running)?.toPartial()
-        operationSession?.cancel(CancellationReason.USER_STOP)
+        operationSession?.cancel(reason)
         operationSession = null
         testJob?.cancel()
         testJob = null
         _uiState.value = SpeedTestUiState.Idle(canceled = partial != null, partial = partial ?: PartialSpeedTest())
+    }
+
+    private fun publishFinished(result: SpeedTestResult) {
+        val finished = SpeedTestUiState.Finished(result)
+        _uiState.value = finished
+        sessionMemory.put(SESSION_RESULT_KEY, finished)
     }
 
     fun onRetry() = startTest()

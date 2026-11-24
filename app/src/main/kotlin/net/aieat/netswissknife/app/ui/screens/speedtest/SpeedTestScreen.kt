@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.speedtest
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
@@ -56,13 +57,13 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
-import kotlinx.coroutines.delay
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -97,7 +98,7 @@ import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
 import net.aieat.netswissknife.app.ui.theme.AppMotion
-import net.aieat.netswissknife.app.util.formatBytes
+import net.aieat.netswissknife.app.util.formatBytesSi
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.speedtest.LatencyStats
@@ -108,7 +109,14 @@ import net.aieat.netswissknife.core.network.speedtest.ThroughputSample
 import net.aieat.netswissknife.core.network.speedtest.ServerInfo
 
 private const val CLOUDFLARE_SPEED_URL = "https://speed.cloudflare.com"
-private const val GAUGE_MAX_MBPS = 1_000.0
+private val GAUGE_SCALE_STEPS_MBPS = intArrayOf(10, 25, 50, 100, 250, 500, 1_000, 2_500, 10_000)
+
+/**
+ * The round maximum shown on the gauge: the smallest step that fits [valueMbps]. Values above the
+ * top step use the top step, and the arc stays full.
+ */
+internal fun gaugeScaleMaxMbps(valueMbps: Double): Int =
+    GAUGE_SCALE_STEPS_MBPS.firstOrNull { valueMbps <= it } ?: GAUGE_SCALE_STEPS_MBPS.last()
 
 @Composable
 fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
@@ -116,6 +124,23 @@ fun SpeedTestScreen(viewModel: SpeedTestViewModel = hiltViewModel()) {
     val networkStatus by viewModel.networkStatus.collectAsStateWithLifecycle()
     val config by viewModel.config.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val activity = LocalActivity.current
+    // Leaving the foreground stops a running transfer. A rotation pauses the Activity too, and the
+    // transfer must keep running across that recreation.
+    DisposableEffect(lifecycleOwner) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_PAUSE) {
+                    viewModel.onLifecyclePause(configurationChange = activity?.isChangingConfigurations == true)
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.onLifecyclePause(configurationChange = activity?.isChangingConfigurations == true)
+        }
+    }
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -332,13 +357,6 @@ private fun SpeedTestIdleContent(
     onDownloadStreamsChange: (Int) -> Unit,
     onUploadStreamsChange: (Int) -> Unit
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "speedtest_idle_pulse")
-    val pulse by infiniteTransition.animateFloat(
-        initialValue = 0.94f, targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(tween(1100), RepeatMode.Reverse),
-        label = "speedtest_idle_pulse_scale"
-    )
-
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -349,7 +367,6 @@ private fun SpeedTestIdleContent(
             Box(
                 modifier = Modifier
                     .size(140.dp)
-                    .scale(pulse)
                     .background(
                         brush = Brush.radialGradient(
                             listOf(
@@ -624,6 +641,7 @@ private fun SpeedGauge(
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
     val density = LocalDensity.current
     val strokeWidth = with(density) { 14.dp.toPx() }
+    val scaleMaxMbps = gaugeScaleMaxMbps(valueMbps)
 
     Box(
         modifier = Modifier.size(180.dp),
@@ -646,7 +664,7 @@ private fun SpeedGauge(
                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
             )
 
-            val progress = (animatedValue / GAUGE_MAX_MBPS.toFloat()).coerceIn(0f, 1f)
+            val progress = (animatedValue / scaleMaxMbps.toFloat()).coerceIn(0f, 1f)
             drawArc(
                 brush = Brush.sweepGradient(listOf(accentColor.copy(alpha = 0.4f), accentColor)),
                 startAngle = startAngle,
@@ -661,12 +679,17 @@ private fun SpeedGauge(
             Icon(imageVector = icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(20.dp))
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "%.1f".format(animatedValue),
+                text = "%.1f".format(valueMbps),
                 style = MaterialTheme.typography.displaySmall,
             )
             Text(
                 text = stringResource(R.string.speedtest_mbps_suffix),
                 style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = stringResource(R.string.speedtest_gauge_scale, scaleMaxMbps),
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -804,37 +827,27 @@ private fun SpeedTestResultContent(
     onRetry: () -> Unit,
     onShare: () -> Unit
 ) {
-    var visibleCards by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) {
-        listOf(80L, 120L, 120L).forEach { d -> delay(d); visibleCards++ }
-    }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SpeedTestResultHeader()
 
         result.serverInfo?.let { ServerInfoChip(it) }
 
-        AnimatedVisibility(visible = visibleCards >= 1, enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 }) {
-            LatencyResultCard(
-                title = stringResource(R.string.speedtest_idle_latency_header),
-                stats = result.latency
-            )
-        }
-        AnimatedVisibility(visible = visibleCards >= 2, enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 }) {
-            ThroughputResultCard(
-                title = stringResource(R.string.speedtest_download_header),
-                icon = Icons.Default.ArrowDownward,
-                accentColor = MaterialTheme.colorScheme.primary,
-                result = result.download
-            )
-        }
-        AnimatedVisibility(visible = visibleCards >= 3, enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 }) {
-            ThroughputResultCard(
-                title = stringResource(R.string.speedtest_upload_header),
-                icon = Icons.Default.ArrowUpward,
-                accentColor = MaterialTheme.colorScheme.tertiary,
-                result = result.upload
-            )
-        }
+        LatencyResultCard(
+            title = stringResource(R.string.speedtest_idle_latency_header),
+            stats = result.latency
+        )
+        ThroughputResultCard(
+            title = stringResource(R.string.speedtest_download_header),
+            icon = Icons.Default.ArrowDownward,
+            accentColor = MaterialTheme.colorScheme.primary,
+            result = result.download
+        )
+        ThroughputResultCard(
+            title = stringResource(R.string.speedtest_upload_header),
+            icon = Icons.Default.ArrowUpward,
+            accentColor = MaterialTheme.colorScheme.tertiary,
+            result = result.upload
+        )
         if (result.loadedLatencyDown.samples.isNotEmpty()) {
             LatencyResultCard(
                 title = stringResource(R.string.speedtest_loaded_latency_download),
@@ -922,7 +935,7 @@ private fun ThroughputResultCard(
                 listOf(
                     stringResource(R.string.speedtest_avg_speed) to "%.1f %s".format(result.avgMbps, stringResource(R.string.speedtest_mbps_suffix)),
                     stringResource(R.string.speedtest_peak_speed) to "%.1f %s".format(result.peakMbps, stringResource(R.string.speedtest_mbps_suffix)),
-                    stringResource(R.string.speedtest_data_transferred) to formatBytes(result.bytesTransferred)
+                    stringResource(R.string.speedtest_data_transferred) to formatBytesSi(result.bytesTransferred)
                 )
             )
             if (result.samples.size >= 2) {
@@ -1049,16 +1062,20 @@ private fun CloudflareAttributionCard() {
 }
 
 internal fun buildSpeedTestShareText(result: SpeedTestResult): String = buildString {
-    appendLine("Net Swiss Knife – Speed Test Results")
+    appendLine("Net Swiss Knife: Speed Test Results")
     appendLine()
     appendLine("Idle latency: min ${result.latency.minMs} ms / avg %.1f ms / max ${result.latency.maxMs} ms / jitter %.1f ms"
         .format(result.latency.avgMs, result.latency.jitterMs))
     result.latency.connectRttMs?.let { appendLine("Connect RTT: $it ms") }
     result.serverInfo?.let { appendLine("Server: ${it.colo ?: "Cloudflare"} · ${it.asn ?: "ASN unavailable"}${it.country?.let { country -> " · $country" } ?: ""}") }
-    appendLine("Latency under download load: %.1f ms avg / %d samples".format(result.loadedLatencyDown.avgMs, result.loadedLatencyDown.samples.size))
-    appendLine("Latency under upload load: %.1f ms avg / %d samples".format(result.loadedLatencyUp.avgMs, result.loadedLatencyUp.samples.size))
-    appendLine("Download: avg %.1f Mbps / peak %.1f Mbps / %s".format(result.download.avgMbps, result.download.peakMbps, formatBytes(result.download.bytesTransferred)))
-    appendLine("Upload: avg %.1f Mbps / peak %.1f Mbps / %s".format(result.upload.avgMbps, result.upload.peakMbps, formatBytes(result.upload.bytesTransferred)))
+    if (result.loadedLatencyDown.samples.isNotEmpty()) {
+        appendLine("Latency under download load: %.1f ms avg / %d samples".format(result.loadedLatencyDown.avgMs, result.loadedLatencyDown.samples.size))
+    }
+    if (result.loadedLatencyUp.samples.isNotEmpty()) {
+        appendLine("Latency under upload load: %.1f ms avg / %d samples".format(result.loadedLatencyUp.avgMs, result.loadedLatencyUp.samples.size))
+    }
+    appendLine("Download: avg %.1f Mbps / peak %.1f Mbps / %s".format(result.download.avgMbps, result.download.peakMbps, formatBytesSi(result.download.bytesTransferred)))
+    appendLine("Upload: avg %.1f Mbps / peak %.1f Mbps / %s".format(result.upload.avgMbps, result.upload.peakMbps, formatBytesSi(result.upload.bytesTransferred)))
     appendLine()
     appendLine("Measured against $CLOUDFLARE_SPEED_URL")
 }
