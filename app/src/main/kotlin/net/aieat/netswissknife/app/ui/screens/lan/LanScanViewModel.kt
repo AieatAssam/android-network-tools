@@ -12,6 +12,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.app.data.AppPreferenceDefaults
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.data.ToolSessionMemory
@@ -38,6 +40,7 @@ import net.aieat.netswissknife.core.domain.LanScanUseCase
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
 import net.aieat.netswissknife.core.network.elapsedMillisSince
 import net.aieat.netswissknife.core.network.lan.LanHost
+import net.aieat.netswissknife.core.network.lan.LanQuickPorts
 import net.aieat.netswissknife.core.network.lan.LanScanDiagnostic
 import net.aieat.netswissknife.core.network.lan.LanScanOperationBudget
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
@@ -59,10 +62,19 @@ private const val DEFAULT_LAN_SUBNET = "192.168.1.0/24"
 /** Broadest prefix the scanner accepts; validation rejects anything wider. */
 private const val MIN_SCANNABLE_PREFIX = 16
 
-/** Prefer a reported conventional cleartext HTTP port; otherwise keep the editable form on port 80. */
+/** Cleartext HTTP ports, in preference order, that the scanner probes. */
+private val HTTP_PROBE_CANDIDATES = listOf(80, 8080)
+
+/** Cadence of live list updates while hosts are being found. Final states are never throttled. */
+private const val LIVE_PUBLISH_INTERVAL_MS = 100L
+
+/**
+ * The cleartext HTTP port the HTTP action should probe: the first candidate that was open,
+ * or null when no web port answered, so the action is not offered.
+ */
 internal fun preferredHttpProbePort(
     openPorts: Collection<Int>,
-): Int = listOf(80, 8080, 8000, 8888).firstOrNull(openPorts::contains) ?: 80
+): Int? = HTTP_PROBE_CANDIDATES.firstOrNull { it in LanQuickPorts.ports && it in openPorts }
 
 /** Compatibility facade for the budget shared with the repository's no-session path. */
 internal object LanScanTimeBudget {
@@ -100,6 +112,8 @@ sealed interface LanScanUiState {
         val uncertainDiagnostics: List<LanScanDiagnostic> = emptyList(),
         val progress: Float = if (totalCount > 0) scannedCount.toFloat() / totalCount else 0f,
         val expandedHostIp: String? = null,
+        /** Whether this device can read MAC addresses; set by the scan's first event, before any host. */
+        val macResolutionSupported: Boolean = true,
     ) : LanScanUiState
 
     data class Canceling(
@@ -235,7 +249,7 @@ class LanScanViewModel
         private val _subnet = MutableStateFlow(restoredSubnet.orEmpty())
         val subnet: StateFlow<String> = _subnet.asStateFlow()
 
-        private val _timeoutMs = MutableStateFlow(restoredTimeoutMs ?: 1_000)
+        private val _timeoutMs = MutableStateFlow((restoredTimeoutMs ?: AppPreferenceDefaults.TIMEOUT_MS).coerceIn(100, 10_000))
         val timeoutMs: StateFlow<Int> = _timeoutMs.asStateFlow()
 
         private val _concurrency = MutableStateFlow(restoredConcurrency ?: 50)
@@ -328,7 +342,7 @@ class LanScanViewModel
                     val prefs = dataStore.data.first()
                     // A restored input keeps its value; the DataStore default applies only to a fresh form.
                     if (restoredTimeoutMs == null) {
-                        _timeoutMs.value = prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: 1_000
+                        _timeoutMs.value = (prefs[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] ?: AppPreferenceDefaults.TIMEOUT_MS).coerceIn(100, 10_000)
                     }
                     if (restoredConcurrency == null) {
                         _concurrency.value = prefs[AppPreferenceKeys.DEFAULT_CONCURRENCY] ?: 50
@@ -512,6 +526,7 @@ class LanScanViewModel
                     totalCount = 0,
                 )
 
+            discardLive()
             val operationSession = operationSessionFactory(params)
             scanOperationSession = operationSession
             scanJob =
@@ -526,8 +541,16 @@ class LanScanViewModel
                             // the currently owned operation is allowed to publish state or recents.
                             if (scanOperationSession !== operationSession) return@collect
                             when (result) {
+                                is LanScanFlowResult.ScanStarted -> {
+                                    stageLive(
+                                        liveBase().copy(macResolutionSupported = result.macResolutionSupported),
+                                        immediate = true,
+                                    )
+                                }
+
                                 is LanScanFlowResult.ValidationError -> {
                                     AppLogger.w(TAG, "startScan: validation error – ${result.message}")
+                                    discardLive()
                                     _uiState.value = LanScanUiState.Error(result.message)
                                 }
 
@@ -543,34 +566,32 @@ class LanScanViewModel
                                         )
                                     }
                                     liveHosts.add(result.host)
-                                    val expandedHostIp = (_uiState.value as? LanScanUiState.Scanning)?.expandedHostIp
-                                    _uiState.value =
-                                        LanScanUiState.Scanning(
+                                    stageLive(
+                                        liveBase().copy(
                                             hosts = liveHosts.toList(),
                                             scannedCount = result.scannedCount,
                                             totalCount = result.totalCount,
                                             uncertainCount = result.uncertainCount,
                                             uncertainDiagnostics = uncertainDiagnostics.toList(),
-                                            expandedHostIp = expandedHostIp,
-                                        )
+                                        ),
+                                    )
                                 }
 
                                 is LanScanFlowResult.ScanProgress -> {
                                     result.diagnostic?.let(uncertainDiagnostics::add)
-                                    val current = _uiState.value
-                                    if (current is LanScanUiState.Scanning) {
-                                        _uiState.value =
-                                            current.copy(
-                                                scannedCount = result.scannedCount,
-                                                totalCount = result.totalCount,
-                                                uncertainCount = result.uncertainCount,
-                                                uncertainDiagnostics = uncertainDiagnostics.toList(),
-                                            )
-                                    }
+                                    stageLive(
+                                        liveBase().copy(
+                                            scannedCount = result.scannedCount,
+                                            totalCount = result.totalCount,
+                                            uncertainCount = result.uncertainCount,
+                                            uncertainDiagnostics = uncertainDiagnostics.toList(),
+                                        ),
+                                    )
                                 }
 
                                 is LanScanFlowResult.ScanComplete -> {
                                     AppLogger.i(TAG, "startScan: scan complete – scanned=${result.summary.totalScanned} alive=${result.summary.aliveHosts} duration=${result.summary.scanDurationMs}ms")
+                                    discardLive()
                                     _uiState.value =
                                         LanScanUiState.Finished(
                                             result.summary,
@@ -597,7 +618,10 @@ class LanScanViewModel
                                 e.toNetworkErrorKind(),
                             )
                     } finally {
-                        if (scanOperationSession === operationSession) scanOperationSession = null
+                        if (scanOperationSession === operationSession) {
+                            scanOperationSession = null
+                            discardLive()
+                        }
                         if (scanJob === coroutineContext[Job]) scanJob = null
                         pendingCancellation?.takeIf { it.session === operationSession }?.let { pending ->
                             pendingCancellation = null
@@ -634,10 +658,54 @@ class LanScanViewModel
                 }
         }
 
+        /** Latest scan snapshot. Live list updates are throttled; final states always publish at once. */
+        private var liveScanning: LanScanUiState.Scanning? = null
+        private var livePublishJob: Job? = null
+        private var lastLivePublishNanos = 0L
+
+        private fun liveBase(): LanScanUiState.Scanning =
+            liveScanning
+                ?: (_uiState.value as? LanScanUiState.Scanning)
+                ?: LanScanUiState.Scanning(hosts = emptyList(), scannedCount = 0, totalCount = 0)
+
+        private fun stageLive(
+            next: LanScanUiState.Scanning,
+            immediate: Boolean = false,
+        ) {
+            liveScanning = next
+            val intervalNanos = LIVE_PUBLISH_INTERVAL_MS * 1_000_000L
+            val sinceLastNanos = SystemMonotonicClock.nowNanos() - lastLivePublishNanos
+            when {
+                immediate || sinceLastNanos >= intervalNanos -> flushLive()
+                livePublishJob == null ->
+                    livePublishJob =
+                        viewModelScope.launch {
+                            delay(((intervalNanos - sinceLastNanos) / 1_000_000L).coerceAtLeast(1L))
+                            livePublishJob = null
+                            flushLive()
+                        }
+            }
+        }
+
+        /** Publishes the staged snapshot, keeping whatever expansion the user set on the visible state. */
+        private fun flushLive() {
+            val staged = liveScanning ?: return
+            val visible = _uiState.value as? LanScanUiState.Scanning ?: return
+            _uiState.value = staged.copy(expandedHostIp = visible.expandedHostIp)
+            lastLivePublishNanos = SystemMonotonicClock.nowNanos()
+        }
+
+        private fun discardLive() {
+            livePublishJob?.cancel()
+            livePublishJob = null
+            liveScanning = null
+        }
+
         private fun partialDeadlineResult(
             hosts: List<LanHost>,
             diagnostics: List<LanScanDiagnostic>,
         ): LanScanUiState.Finished {
+            flushLive()
             val current = _uiState.value as? LanScanUiState.Scanning
             val partialHosts = current?.hosts ?: hosts.toList()
             val summary =
@@ -703,6 +771,7 @@ class LanScanViewModel
             )
 
         private fun cancelWithPartial(reason: CancellationReason) {
+            flushLive()
             val current = _uiState.value as? LanScanUiState.Scanning ?: return
             val session = scanOperationSession
             val job = scanJob
@@ -819,6 +888,7 @@ class LanScanViewModel
          * Canceled. A scan the pause is already stopping takes its reason from [pendingCancellation].
          */
         private fun stateToKeepOnLeave(): LanScanUiState {
+        flushLive()
             val pending = pendingCancellation
             return when (val current = _uiState.value) {
                 is LanScanUiState.Finished, is LanScanUiState.Canceled -> {

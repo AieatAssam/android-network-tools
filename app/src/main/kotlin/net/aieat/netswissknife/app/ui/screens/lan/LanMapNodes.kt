@@ -25,17 +25,19 @@ internal data class LanMapPreview<T>(
     val hiddenCount: Int,
 )
 
-/** Applies the node limit unless the user asked to see every node. */
+/** Draws at most [limit] nodes and reports how many were left out. */
 internal fun <T> lanMapVisibleNodes(
     items: List<T>,
-    showAll: Boolean,
     limit: Int = LAN_MAP_NODE_LIMIT,
 ): LanMapPreview<T> =
-    if (showAll || items.size <= limit) {
+    if (items.size <= limit) {
         LanMapPreview(visible = items, hiddenCount = 0)
     } else {
         LanMapPreview(visible = items.take(limit), hiddenCount = items.size - limit)
     }
+
+/** The node limit after the user asks for more: one more chunk of [LAN_MAP_NODE_LIMIT] nodes. */
+internal fun lanMapExpandedLimit(currentLimit: Int): Int = currentLimit + LAN_MAP_NODE_LIMIT
 
 /**
  * Caption under a map node: the first label of the hostname, or the last IP octet when no

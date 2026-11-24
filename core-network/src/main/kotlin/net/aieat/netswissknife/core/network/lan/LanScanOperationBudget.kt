@@ -9,7 +9,7 @@ object LanScanOperationBudget {
         "Estimated scan time exceeds the 10-minute limit. Use a smaller subnet, increase concurrency, or lower the probe timeout."
 
     private const val PRESENCE_PORT_COUNT = 10
-    private const val QUICK_PORT_COUNT = 16
+    private val QUICK_PORT_COUNT = LanQuickPorts.ports.size
     private const val TCP_PRESENCE_TIMEOUT_CAP_MS = 400
     private const val LOCAL_NAME_TIMEOUT_CAP_MS = 300
     private const val QUICK_PORT_TIMEOUT_CAP_MS = 500

@@ -502,7 +502,7 @@ class LanScanScreenTest {
             .performScrollTo()
             .assertIsDisplayed()
             .performClick()
-        composeRule.onNodeWithTag("lan_action_tls_8000").assertIsDisplayed()
+        composeRule.onNodeWithTag("lan_action_tls_8000").assertDoesNotExist()
         composeRule.onNodeWithTag("lan_action_tls_8443").assertDoesNotExist()
 
         verify(exactly = 1) { viewModel.onInspectTls(ip, 443) }
@@ -510,7 +510,7 @@ class LanScanScreenTest {
     }
 
     @Test
-    fun expandedHost_offersEditableHttpProbeUsingKnownPortOrPort80Fallback() {
+    fun expandedHost_offersHttpProbeOnlyWhenAConventionalWebPortIsOpen() {
         val ip = "192.168.1.52"
         val stateFlow =
             MutableStateFlow<LanScanUiState>(
@@ -552,12 +552,8 @@ class LanScanScreenTest {
             )
         composeRule.mainClock.advanceTimeBy(500L)
         repeat(2) { composeRule.onNodeWithTag("lan_content").performTouchInput { swipeUp() } }
-        composeRule
-            .onNodeWithText("Probe HTTP (port 80)")
-            .performScrollTo()
-            .assertIsDisplayed()
-            .performClick()
-        verify(exactly = 1) { viewModel.onProbeHttp(fallbackIp, 80) }
+        composeRule.onNodeWithTag("lan_action_http").assertDoesNotExist()
+        verify(exactly = 0) { viewModel.onProbeHttp(fallbackIp, any()) }
 
         val unknownIp = "192.168.1.54"
         stateFlow.value =
@@ -573,12 +569,8 @@ class LanScanScreenTest {
             )
         composeRule.mainClock.advanceTimeBy(500L)
         repeat(2) { composeRule.onNodeWithTag("lan_content").performTouchInput { swipeUp() } }
-        composeRule
-            .onNodeWithText("Probe HTTP (port 80)")
-            .performScrollTo()
-            .assertIsDisplayed()
-            .performClick()
-        verify(exactly = 1) { viewModel.onProbeHttp(unknownIp, 80) }
+        composeRule.onNodeWithTag("lan_action_http").assertDoesNotExist()
+        verify(exactly = 0) { viewModel.onProbeHttp(unknownIp, any()) }
     }
 
     @Test

@@ -84,6 +84,9 @@ class LanScanUseCase(private val repository: LanScanRepository) {
         return updates
             .map { update ->
                 when (update) {
+                    is LanScanUpdate.ScanStarted ->
+                        LanScanFlowResult.ScanStarted(update.macResolutionSupported)
+
                     is LanScanUpdate.HostFound ->
                         LanScanFlowResult.HostFound(
                             update.host,

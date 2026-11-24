@@ -33,6 +33,20 @@ class LanScanUseCaseTest {
         ))
 
     @Nested
+    @DisplayName("scan start")
+    inner class ScanStart {
+
+        @Test
+        fun `a valid scan opens with ScanStarted before any host or progress event`() = runTest {
+            val results = makeUseCase().invoke(LanScanParams(subnet = "192.168.1.0/30")).toList()
+
+            val first = results.first()
+            assertTrue(first is LanScanFlowResult.ScanStarted, "Expected ScanStarted first, got $first")
+            assertTrue(results.last() is LanScanFlowResult.ScanComplete)
+        }
+    }
+
+    @Nested
     @DisplayName("subnet validation")
     inner class SubnetValidation {
 
