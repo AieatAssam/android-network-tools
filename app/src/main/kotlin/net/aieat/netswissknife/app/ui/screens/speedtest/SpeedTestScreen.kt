@@ -71,6 +71,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -507,45 +508,12 @@ private fun SpeedTestRunningContent(
                 )
                 Spacer(Modifier.height(16.dp))
 
-                when (state.phase) {
-                    SpeedTestPhase.LATENCY -> {
-                        LatencyLiveStats(state.latencyStats)
-                    }
-
-                    SpeedTestPhase.DOWNLOAD -> {
-                        ThroughputLiveView(
-                            samples = state.downloadSamples,
-                            accentColor = MaterialTheme.colorScheme.primary,
-                            icon = Icons.Default.ArrowDownward,
-                        )
-                    }
-
-                    SpeedTestPhase.UPLOAD -> {
-                        ThroughputLiveView(
-                            samples = state.uploadSamples,
-                            accentColor = MaterialTheme.colorScheme.tertiary,
-                            icon = Icons.Default.ArrowUpward,
-                        )
-                    }
-                }
+                RunningPhaseLiveView(state)
                 if (state.serverInfo != null) {
                     Spacer(Modifier.height(12.dp))
                     ServerInfoChip(state.serverInfo)
                 }
-                val loadedStats =
-                    when (state.phase) {
-                        SpeedTestPhase.DOWNLOAD -> state.loadedLatencyDown
-                        SpeedTestPhase.UPLOAD -> state.loadedLatencyUp
-                        SpeedTestPhase.LATENCY -> LatencyStats.EMPTY
-                    }
-                if (loadedStats.samples.isNotEmpty()) {
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = stringResource(if (state.phase == SpeedTestPhase.DOWNLOAD) R.string.speedtest_loaded_latency_download else R.string.speedtest_loaded_latency_upload),
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                    StatGrid(latencyStatGridEntries(loadedStats))
-                }
+                LoadedLatencySection(state)
             }
         }
 
@@ -558,6 +526,51 @@ private fun SpeedTestRunningContent(
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.speedtest_cancel_button))
         }
+    }
+}
+
+/** The live view for the phase in progress: latency statistics, or the throughput gauge and chart. */
+@Composable
+private fun RunningPhaseLiveView(state: SpeedTestUiState.Running) {
+    when (state.phase) {
+        SpeedTestPhase.LATENCY -> {
+            LatencyLiveStats(state.latencyStats)
+        }
+
+        SpeedTestPhase.DOWNLOAD -> {
+            ThroughputLiveView(
+                samples = state.downloadSamples,
+                accentColor = MaterialTheme.colorScheme.primary,
+                icon = Icons.Default.ArrowDownward,
+            )
+        }
+
+        SpeedTestPhase.UPLOAD -> {
+            ThroughputLiveView(
+                samples = state.uploadSamples,
+                accentColor = MaterialTheme.colorScheme.tertiary,
+                icon = Icons.Default.ArrowUpward,
+            )
+        }
+    }
+}
+
+/** Latency measured under load during the download or upload phase, once samples exist. */
+@Composable
+private fun LoadedLatencySection(state: SpeedTestUiState.Running) {
+    val loadedStats =
+        when (state.phase) {
+            SpeedTestPhase.DOWNLOAD -> state.loadedLatencyDown
+            SpeedTestPhase.UPLOAD -> state.loadedLatencyUp
+            SpeedTestPhase.LATENCY -> LatencyStats.EMPTY
+        }
+    if (loadedStats.samples.isNotEmpty()) {
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = stringResource(if (state.phase == SpeedTestPhase.DOWNLOAD) R.string.speedtest_loaded_latency_download else R.string.speedtest_loaded_latency_upload),
+            style = MaterialTheme.typography.labelMedium,
+        )
+        StatGrid(latencyStatGridEntries(loadedStats))
     }
 }
 
@@ -715,24 +728,40 @@ private fun SpeedGauge(
                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
             )
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(imageVector = icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = "%.1f".format(valueMbps),
-                style = MaterialTheme.typography.displaySmall,
-            )
-            Text(
-                text = stringResource(R.string.speedtest_mbps_suffix),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = stringResource(R.string.speedtest_gauge_scale, scaleMaxMbps),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        SpeedGaugeLabels(
+            valueMbps = valueMbps,
+            scaleMaxMbps = scaleMaxMbps,
+            accentColor = accentColor,
+            icon = icon,
+        )
+    }
+}
+
+/** The icon, current value, unit and scale shown in the middle of the gauge. */
+@Composable
+private fun SpeedGaugeLabels(
+    valueMbps: Double,
+    scaleMaxMbps: Int,
+    accentColor: Color,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(imageVector = icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "%.1f".format(valueMbps),
+            style = MaterialTheme.typography.displaySmall,
+        )
+        Text(
+            text = stringResource(R.string.speedtest_mbps_suffix),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = stringResource(R.string.speedtest_gauge_scale, scaleMaxMbps),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -778,36 +807,55 @@ private fun ThroughputChart(
             drawText(textLayoutResult = measured, topLeft = Offset(0f, y - measured.size.height / 2f))
         }
 
-        val points =
-            samples.mapIndexed { index, sample ->
-                val x = leftPad + (chartWidth - leftPad - edgePad) * index / (samples.size - 1).coerceAtLeast(1)
-                val y = chartHeight - edgePad - (sample.instantMbps / maxMbps).toFloat() * (chartHeight - 2 * edgePad)
-                Offset(x, y)
-            }
-
-        val fillPath =
-            Path().apply {
-                moveTo(points.first().x, chartHeight - edgePad)
-                points.forEach { lineTo(it.x, it.y) }
-                lineTo(points.last().x, chartHeight - edgePad)
-                close()
-            }
-        drawPath(
-            path = fillPath,
-            brush =
-                Brush.verticalGradient(
-                    colors = listOf(accentColor.copy(alpha = 0.35f), Color.Transparent),
-                    startY = 0f,
-                    endY = chartHeight,
-                ),
+        drawThroughputArea(
+            samples = samples,
+            maxMbps = maxMbps,
+            leftPad = leftPad,
+            edgePad = edgePad,
+            accentColor = accentColor,
         )
-        val linePath =
-            Path().apply {
-                moveTo(points.first().x, points.first().y)
-                points.drop(1).forEach { lineTo(it.x, it.y) }
-            }
-        drawPath(path = linePath, color = accentColor, style = Stroke(width = 2.5f, cap = StrokeCap.Round))
     }
+}
+
+/** The filled area and line for [samples], scaled so [maxMbps] reaches the top grid line. */
+private fun DrawScope.drawThroughputArea(
+    samples: List<ThroughputSample>,
+    maxMbps: Double,
+    leftPad: Float,
+    edgePad: Float,
+    accentColor: Color,
+) {
+    val chartWidth = size.width
+    val chartHeight = size.height
+    val points =
+        samples.mapIndexed { index, sample ->
+            val x = leftPad + (chartWidth - leftPad - edgePad) * index / (samples.size - 1).coerceAtLeast(1)
+            val y = chartHeight - edgePad - (sample.instantMbps / maxMbps).toFloat() * (chartHeight - 2 * edgePad)
+            Offset(x, y)
+        }
+
+    val fillPath =
+        Path().apply {
+            moveTo(points.first().x, chartHeight - edgePad)
+            points.forEach { lineTo(it.x, it.y) }
+            lineTo(points.last().x, chartHeight - edgePad)
+            close()
+        }
+    drawPath(
+        path = fillPath,
+        brush =
+            Brush.verticalGradient(
+                colors = listOf(accentColor.copy(alpha = 0.35f), Color.Transparent),
+                startY = 0f,
+                endY = chartHeight,
+            ),
+    )
+    val linePath =
+        Path().apply {
+            moveTo(points.first().x, points.first().y)
+            points.drop(1).forEach { lineTo(it.x, it.y) }
+        }
+    drawPath(path = linePath, color = accentColor, style = Stroke(width = 2.5f, cap = StrokeCap.Round))
 }
 
 // ── Result strip (mini summary while running) ────────────────────────────────

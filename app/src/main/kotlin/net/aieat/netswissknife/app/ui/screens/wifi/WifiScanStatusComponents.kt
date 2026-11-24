@@ -199,51 +199,70 @@ fun WifiConnectedNetworkCard(info: WifiConnectionInfo) {
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
-            ConnectionDetailRow(stringResource(R.string.wifi_detail_bssid), info.bssid.ifBlank { unavailableValue })
-            ConnectionDetailRow(
-                stringResource(R.string.wifi_detail_band_channel),
-                stringResource(R.string.wifi_band_channel_value, info.band.ghzLabel, info.channel),
-            )
-            ConnectionDetailRow(
-                stringResource(R.string.wifi_detail_signal),
-                stringResource(R.string.wifi_rssi_with_level, info.rssi, levelLabel),
-            )
-            ConnectionDetailRow(
-                stringResource(R.string.wifi_detail_link_speed),
-                stringResource(R.string.wifi_link_speed_value, info.linkSpeedMbps),
-            )
-            if (info.txLinkSpeedMbps >= 0) {
-                ConnectionDetailRow(
-                    stringResource(R.string.wifi_detail_tx_speed),
-                    stringResource(R.string.wifi_link_speed_value, info.txLinkSpeedMbps),
-                )
-            }
-            if (info.rxLinkSpeedMbps >= 0) {
-                ConnectionDetailRow(
-                    stringResource(R.string.wifi_detail_rx_speed),
-                    stringResource(R.string.wifi_link_speed_value, info.rxLinkSpeedMbps),
-                )
-            }
-            ConnectionDetailRow(
-                stringResource(R.string.wifi_detail_ip),
-                info.ipAddress.ifBlank { unavailableValue },
-            )
-            if (info.ipv6Addresses.isNotEmpty()) {
-                ConnectionDetailRow(
-                    stringResource(R.string.wifi_detail_ipv6),
-                    info.ipv6Addresses.joinToString("\n"),
-                )
-            }
-            info.gateway?.let {
-                ConnectionDetailRow(stringResource(R.string.wifi_detail_gateway), it)
-            }
-            if (info.dnsServers.isNotEmpty()) {
-                ConnectionDetailRow(
-                    stringResource(R.string.wifi_detail_dns),
-                    info.dnsServers.joinToString("\n"),
-                )
-            }
+            WifiConnectionLinkRows(info = info, levelLabel = levelLabel, unavailableValue = unavailableValue)
+            WifiConnectionAddressRows(info = info, unavailableValue = unavailableValue)
         }
+    }
+}
+
+/** BSSID, band and channel, signal, and the link speeds the platform reports. */
+@Composable
+private fun WifiConnectionLinkRows(
+    info: WifiConnectionInfo,
+    levelLabel: String,
+    unavailableValue: String,
+) {
+    ConnectionDetailRow(stringResource(R.string.wifi_detail_bssid), info.bssid.ifBlank { unavailableValue })
+    ConnectionDetailRow(
+        stringResource(R.string.wifi_detail_band_channel),
+        stringResource(R.string.wifi_band_channel_value, info.band.ghzLabel, info.channel),
+    )
+    ConnectionDetailRow(
+        stringResource(R.string.wifi_detail_signal),
+        stringResource(R.string.wifi_rssi_with_level, info.rssi, levelLabel),
+    )
+    ConnectionDetailRow(
+        stringResource(R.string.wifi_detail_link_speed),
+        stringResource(R.string.wifi_link_speed_value, info.linkSpeedMbps),
+    )
+    if (info.txLinkSpeedMbps >= 0) {
+        ConnectionDetailRow(
+            stringResource(R.string.wifi_detail_tx_speed),
+            stringResource(R.string.wifi_link_speed_value, info.txLinkSpeedMbps),
+        )
+    }
+    if (info.rxLinkSpeedMbps >= 0) {
+        ConnectionDetailRow(
+            stringResource(R.string.wifi_detail_rx_speed),
+            stringResource(R.string.wifi_link_speed_value, info.rxLinkSpeedMbps),
+        )
+    }
+}
+
+/** IPv4 and IPv6 addresses, gateway and DNS servers. */
+@Composable
+private fun WifiConnectionAddressRows(
+    info: WifiConnectionInfo,
+    unavailableValue: String,
+) {
+    ConnectionDetailRow(
+        stringResource(R.string.wifi_detail_ip),
+        info.ipAddress.ifBlank { unavailableValue },
+    )
+    if (info.ipv6Addresses.isNotEmpty()) {
+        ConnectionDetailRow(
+            stringResource(R.string.wifi_detail_ipv6),
+            info.ipv6Addresses.joinToString("\n"),
+        )
+    }
+    info.gateway?.let {
+        ConnectionDetailRow(stringResource(R.string.wifi_detail_gateway), it)
+    }
+    if (info.dnsServers.isNotEmpty()) {
+        ConnectionDetailRow(
+            stringResource(R.string.wifi_detail_dns),
+            info.dnsServers.joinToString("\n"),
+        )
     }
 }
 

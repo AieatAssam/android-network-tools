@@ -44,13 +44,35 @@ internal object TopologyCanvasGeometry {
         val known = ips.toSet()
         if (known.isEmpty()) return TopologyLayout(emptyMap(), 0f)
 
+        val hops = hopsFrom(rootIp, known, adjacencyOf(known, edges))
+        val unreachedRing = (hops.values.maxOrNull() ?: 0) + 1
+        val rings = known.groupBy { hops[it] ?: unreachedRing }.toSortedMap()
+        val positions = ringPositions(rings)
+
+        val extent = positions.values.maxOfOrNull { sqrt(it.x * it.x + it.y * it.y) } ?: 0f
+        return TopologyLayout(positions, extent + MAX_NODE_RADIUS_DP)
+    }
+
+    /** Undirected neighbours for each address in [known]; self-loops and unknown addresses are dropped. */
+    private fun adjacencyOf(
+        known: Set<String>,
+        edges: List<Pair<String, String>>,
+    ): Map<String, List<String>> {
         val adjacency = HashMap<String, MutableList<String>>()
         for ((a, b) in edges) {
             if (a == b || a !in known || b !in known) continue
             adjacency.getOrPut(a) { mutableListOf() }.add(b)
             adjacency.getOrPut(b) { mutableListOf() }.add(a)
         }
+        return adjacency
+    }
 
+    /** Breadth-first hop counts from [rootIp]; empty when the root is missing or not in [known]. */
+    private fun hopsFrom(
+        rootIp: String?,
+        known: Set<String>,
+        adjacency: Map<String, List<String>>,
+    ): Map<String, Int> {
         val hops = HashMap<String, Int>()
         if (rootIp != null && rootIp in known) {
             hops[rootIp] = 0
@@ -67,9 +89,11 @@ internal object TopologyCanvasGeometry {
                 }
             }
         }
-        val unreachedRing = (hops.values.maxOrNull() ?: 0) + 1
-        val rings = known.groupBy { hops[it] ?: unreachedRing }.toSortedMap()
+        return hops
+    }
 
+    /** Centres for each ring's members, ring 0 at the origin and each later ring outside the previous one. */
+    private fun ringPositions(rings: Map<Int, List<String>>): Map<String, Offset> {
         val positions = HashMap<String, Offset>()
         var previousRadius = 0f
         for ((ring, members) in rings) {
@@ -87,9 +111,7 @@ internal object TopologyCanvasGeometry {
             }
             previousRadius = radius
         }
-
-        val extent = positions.values.maxOfOrNull { sqrt(it.x * it.x + it.y * it.y) } ?: 0f
-        return TopologyLayout(positions, extent + MAX_NODE_RADIUS_DP)
+        return positions
     }
 
     /**

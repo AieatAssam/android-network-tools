@@ -756,13 +756,7 @@ class LanScanViewModel
          * false when no row is expanded, and Back then leaves the tool as usual.
          */
         fun collapseExpandedHost(): Boolean {
-            val collapsed: LanScanUiState? =
-                when (val current = _uiState.value) {
-                    is LanScanUiState.Scanning -> current.expandedHostIp?.let { current.copy(expandedHostIp = null) }
-                    is LanScanUiState.Finished -> current.expandedHostIp?.let { current.copy(expandedHostIp = null) }
-                    is LanScanUiState.Canceled -> current.expandedHostIp?.let { current.copy(expandedHostIp = null) }
-                    else -> null
-                }
+            val collapsed = collapseHostState(_uiState.value)
             if (collapsed == null) return false
             _uiState.value = collapsed
             return true
@@ -819,24 +813,7 @@ class LanScanViewModel
         }
 
         fun onToggleHostExpanded(ip: String) {
-            _uiState.value =
-                when (val current = _uiState.value) {
-                    is LanScanUiState.Scanning -> {
-                        current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
-                    }
-
-                    is LanScanUiState.Finished -> {
-                        current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
-                    }
-
-                    is LanScanUiState.Canceled -> {
-                        current.copy(expandedHostIp = if (current.expandedHostIp == ip) null else ip)
-                    }
-
-                    else -> {
-                        return
-                    }
-                }
+            _uiState.value = toggleHostState(_uiState.value, ip) ?: return
         }
 
         /**
@@ -849,12 +826,7 @@ class LanScanViewModel
         }
 
         fun onToggleDiagnostics() {
-            _uiState.value =
-                when (val current = _uiState.value) {
-                    is LanScanUiState.Finished -> current.copy(showDiagnostics = !current.showDiagnostics)
-                    is LanScanUiState.Canceled -> current.copy(showDiagnostics = !current.showDiagnostics)
-                    else -> return
-                }
+            _uiState.value = toggleDiagnosticsState(_uiState.value) ?: return
         }
 
         fun onScanPorts(host: String) {
@@ -907,25 +879,7 @@ class LanScanViewModel
 
                 is LanScanUiState.Canceling -> {
                     val reason = pending?.let { it.session.cancellationReason ?: it.reason }
-                    val expanded = pending?.expandedHostIp
-                    when (reason) {
-                        CancellationReason.USER_STOP -> {
-                            LanScanUiState.Canceled(current.summary, expandedHostIp = expanded)
-                        }
-
-                        CancellationReason.DEADLINE_EXCEEDED -> {
-                            LanScanUiState.Finished(
-                                current.summary,
-                                expandedHostIp = expanded,
-                                partial = true,
-                                timeLimitReached = true,
-                            )
-                        }
-
-                        else -> {
-                            LanScanUiState.Finished(current.summary, expandedHostIp = expanded, partial = true)
-                        }
-                    }
+                    stoppingScanStateToKeep(current.summary, reason, pending?.expandedHostIp)
                 }
 
                 is LanScanUiState.Scanning -> {

@@ -606,41 +606,64 @@ private fun PingAdvancedOptions(
                 }
             }
             AnimatedVisibility(visible = expanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PingSliderRow(
-                        label = stringResource(R.string.ping_payload_label, payloadBytes),
-                        value = payloadBytes.toFloat(),
-                        valueRange = 0f..1472f,
-                        steps = 31,
-                        onValueChange = { onPayloadSizeChange(it.toInt()) },
-                        enabled = enabled,
-                    )
-                    PingSliderRow(
-                        label = stringResource(R.string.ping_ttl_label, ttl),
-                        value = ttl.toFloat(),
-                        valueRange = 1f..255f,
-                        steps = 31,
-                        onValueChange = { onTtlChange(it.toInt()) },
-                        enabled = enabled,
-                    )
-                    PingSliderRow(
-                        label = stringResource(R.string.ping_interval_label, intervalMs),
-                        // 99 steps of 100 ms: 100 ms to 10 s in round values (V5-06).
-                        value = intervalMs.toFloat(),
-                        valueRange = 100f..10_000f,
-                        steps = 98,
-                        onValueChange = { onIntervalChange(it.toInt()) },
-                        enabled = enabled,
-                    )
-                    TextButton(
-                        onClick = onResetAdvanced,
-                        enabled = enabled,
-                        modifier = Modifier.align(Alignment.End),
-                    ) {
-                        Text(stringResource(R.string.ping_reset_advanced))
-                    }
-                }
+                PingAdvancedSliders(
+                    payloadBytes = payloadBytes,
+                    ttl = ttl,
+                    intervalMs = intervalMs,
+                    onPayloadSizeChange = onPayloadSizeChange,
+                    onTtlChange = onTtlChange,
+                    onIntervalChange = onIntervalChange,
+                    onResetAdvanced = onResetAdvanced,
+                    enabled = enabled,
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun PingAdvancedSliders(
+    payloadBytes: Int,
+    ttl: Int,
+    intervalMs: Int,
+    onPayloadSizeChange: (Int) -> Unit,
+    onTtlChange: (Int) -> Unit,
+    onIntervalChange: (Int) -> Unit,
+    onResetAdvanced: () -> Unit,
+    enabled: Boolean,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        PingSliderRow(
+            label = stringResource(R.string.ping_payload_label, payloadBytes),
+            value = payloadBytes.toFloat(),
+            valueRange = 0f..1472f,
+            steps = 31,
+            onValueChange = { onPayloadSizeChange(it.toInt()) },
+            enabled = enabled,
+        )
+        PingSliderRow(
+            label = stringResource(R.string.ping_ttl_label, ttl),
+            value = ttl.toFloat(),
+            valueRange = 1f..255f,
+            steps = 31,
+            onValueChange = { onTtlChange(it.toInt()) },
+            enabled = enabled,
+        )
+        PingSliderRow(
+            label = stringResource(R.string.ping_interval_label, intervalMs),
+            // 99 steps of 100 ms: 100 ms to 10 s in round values (V5-06).
+            value = intervalMs.toFloat(),
+            valueRange = 100f..10_000f,
+            steps = 98,
+            onValueChange = { onIntervalChange(it.toInt()) },
+            enabled = enabled,
+        )
+        TextButton(
+            onClick = onResetAdvanced,
+            enabled = enabled,
+            modifier = Modifier.align(Alignment.End),
+        ) {
+            Text(stringResource(R.string.ping_reset_advanced))
         }
     }
 }
@@ -740,70 +763,7 @@ private fun PingIdlePanel(hasHost: Boolean) {
 private fun PingRunningPanel(state: PingUiState.Running) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Progress / counter card
-        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text =
-                            if (state.isContinuous) {
-                                stringResource(R.string.ping_continuous_running_title)
-                            } else {
-                                stringResource(R.string.ping_running_title)
-                            },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    if (state.isContinuous) {
-                        Text(
-                            text = stringResource(R.string.ping_pings_sent, state.pingsSent),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    } else {
-                        Text(
-                            text = stringResource(R.string.ping_progress_format, state.packets.size, state.totalCount),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-                if (!state.isContinuous) {
-                    LinearProgressIndicator(
-                        progress = { state.packets.size.toFloat() / state.totalCount.coerceAtLeast(1) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                if (state.packets.isNotEmpty()) {
-                    val liveStats = state.stats ?: PingStats.compute(state.packets)
-                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                    ) {
-                        val lossColor =
-                            if (liveStats.lossPercent == 0f) {
-                                MaterialTheme.colorScheme.tertiary
-                            } else {
-                                MaterialTheme.colorScheme.error
-                            }
-                        LiveStatLabel(
-                            label = stringResource(R.string.ping_packet_loss),
-                            value = pingLossLabel(liveStats.lossPercent),
-                            color = lossColor,
-                        )
-                        if (liveStats.received > 0) {
-                            LiveStatLabel(stringResource(R.string.ping_rtt_min), "${liveStats.minMs} ms")
-                            LiveStatLabel(stringResource(R.string.ping_rtt_avg), "${"%.0f".format(liveStats.avgMs)} ms")
-                            LiveStatLabel(stringResource(R.string.ping_rtt_max), "${liveStats.maxMs} ms")
-                        }
-                    }
-                }
-            }
-        }
+        PingProgressCard(state)
 
         // Live RTT chart (rolling window in continuous mode)
         if (state.packets.any { it.rtTimeMs != null }) {
@@ -815,28 +775,106 @@ private fun PingRunningPanel(state: PingUiState.Running) {
 
         // Live packet list, bounded to the rolling window in continuous mode
         if (state.packets.isNotEmpty()) {
-            val displayLimit = PING_ROLLING_WINDOW
-            val displayPackets = if (state.isContinuous) state.packets.takeLast(displayLimit) else state.packets
-            val maxRtt = displayPackets.mapNotNull { it.rtTimeMs }.maxOrNull() ?: 0L
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
+            PingLivePacketsCard(state)
+        }
+    }
+}
+
+@Composable
+private fun PingProgressCard(state: PingUiState.Running) {
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text =
+                        if (state.isContinuous) {
+                            stringResource(R.string.ping_continuous_running_title)
+                        } else {
+                            stringResource(R.string.ping_running_title)
+                        },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                if (state.isContinuous) {
                     Text(
-                        text = stringResource(R.string.ping_result_header),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+                        text = stringResource(R.string.ping_pings_sent, state.pingsSent),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
                     )
-                    if (state.isContinuous && state.pingsSent > displayLimit) {
-                        Text(
-                            text = stringResource(R.string.ping_showing_recent, displayLimit, state.pingsSent),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
-                        items(displayPackets, key = { it.sequence }) { packet -> PacketRow(packet, maxRttMs = maxRtt) }
-                    }
+                } else {
+                    Text(
+                        text = stringResource(R.string.ping_progress_format, state.packets.size, state.totalCount),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
                 }
+            }
+            if (!state.isContinuous) {
+                LinearProgressIndicator(
+                    progress = { state.packets.size.toFloat() / state.totalCount.coerceAtLeast(1) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            if (state.packets.isNotEmpty()) {
+                val liveStats = state.stats ?: PingStats.compute(state.packets)
+                HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                PingLiveStatsRow(liveStats)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PingLiveStatsRow(liveStats: PingStats) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        val lossColor =
+            if (liveStats.lossPercent == 0f) {
+                MaterialTheme.colorScheme.tertiary
+            } else {
+                MaterialTheme.colorScheme.error
+            }
+        LiveStatLabel(
+            label = stringResource(R.string.ping_packet_loss),
+            value = pingLossLabel(liveStats.lossPercent),
+            color = lossColor,
+        )
+        if (liveStats.received > 0) {
+            LiveStatLabel(stringResource(R.string.ping_rtt_min), "${liveStats.minMs} ms")
+            LiveStatLabel(stringResource(R.string.ping_rtt_avg), "${"%.0f".format(liveStats.avgMs)} ms")
+            LiveStatLabel(stringResource(R.string.ping_rtt_max), "${liveStats.maxMs} ms")
+        }
+    }
+}
+
+@Composable
+private fun PingLivePacketsCard(state: PingUiState.Running) {
+    val displayLimit = PING_ROLLING_WINDOW
+    val displayPackets = if (state.isContinuous) state.packets.takeLast(displayLimit) else state.packets
+    val maxRtt = displayPackets.mapNotNull { it.rtTimeMs }.maxOrNull() ?: 0L
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = stringResource(R.string.ping_result_header),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (state.isContinuous && state.pingsSent > displayLimit) {
+                Text(
+                    text = stringResource(R.string.ping_showing_recent, displayLimit, state.pingsSent),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                items(displayPackets, key = { it.sequence }) { packet -> PacketRow(packet, maxRttMs = maxRtt) }
             }
         }
     }

@@ -32,9 +32,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Devices
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -42,14 +39,11 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -110,7 +104,7 @@ object WakeOnLanScreenTestTags {
     const val CLEAR_PREFILL_ACTION = "wol_clear_prefill_action"
 }
 
-private val MinTouchTarget = 48.dp
+internal val MinTouchTarget = 48.dp
 
 @Composable
 fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
@@ -132,13 +126,7 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
     val editingMac by viewModel.editingMac.collectAsStateWithLifecycle()
     val saveConflict by viewModel.saveConflict.collectAsStateWithLifecycle()
     val saveNotice by viewModel.saveNotice.collectAsStateWithLifecycle()
-    val announcementPhase =
-        when (uiState) {
-            WolUiState.Idle -> null
-            WolUiState.Sending -> ToolAnnouncementPhase.RUNNING
-            is WolUiState.Success -> ToolAnnouncementPhase.FINISHED
-            is WolUiState.Error -> ToolAnnouncementPhase.ERROR
-        }
+    val announcementPhase = uiState.announcementPhase()
     ToolStateAnnouncer(stringResource(R.string.wol_screen_title), announcementPhase)
 
     var visible by remember { mutableStateOf(false) }
@@ -236,52 +224,52 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
     }
 
     pendingDelete?.let { device ->
-        val label = WolSavedDevices.displayName(device)
-        AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            title = { Text(stringResource(R.string.wol_delete_confirm_title)) },
-            text = { Text(stringResource(R.string.wol_delete_confirm_body, label)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.savedDeviceEditor.deleteDevice(device.mac)
-                        pendingDelete = null
-                    },
-                ) {
-                    Text(stringResource(R.string.wol_delete_confirm_action), color = MaterialTheme.colorScheme.error)
-                }
+        WolDeleteDeviceDialog(
+            device = device,
+            onConfirm = {
+                viewModel.savedDeviceEditor.deleteDevice(device.mac)
+                pendingDelete = null
             },
-            dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
+            onDismiss = { pendingDelete = null },
         )
     }
 
     if (showHelp) {
-        ToolHelpSheet(
-            title = stringResource(R.string.wol_screen_title),
-            conceptHeading = stringResource(R.string.help_wol_concept_heading),
-            conceptBody = stringResource(R.string.help_wol_concept_body),
-            sections =
-                listOf(
-                    HelpSection(
-                        heading = stringResource(R.string.help_wol_mac_heading),
-                        body = stringResource(R.string.help_wol_mac_body),
-                    ),
-                    HelpSection(
-                        heading = stringResource(R.string.help_wol_requirements_heading),
-                        body = stringResource(R.string.help_wol_requirements_body),
-                    ),
-                    HelpSection(
-                        heading = stringResource(R.string.help_wol_broadcast_heading),
-                        body = stringResource(R.string.help_wol_broadcast_body),
-                    ),
-                ),
-            onDismiss = { showHelp = false },
-        )
+        WolHelpSheet(onDismiss = { showHelp = false })
     }
+}
+
+private fun WolUiState.announcementPhase(): ToolAnnouncementPhase? =
+    when (this) {
+        WolUiState.Idle -> null
+        WolUiState.Sending -> ToolAnnouncementPhase.RUNNING
+        is WolUiState.Success -> ToolAnnouncementPhase.FINISHED
+        is WolUiState.Error -> ToolAnnouncementPhase.ERROR
+    }
+
+@Composable
+private fun WolHelpSheet(onDismiss: () -> Unit) {
+    ToolHelpSheet(
+        title = stringResource(R.string.wol_screen_title),
+        conceptHeading = stringResource(R.string.help_wol_concept_heading),
+        conceptBody = stringResource(R.string.help_wol_concept_body),
+        sections =
+            listOf(
+                HelpSection(
+                    heading = stringResource(R.string.help_wol_mac_heading),
+                    body = stringResource(R.string.help_wol_mac_body),
+                ),
+                HelpSection(
+                    heading = stringResource(R.string.help_wol_requirements_heading),
+                    body = stringResource(R.string.help_wol_requirements_body),
+                ),
+                HelpSection(
+                    heading = stringResource(R.string.help_wol_broadcast_heading),
+                    body = stringResource(R.string.help_wol_broadcast_body),
+                ),
+            ),
+        onDismiss = onDismiss,
+    )
 }
 
 @Composable
@@ -519,205 +507,6 @@ private fun WolStateCard(
                     message = ErrorTextMapper.map(state.info, state.message).asString(),
                     onRetry = onRetry,
                 )
-            }
-        }
-    }
-}
-
-// ── Saved devices ─────────────────────────────────────────────────────────────
-
-@Composable
-@Suppress("FunctionNaming", "ktlint:standard:function-naming")
-private fun WolSavedDevicesSection(
-    devices: List<WolSavedDevice>,
-    deviceName: String,
-    editingMac: String?,
-    conflict: Boolean,
-    notice: WolSaveNotice?,
-    canSave: Boolean,
-    isSending: Boolean,
-    onNameChange: (String) -> Unit,
-    onSave: () -> Unit,
-    onCancelEdit: () -> Unit,
-    onUse: (WolSavedDevice) -> Unit,
-    onWake: (WolSavedDevice) -> Unit,
-    onEdit: (WolSavedDevice) -> Unit,
-    onDelete: (WolSavedDevice) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.s + AppSpacing.xs)) {
-        Text(
-            text = stringResource(R.string.wol_saved_title),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        WolSavedDeviceForm(
-            deviceName = deviceName,
-            editingMac = editingMac,
-            conflict = conflict,
-            notice = notice,
-            canSave = canSave,
-            isSending = isSending,
-            onNameChange = onNameChange,
-            onSave = onSave,
-            onCancelEdit = onCancelEdit,
-        )
-        HorizontalDivider()
-        if (devices.isEmpty()) {
-            Text(
-                text = stringResource(R.string.wol_saved_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            devices.forEach { device ->
-                WolSavedDeviceRow(
-                    device = device,
-                    isSending = isSending,
-                    onUse = { onUse(device) },
-                    onWake = { onWake(device) },
-                    onEdit = { onEdit(device) },
-                    onDelete = { onDelete(device) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-@Suppress("FunctionNaming", "ktlint:standard:function-naming")
-private fun WolSavedDeviceForm(
-    deviceName: String,
-    editingMac: String?,
-    conflict: Boolean,
-    notice: WolSaveNotice?,
-    canSave: Boolean,
-    isSending: Boolean,
-    onNameChange: (String) -> Unit,
-    onSave: () -> Unit,
-    onCancelEdit: () -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.s + AppSpacing.xs)) {
-        ToolTextField(
-            value = deviceName,
-            onValueChange = onNameChange,
-            label = { Text(stringResource(R.string.wol_device_name_label)) },
-            leadingIcon = {
-                Icon(Icons.Default.Devices, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            },
-            singleLine = true,
-            enabled = !isSending,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            modifier = Modifier.fillMaxWidth(),
-            shape = AppShapes.medium,
-        )
-        if (conflict) {
-            Text(
-                text = stringResource(R.string.wol_device_conflict),
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        notice?.let { WolSaveNoticeText(it) }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(AppSpacing.s),
-        ) {
-            Button(
-                onClick = hapticAction(onSave),
-                enabled = canSave,
-                modifier = Modifier.heightIn(min = MinTouchTarget),
-            ) {
-                val label = if (editingMac != null) R.string.wol_update_device else R.string.wol_save_device
-                Text(stringResource(label))
-            }
-            if (editingMac != null) {
-                TextButton(
-                    onClick = onCancelEdit,
-                    enabled = !isSending,
-                    modifier = Modifier.heightIn(min = MinTouchTarget),
-                ) {
-                    Text(stringResource(R.string.wol_cancel_edit))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-@Suppress("FunctionNaming", "ktlint:standard:function-naming")
-private fun WolSavedDeviceRow(
-    device: WolSavedDevice,
-    isSending: Boolean,
-    onUse: () -> Unit,
-    onWake: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    val label = WolSavedDevices.displayName(device)
-    val editDescription = stringResource(R.string.wol_edit_device_description, label)
-    val deleteDescription = stringResource(R.string.wol_delete_device_description, label)
-    val wakeDescription = stringResource(R.string.wol_wake_device_description, label)
-    val usesDefaultTarget =
-        device.broadcastAddress == WakeOnLanViewModel.DEFAULT_BROADCAST &&
-            device.port == WakeOnLanViewModel.DEFAULT_PORT
-    // The MAC gets the full row width (never wrapped mid-address); the actions sit on their own line.
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        if (label != device.mac) {
-            Text(
-                text = device.mac,
-                style = MaterialTheme.typography.labelSmall,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-            )
-        }
-        if (!usesDefaultTarget) {
-            Text(
-                text = stringResource(R.string.wol_saved_target, device.broadcastAddress, device.port),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.End,
-        ) {
-            TextButton(
-                onClick = hapticAction(onUse),
-                enabled = !isSending,
-                modifier = Modifier.heightIn(min = MinTouchTarget),
-            ) {
-                Text(stringResource(R.string.wol_use_device))
-            }
-            FilledTonalButton(
-                onClick = hapticAction(onWake),
-                enabled = !isSending,
-                modifier =
-                    Modifier
-                        .heightIn(min = MinTouchTarget)
-                        .semantics { contentDescription = wakeDescription },
-            ) {
-                Text(stringResource(R.string.wol_wake_device))
-            }
-            IconButton(
-                onClick = onEdit,
-                enabled = !isSending,
-                modifier = Modifier.semantics { contentDescription = editDescription },
-            ) {
-                Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            }
-            IconButton(
-                onClick = onDelete,
-                enabled = !isSending,
-                modifier = Modifier.semantics { contentDescription = deleteDescription },
-            ) {
-                Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
             }
         }
     }

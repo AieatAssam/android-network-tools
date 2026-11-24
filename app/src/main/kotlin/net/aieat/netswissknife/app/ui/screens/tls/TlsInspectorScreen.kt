@@ -739,148 +739,171 @@ private fun ConnectionCard(result: TlsInspectorResult) {
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.tls_connection_header),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    // Verdict, not the bare chain result: hostname, expiry and pin failures
-                    // make the connection untrusted even when the chain verifies.
-                    val trusted = result.isConnectionTrusted
-                    SuggestionChip(
-                        onClick = {},
-                        label = {
-                            Text(
-                                if (trusted) {
-                                    stringResource(R.string.tls_trusted)
-                                } else {
-                                    stringResource(R.string.tls_untrusted)
-                                },
-                            )
-                        },
-                        colors = verdictChipColors(trusted),
-                    )
-                }
-
-                Text(
-                    text = verdictDetail(result),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.testTag(TlsInspectorScreenTestTags.VERDICT_DETAIL),
-                )
-                HorizontalDivider()
-
-                LabeledValue(
-                    label = stringResource(R.string.tls_version),
-                    value = result.tlsVersion,
-                )
-                result.hostnameMatches?.let { matches ->
-                    LabeledValue(
-                        label = stringResource(R.string.tls_hostname_label),
-                        value =
-                            stringResource(
-                                if (matches) R.string.tls_hostname_matches else R.string.tls_hostname_does_not_match,
-                            ),
-                    )
-                }
-                LabeledValue(
-                    label = stringResource(R.string.tls_cipher_suite),
-                    value = withSeparatorBreaks(result.cipherSuite),
-                )
-                if (result.handshakeCompleted) {
-                    LabeledValue(
-                        label = stringResource(R.string.tls_handshake_time),
-                        value = stringResource(R.string.tls_ms_format, result.handshakeTimeMs),
-                    )
-                }
-                LabeledValue(
-                    label = stringResource(R.string.tls_connect_time),
-                    value = stringResource(R.string.tls_ms_format, result.connectTimeMs),
-                )
-                result.alpn?.takeIf { it.isNotBlank() }?.let { alpn ->
-                    LabeledValue(stringResource(R.string.tls_alpn), alpn)
-                }
-                result.protocolSupport?.toSortedMap()?.forEach { (protocol, supported) ->
-                    LabeledValue(
-                        label = protocol,
-                        value = stringResource(if (supported) R.string.tls_supported else R.string.tls_not_supported),
-                    )
-                }
-                result.protocolProbeUnknown.sorted().forEach { protocol ->
-                    LabeledValue(protocol, stringResource(R.string.tls_probe_unknown))
-                }
-                result.protocolProbeNotTestable.sorted().forEach { protocol ->
-                    LabeledValue(protocol, stringResource(R.string.tls_probe_not_testable))
-                }
-                if (result.chainIssues.isNotEmpty()) {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                    Text(
-                        stringResource(R.string.tls_findings),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    result.chainIssues.forEach { issue ->
-                        val blocking = issue.isBlocking
-                        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(
-                                Icons.Default.Warning,
-                                contentDescription = null,
-                                tint =
-                                    if (blocking) {
-                                        MaterialTheme.colorScheme.error
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Surface(
-                                    shape = MaterialTheme.shapes.small,
-                                    color =
-                                        if (blocking) {
-                                            MaterialTheme.colorScheme.errorContainer
-                                        } else {
-                                            MaterialTheme.colorScheme.secondaryContainer
-                                        },
-                                ) {
-                                    Text(
-                                        stringResource(
-                                            if (blocking) {
-                                                R.string.tls_finding_blocking
-                                            } else {
-                                                R.string.tls_finding_advisory
-                                            },
-                                        ),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color =
-                                            if (blocking) {
-                                                MaterialTheme.colorScheme.onErrorContainer
-                                            } else {
-                                                MaterialTheme.colorScheme.onSecondaryContainer
-                                            },
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    )
-                                }
-                                Text(
-                                    issueText(issue, result.untrustedRootName),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color =
-                                        if (blocking) {
-                                            MaterialTheme.colorScheme.error
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
-                                )
-                            }
-                        }
-                    }
-                }
+                ConnectionVerdictHeader(result)
+                ConnectionDetails(result)
+                ConnectionFindings(result)
             }
+        }
+    }
+}
+
+/** The card title with the Trusted or Untrusted chip, and the line that says what the verdict rests on. */
+@Composable
+private fun ConnectionVerdictHeader(result: TlsInspectorResult) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.tls_connection_header),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        // Verdict, not the bare chain result: hostname, expiry and pin failures
+        // make the connection untrusted even when the chain verifies.
+        val trusted = result.isConnectionTrusted
+        SuggestionChip(
+            onClick = {},
+            label = {
+                Text(
+                    if (trusted) {
+                        stringResource(R.string.tls_trusted)
+                    } else {
+                        stringResource(R.string.tls_untrusted)
+                    },
+                )
+            },
+            colors = verdictChipColors(trusted),
+        )
+    }
+
+    Text(
+        text = verdictDetail(result),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.testTag(TlsInspectorScreenTestTags.VERDICT_DETAIL),
+    )
+    HorizontalDivider()
+}
+
+@Composable
+private fun ConnectionDetails(result: TlsInspectorResult) {
+    LabeledValue(
+        label = stringResource(R.string.tls_version),
+        value = result.tlsVersion,
+    )
+    result.hostnameMatches?.let { matches ->
+        LabeledValue(
+            label = stringResource(R.string.tls_hostname_label),
+            value =
+                stringResource(
+                    if (matches) R.string.tls_hostname_matches else R.string.tls_hostname_does_not_match,
+                ),
+        )
+    }
+    LabeledValue(
+        label = stringResource(R.string.tls_cipher_suite),
+        value = withSeparatorBreaks(result.cipherSuite),
+    )
+    if (result.handshakeCompleted) {
+        LabeledValue(
+            label = stringResource(R.string.tls_handshake_time),
+            value = stringResource(R.string.tls_ms_format, result.handshakeTimeMs),
+        )
+    }
+    LabeledValue(
+        label = stringResource(R.string.tls_connect_time),
+        value = stringResource(R.string.tls_ms_format, result.connectTimeMs),
+    )
+    result.alpn?.takeIf { it.isNotBlank() }?.let { alpn ->
+        LabeledValue(stringResource(R.string.tls_alpn), alpn)
+    }
+    result.protocolSupport?.toSortedMap()?.forEach { (protocol, supported) ->
+        LabeledValue(
+            label = protocol,
+            value = stringResource(if (supported) R.string.tls_supported else R.string.tls_not_supported),
+        )
+    }
+    result.protocolProbeUnknown.sorted().forEach { protocol ->
+        LabeledValue(protocol, stringResource(R.string.tls_probe_unknown))
+    }
+    result.protocolProbeNotTestable.sorted().forEach { protocol ->
+        LabeledValue(protocol, stringResource(R.string.tls_probe_not_testable))
+    }
+}
+
+@Composable
+private fun ConnectionFindings(result: TlsInspectorResult) {
+    if (result.chainIssues.isNotEmpty()) {
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        Text(
+            stringResource(R.string.tls_findings),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
+        result.chainIssues.forEach { issue ->
+            ChainIssueRow(issue, result.untrustedRootName)
+        }
+    }
+}
+
+@Composable
+private fun ChainIssueRow(
+    issue: net.aieat.netswissknife.core.network.tls.ChainIssue,
+    untrustedRootName: String?,
+) {
+    val blocking = issue.isBlocking
+    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(
+            Icons.Default.Warning,
+            contentDescription = null,
+            tint =
+                if (blocking) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            modifier = Modifier.size(18.dp),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color =
+                    if (blocking) {
+                        MaterialTheme.colorScheme.errorContainer
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    },
+            ) {
+                Text(
+                    stringResource(
+                        if (blocking) {
+                            R.string.tls_finding_blocking
+                        } else {
+                            R.string.tls_finding_advisory
+                        },
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color =
+                        if (blocking) {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        },
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+            Text(
+                issueText(issue, untrustedRootName),
+                style = MaterialTheme.typography.bodySmall,
+                color =
+                    if (blocking) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+            )
         }
     }
 }

@@ -66,6 +66,13 @@ internal data class WolSessionSnapshot(
     val finished: WolUiState?,
 )
 
+private fun NetworkResult.Error.toWolErrorState(): WolUiState.Error =
+    WolUiState.Error(
+        message = message,
+        info = info,
+        networkErrorKind = cause.toNetworkErrorKind(),
+    )
+
 @HiltViewModel
 class WakeOnLanViewModel
     @Inject
@@ -172,7 +179,7 @@ class WakeOnLanViewModel
                 scope = viewModelScope,
                 currentMac = { _macAddress.value },
                 currentBroadcast = { _broadcastAddress.value },
-                currentPort = { formPort() },
+                currentPort = { _port.value.toIntOrNull()?.takeIf { it in PORT_RANGE } },
                 fillDevice = { device -> fillTarget(device) },
                 initialDeviceName = restoredSession?.deviceName.orEmpty(),
             )
@@ -271,8 +278,6 @@ class WakeOnLanViewModel
             onPortChange(device.port.toString())
         }
 
-        private fun formPort(): Int? = _port.value.toIntOrNull()?.takeIf { it in PORT_RANGE }
-
         private fun sendTo(
             mac: String,
             broadcast: String,
@@ -296,7 +301,7 @@ class WakeOnLanViewModel
                     _uiState.value =
                         when (result) {
                             is NetworkResult.Success -> WolUiState.Success(result.data)
-                            is NetworkResult.Error -> errorState(result)
+                            is NetworkResult.Error -> result.toWolErrorState()
                         }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -305,13 +310,6 @@ class WakeOnLanViewModel
                 }
             }
         }
-
-        private fun errorState(result: NetworkResult.Error): WolUiState.Error =
-            WolUiState.Error(
-                message = result.message,
-                info = result.info,
-                networkErrorKind = result.cause.toNetworkErrorKind(),
-            )
 
         fun stopSending() {
             sendGeneration++

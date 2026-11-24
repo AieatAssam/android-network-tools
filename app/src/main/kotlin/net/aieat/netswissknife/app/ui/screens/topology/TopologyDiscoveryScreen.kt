@@ -800,21 +800,7 @@ private fun TopologyResultUtilities(
     onSelectNode: (String) -> Unit,
 ) {
     val context = LocalContext.current
-    val reportLabels =
-        TopologyReportLabels(
-            title = stringResource(R.string.topology_report_title),
-            queried = stringResource(R.string.topology_report_queried),
-            counts = stringResource(R.string.topology_report_counts),
-            truncated = stringResource(R.string.topology_report_truncated),
-            snmpErrors = stringResource(R.string.topology_report_snmp_errors),
-            vendor = stringResource(R.string.topology_report_vendor),
-            model = stringResource(R.string.topology_report_model),
-            snmp = stringResource(R.string.topology_report_snmp),
-            reachable = stringResource(R.string.topology_report_reachable),
-            unavailable = stringResource(R.string.topology_report_unavailable),
-            interfaceLine = stringResource(R.string.topology_report_interface),
-            vlanLine = stringResource(R.string.topology_report_vlan),
-        )
+    val reportLabels = topologyReportLabels()
     val copiedMessage = stringResource(R.string.lan_copied)
     val shareSubject = stringResource(R.string.topology_screen_title)
     val clipLabel = stringResource(R.string.topology_screen_title)
@@ -827,32 +813,13 @@ private fun TopologyResultUtilities(
             }
         }
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier.weight(1f)) {
-            OutlinedTextField(
-                value = nodeSearch,
-                onValueChange = onNodeSearchChange,
-                label = { Text(stringResource(R.string.topology_search_nodes)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
-            )
-            DropdownMenu(
-                expanded = matches.isNotEmpty(),
-                onDismissRequest = { onNodeSearchChange("") },
-                properties =
-                    androidx.compose.ui.window
-                        .PopupProperties(focusable = false),
-            ) {
-                matches.take(8).forEach { node ->
-                    DropdownMenuItem(
-                        text = { Text("${node.sysName ?: node.ip} · ${node.ip}") },
-                        onClick = {
-                            onSelectNode(node.ip)
-                            onNodeSearchChange("")
-                        },
-                    )
-                }
-            }
-        }
+        TopologyNodeSearch(
+            nodeSearch = nodeSearch,
+            matches = matches,
+            onNodeSearchChange = onNodeSearchChange,
+            onSelectNode = onSelectNode,
+            modifier = Modifier.weight(1f),
+        )
         TextButton(onClick = {
             val report = topologyReport(graph, reportStatus, reportLabels)
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -863,6 +830,60 @@ private fun TopologyResultUtilities(
             context.shareText(topologyReport(graph, reportStatus, reportLabels), shareSubject)
         }) {
             Text(stringResource(R.string.action_share))
+        }
+    }
+}
+
+@Composable
+private fun topologyReportLabels(): TopologyReportLabels =
+    TopologyReportLabels(
+        title = stringResource(R.string.topology_report_title),
+        queried = stringResource(R.string.topology_report_queried),
+        counts = stringResource(R.string.topology_report_counts),
+        truncated = stringResource(R.string.topology_report_truncated),
+        snmpErrors = stringResource(R.string.topology_report_snmp_errors),
+        vendor = stringResource(R.string.topology_report_vendor),
+        model = stringResource(R.string.topology_report_model),
+        snmp = stringResource(R.string.topology_report_snmp),
+        reachable = stringResource(R.string.topology_report_reachable),
+        unavailable = stringResource(R.string.topology_report_unavailable),
+        interfaceLine = stringResource(R.string.topology_report_interface),
+        vlanLine = stringResource(R.string.topology_report_vlan),
+    )
+
+/** The node search field, with a menu of the first matching nodes; picking one selects it and clears the search. */
+@Composable
+private fun TopologyNodeSearch(
+    nodeSearch: String,
+    matches: List<TopologyNode>,
+    onNodeSearchChange: (String) -> Unit,
+    onSelectNode: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        OutlinedTextField(
+            value = nodeSearch,
+            onValueChange = onNodeSearchChange,
+            label = { Text(stringResource(R.string.topology_search_nodes)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
+        )
+        DropdownMenu(
+            expanded = matches.isNotEmpty(),
+            onDismissRequest = { onNodeSearchChange("") },
+            properties =
+                androidx.compose.ui.window
+                    .PopupProperties(focusable = false),
+        ) {
+            matches.take(8).forEach { node ->
+                DropdownMenuItem(
+                    text = { Text("${node.sysName ?: node.ip} · ${node.ip}") },
+                    onClick = {
+                        onSelectNode(node.ip)
+                        onNodeSearchChange("")
+                    },
+                )
+            }
         }
     }
 }
@@ -1889,36 +1910,10 @@ private fun NeighbourRow(
                 .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-        ) {
-            Text(
-                text = link.protocol.name,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            )
-        }
+        NeighbourProtocolBadge(link.protocol.name)
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
-            val portInfo =
-                when {
-                    localPort != null && remotePort != null -> {
-                        stringResource(R.string.topology_neighbour_ports, localPort, remotePort)
-                    }
-
-                    localPort != null -> {
-                        stringResource(R.string.topology_neighbour_local_port, localPort)
-                    }
-
-                    remotePort != null -> {
-                        stringResource(R.string.topology_neighbour_remote_port, remotePort)
-                    }
-
-                    else -> {
-                        ""
-                    }
-                }
+            val portInfo = neighbourPortInfo(localPort, remotePort)
             if (portInfo.isNotBlank()) {
                 Text(
                     text = portInfo,
@@ -1948,6 +1943,45 @@ private fun NeighbourRow(
         }
     }
 }
+
+/** The discovery protocol that reported a neighbour link, e.g. LLDP or CDP. */
+@Composable
+private fun NeighbourProtocolBadge(protocol: String) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Text(
+            text = protocol,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        )
+    }
+}
+
+/** The local and remote port of a neighbour link, whichever are known; empty when neither is. */
+@Composable
+private fun neighbourPortInfo(
+    localPort: String?,
+    remotePort: String?,
+): String =
+    when {
+        localPort != null && remotePort != null -> {
+            stringResource(R.string.topology_neighbour_ports, localPort, remotePort)
+        }
+
+        localPort != null -> {
+            stringResource(R.string.topology_neighbour_local_port, localPort)
+        }
+
+        remotePort != null -> {
+            stringResource(R.string.topology_neighbour_remote_port, remotePort)
+        }
+
+        else -> {
+            ""
+        }
+    }
 
 /**
  * Formats a link speed with one decimal place where it adds information, e.g. 2.5 Gbps or 1.5 Mbps.

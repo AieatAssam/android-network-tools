@@ -235,7 +235,7 @@ data class TraceRouteMap(
                 val last = target.lastOrNull()
                 val samePlace = last?.let { it.lat == geo.lat && it.location.lon == geo.lon } == true
                 val merges = last != null && samePlace && (!isDisputed || adjacent(last, stops))
-                if (merges && last != null) {
+                if (merges) {
                     target[target.lastIndex] = last.copy(hops = last.hops + hop)
                 } else {
                     target += RouteStop(hops = listOf(hop), lat = geo.lat, lon = lon, disputed = isDisputed)

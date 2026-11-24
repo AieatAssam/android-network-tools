@@ -410,14 +410,7 @@ class TlsInspectorViewModelTest {
                             OperationRunner.run(operationSession) {
                                 if (operationCount++ == 0) {
                                     capturedSession = operationSession
-                                    operationSession.resources.register(
-                                        AutoCloseable {
-                                            cleanupStarted.complete(Unit)
-                                            check(allowCleanupToFinish.await(10, TimeUnit.SECONDS)) {
-                                                "test did not release TLS operation cleanup"
-                                            }
-                                        },
-                                    )
+                                    operationSession.registerBlockingCleanup(cleanupStarted, allowCleanupToFinish)
                                     operationEntered.complete(Unit)
                                     awaitCancellation()
                                 } else {
@@ -445,25 +438,18 @@ class TlsInspectorViewModelTest {
                     assertFalse(cancelViewModel.uiState.value.isCanceled)
 
                     cancelViewModel.stopInspection()
-                    withContext(Dispatchers.Default.limitedParallelism(1)) {
-                        withTimeout(5_000) { cleanupStarted.await() }
-                    }
+                    awaitOffTestDispatcher { cleanupStarted.await() }
                     assertTrue(cancelViewModel.uiState.value.isLoading)
                     assertTrue(cancelViewModel.uiState.value.isCanceling)
                 } finally {
                     allowCleanupToFinish.countDown()
                     cancelViewModel.stopInspection()
                     if (operationEntered.isCompleted) {
-                        withContext(Dispatchers.Default.limitedParallelism(1)) {
-                            withTimeout(5_000) { cancelViewModel.uiState.first { !it.isLoading } }
-                        }
+                        awaitOffTestDispatcher { cancelViewModel.uiState.first { !it.isLoading } }
                     }
                 }
 
-                val canceledState =
-                    withContext(Dispatchers.Default.limitedParallelism(1)) {
-                        withTimeout(5_000) { cancelViewModel.uiState.first { it.isCanceled } }
-                    }
+                val canceledState = awaitOffTestDispatcher { cancelViewModel.uiState.first { it.isCanceled } }
                 assertFalse(canceledState.isLoading)
                 assertFalse(canceledState.isCanceling)
                 assertNull(canceledState.result)
@@ -475,10 +461,8 @@ class TlsInspectorViewModelTest {
 
                 cancelViewModel.inspect()
                 val retriedState =
-                    withContext(Dispatchers.Default.limitedParallelism(1)) {
-                        withTimeout(5_000) {
-                            cancelViewModel.uiState.first { it.result != null || it.error != null }
-                        }
+                    awaitOffTestDispatcher {
+                        cancelViewModel.uiState.first { it.result != null || it.error != null }
                     }
 
                 assertEquals(stubResult, retriedState.result)
@@ -739,4 +723,25 @@ class TlsInspectorViewModelTest {
             "port" to "8443",
         )
     }
+}
+
+/** Waits up to five seconds on a real thread, for work that the test dispatcher does not drive. */
+private suspend fun <T> awaitOffTestDispatcher(block: suspend () -> T): T =
+    withContext(Dispatchers.Default.limitedParallelism(1)) {
+        withTimeout(5_000) { block() }
+    }
+
+/** Registers a cleanup that signals [started], then blocks until the test opens [release]. */
+private fun OperationSession.registerBlockingCleanup(
+    started: CompletableDeferred<Unit>,
+    release: CountDownLatch,
+) {
+    resources.register(
+        AutoCloseable {
+            started.complete(Unit)
+            check(release.await(10, TimeUnit.SECONDS)) {
+                "test did not release TLS operation cleanup"
+            }
+        },
+    )
 }

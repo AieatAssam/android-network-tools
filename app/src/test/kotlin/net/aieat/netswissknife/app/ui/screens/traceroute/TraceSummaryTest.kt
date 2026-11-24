@@ -86,6 +86,21 @@ class TraceSummaryTest {
         }
 
         @Test
+        fun `a single silent hop after the last reply of a finished trace is a run marked as the end of replies`() {
+            val rows = hopListRows(listOf(reply(1), reply(2), silent(3)), finished = true)
+
+            assertEquals(HopListRow.NoReplyRun(firstHop = 3, lastHop = 3, afterLastReply = true), rows.last())
+            assertEquals(3, rows.size)
+        }
+
+        @Test
+        fun `a single latest silent hop of a running trace keeps its own row`() {
+            val rows = hopListRows(listOf(reply(1), silent(2)), finished = false)
+
+            assertEquals(listOf(HopListRow.Hop(reply(1)), HopListRow.Hop(silent(2))), rows)
+        }
+
+        @Test
         fun `a trace where nothing answered is one row`() {
             val rows = hopListRows((1..5).map(::silent), finished = true)
 

@@ -862,6 +862,39 @@ private fun LazyListScope.serviceResultItems(
             ServiceGroupModeRow(groupByDevice = groupByDevice, onChange = onGroupByDevice)
         }
     }
+    serviceStatusItems(
+        uiState = uiState,
+        filteredByType = filteredByType,
+        noMatch = noMatch,
+        searchQuery = searchQuery,
+        onSearchChange = onSearchChange,
+    )
+    serviceGroupItems(
+        groups = groups,
+        groupByDevice = groupByDevice,
+        expandedGroups = expandedGroups,
+        onPingHost = onPingHost,
+        onHttpProbe = onHttpProbe,
+    )
+    item(key = "report") {
+        ResultActionsRow(
+            copyText = report,
+            onShare = onShare,
+        )
+    }
+    item(key = "end_spacer") {
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+/** The no-match hint, cancel and scanning notes, and the service count shown above the groups. */
+private fun LazyListScope.serviceStatusItems(
+    uiState: MdnsDiscoveryUiState,
+    filteredByType: Map<String, List<DiscoveredService>>,
+    noMatch: Boolean,
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
+) {
     if (noMatch) {
         item(key = "no_match") {
             NoMatchHint(query = searchQuery, onClear = { onSearchChange("") })
@@ -888,6 +921,16 @@ private fun LazyListScope.serviceResultItems(
             ServiceCountText(shown = shown, total = uiState.services.size)
         }
     }
+}
+
+/** One header per group and, while the group is expanded, one row per service. */
+private fun LazyListScope.serviceGroupItems(
+    groups: Map<String, List<DiscoveredService>>,
+    groupByDevice: Boolean,
+    expandedGroups: MutableMap<String, Boolean>,
+    onPingHost: (String) -> Unit,
+    onHttpProbe: (DiscoveredService) -> Unit,
+) {
     groups.forEach { (groupKey, services) ->
         val isExpanded = expandedGroups[groupKey] != false
         item(key = "group:$groupKey") {
@@ -904,15 +947,6 @@ private fun LazyListScope.serviceResultItems(
                 ServiceItem(service, onPingHost, onHttpProbe)
             }
         }
-    }
-    item(key = "report") {
-        ResultActionsRow(
-            copyText = report,
-            onShare = onShare,
-        )
-    }
-    item(key = "end_spacer") {
-        Spacer(Modifier.height(16.dp))
     }
 }
 
@@ -1049,40 +1083,12 @@ private fun ServiceGroupHeader(
             tint = MaterialTheme.colorScheme.primary,
         )
         Spacer(Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (typeInfo != null) {
-                Text(
-                    text = groupKey,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        Box(
-            modifier =
-                Modifier
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary)
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-        ) {
-            Text(
-                text = count.toString(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onPrimary,
-                fontWeight = FontWeight.Bold,
-            )
-        }
+        ServiceGroupTitle(
+            title = title,
+            serviceType = groupKey.takeIf { typeInfo != null },
+            modifier = Modifier.weight(1f),
+        )
+        ServiceGroupCountBadge(count)
         Spacer(Modifier.width(8.dp))
         Icon(
             imageVector = Icons.Default.ExpandMore,
@@ -1093,7 +1099,53 @@ private fun ServiceGroupHeader(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/** The group's title and, for a known service type, the raw type string beneath it. */
+@Composable
+private fun ServiceGroupTitle(
+    title: String,
+    serviceType: String?,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (serviceType != null) {
+            Text(
+                text = serviceType,
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ServiceGroupCountBadge(count: Int) {
+    Box(
+        modifier =
+            Modifier
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary)
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+    ) {
+        Text(
+            text = count.toString(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onPrimary,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
 @Composable
 private fun ServiceItem(
     service: DiscoveredService,
@@ -1128,141 +1180,185 @@ private fun ServiceItem(
                 ),
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = service.displayName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (service.port > 0) {
-                    Text(
-                        text = ":${service.port}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontFamily = FontFamily.Monospace,
-                    )
-                }
-                if (hasTxt) {
-                    Icon(
-                        imageVector = Icons.Default.ExpandMore,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp).rotate(chevronRotation),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            ServiceItemHeader(service = service, hasTxt = hasTxt, chevronRotation = chevronRotation)
 
-            val validHostname =
-                ToolHost.parse(service.hostname)?.takeUnless {
-                    HostValidator.isValidIpv4(it.value) || HostValidator.isValidIpv6(it.value)
-                }
-            if (mdnsHttpIntent(service) != null) {
-                val httpProbeDescription =
-                    stringResource(
-                        R.string.mdns_http_probe_description,
-                        service.displayName,
-                    )
-                FilledTonalButton(
-                    onClick = { onHttpProbe(service) },
-                    modifier = Modifier.semantics { contentDescription = httpProbeDescription },
-                ) {
-                    Icon(Icons.Default.Http, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.mdns_http_probe))
-                }
-            }
-            if (validHostname != null) {
-                val pingHostnameDescription =
-                    stringResource(
-                        R.string.mdns_ping_hostname_description,
-                        validHostname.value,
-                    )
-                Text(
-                    text = validHostname.value,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                FilledTonalButton(
-                    onClick = { onPingHost(validHostname.value) },
-                    modifier = Modifier.semantics { contentDescription = pingHostnameDescription },
-                ) {
-                    Icon(Icons.Default.NetworkPing, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.mdns_ping_hostname))
-                }
-            }
+            ServiceHostActions(service = service, onPingHost = onPingHost, onHttpProbe = onHttpProbe)
 
-            val validAddresses =
-                service.ipAddresses
-                    .mapNotNull { address ->
-                        ToolHost.parse(address)?.takeIf {
-                            HostValidator.isValidIpv4(it.value) || HostValidator.isValidIpv6(it.value)
-                        }
-                    }.distinctBy { it.canonical }
-            if (validAddresses.isNotEmpty()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    validAddresses.forEach { ip ->
-                        SuggestionChip(
-                            onClick = { onPingHost(ip.value) },
-                            label = {
-                                Text(
-                                    stringResource(R.string.mdns_ping_address, ip.value),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontFamily = FontFamily.Monospace,
-                                )
-                            },
-                        )
-                    }
-                }
-            }
+            ServiceAddressChips(service = service, onPingHost = onPingHost)
 
             AnimatedVisibility(visible = expanded && hasTxt) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                    Text(
-                        stringResource(R.string.mdns_txt_records_label),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    visibleTxtEntries(service.txtRecords, showAllTxt).forEach { (key, value) ->
-                        Row {
-                            Text(
-                                "$key=",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.tertiary,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text(
-                                value,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                    if (service.txtRecords.size > MDNS_TXT_VISIBLE_LIMIT) {
-                        TextButton(onClick = { showAllTxt = !showAllTxt }) {
-                            Text(
-                                if (showAllTxt) {
-                                    stringResource(R.string.mdns_txt_show_less)
-                                } else {
-                                    stringResource(R.string.mdns_txt_show_all, service.txtRecords.size)
-                                },
-                            )
-                        }
-                    }
+                ServiceTxtRecords(
+                    service = service,
+                    showAllTxt = showAllTxt,
+                    onToggleShowAll = { showAllTxt = !showAllTxt },
+                )
+            }
+        }
+    }
+}
+
+/** The TXT records, limited to the first few until the user asks for all of them. */
+@Composable
+private fun ServiceTxtRecords(
+    service: DiscoveredService,
+    showAllTxt: Boolean,
+    onToggleShowAll: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        Text(
+            stringResource(R.string.mdns_txt_records_label),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+        )
+        visibleTxtEntries(service.txtRecords, showAllTxt).forEach { (key, value) ->
+            Row {
+                Text(
+                    "$key=",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    value,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (service.txtRecords.size > MDNS_TXT_VISIBLE_LIMIT) {
+            TextButton(onClick = onToggleShowAll) {
+                Text(
+                    if (showAllTxt) {
+                        stringResource(R.string.mdns_txt_show_less)
+                    } else {
+                        stringResource(R.string.mdns_txt_show_all, service.txtRecords.size)
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** The service name, its port when known, and a chevron when there are TXT records to expand. */
+@Composable
+private fun ServiceItemHeader(
+    service: DiscoveredService,
+    hasTxt: Boolean,
+    chevronRotation: Float,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = service.displayName,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (service.port > 0) {
+            Text(
+                text = ":${service.port}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontFamily = FontFamily.Monospace,
+            )
+        }
+        if (hasTxt) {
+            Icon(
+                imageVector = Icons.Default.ExpandMore,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp).rotate(chevronRotation),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** The HTTP probe action for a web service and the ping action for a hostname that is not an address. */
+@Composable
+private fun ServiceHostActions(
+    service: DiscoveredService,
+    onPingHost: (String) -> Unit,
+    onHttpProbe: (DiscoveredService) -> Unit,
+) {
+    val validHostname =
+        ToolHost.parse(service.hostname)?.takeUnless {
+            HostValidator.isValidIpv4(it.value) || HostValidator.isValidIpv6(it.value)
+        }
+    if (mdnsHttpIntent(service) != null) {
+        val httpProbeDescription =
+            stringResource(
+                R.string.mdns_http_probe_description,
+                service.displayName,
+            )
+        FilledTonalButton(
+            onClick = { onHttpProbe(service) },
+            modifier = Modifier.semantics { contentDescription = httpProbeDescription },
+        ) {
+            Icon(Icons.Default.Http, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.mdns_http_probe))
+        }
+    }
+    if (validHostname != null) {
+        val pingHostnameDescription =
+            stringResource(
+                R.string.mdns_ping_hostname_description,
+                validHostname.value,
+            )
+        Text(
+            text = validHostname.value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        FilledTonalButton(
+            onClick = { onPingHost(validHostname.value) },
+            modifier = Modifier.semantics { contentDescription = pingHostnameDescription },
+        ) {
+            Icon(Icons.Default.NetworkPing, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.mdns_ping_hostname))
+        }
+    }
+}
+
+/** One ping chip per distinct, valid address the service announced. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ServiceAddressChips(
+    service: DiscoveredService,
+    onPingHost: (String) -> Unit,
+) {
+    val validAddresses =
+        service.ipAddresses
+            .mapNotNull { address ->
+                ToolHost.parse(address)?.takeIf {
+                    HostValidator.isValidIpv4(it.value) || HostValidator.isValidIpv6(it.value)
                 }
+            }.distinctBy { it.canonical }
+    if (validAddresses.isNotEmpty()) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            validAddresses.forEach { ip ->
+                SuggestionChip(
+                    onClick = { onPingHost(ip.value) },
+                    label = {
+                        Text(
+                            stringResource(R.string.mdns_ping_address, ip.value),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                    },
+                )
             }
         }
     }

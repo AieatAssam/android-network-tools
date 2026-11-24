@@ -1330,35 +1330,10 @@ private fun BodyTabContent(
     val shownBytes = if (result.responseBodyTruncated) result.responseBodyBytes else previewBytes
 
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(R.string.httprobe_response_body),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f),
-            )
-            if (!responseBody.isNullOrBlank()) {
-                TextButton(onClick = { copyWithFeedback(responseBody) }) {
-                    Text(stringResource(R.string.httprobe_copy_body), style = MaterialTheme.typography.labelSmall)
-                }
-            }
-        }
+        BodyHeaderRow(responseBody = responseBody, onCopy = copyWithFeedback)
 
         if (result.responseBodyTruncated || preview.truncated) {
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.tertiaryContainer,
-            ) {
-                Text(
-                    text = stringResource(R.string.httprobe_body_truncated, formatBytes(shownBytes)),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                )
-            }
+            BodyTruncatedNotice(shownBytes)
         }
 
         if (responseBody.isNullOrBlank()) {
@@ -1369,52 +1344,111 @@ private fun BodyTabContent(
             )
         } else {
             if (isJson) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(stringResource(R.string.httprobe_pretty_json), style = MaterialTheme.typography.labelMedium)
-                    val validityLabel =
-                        when {
-                            jsonUnavailable -> R.string.httprobe_json_incomplete
-                            formattedJson == null -> R.string.httprobe_json_checking
-                            formattedJson?.text != null -> R.string.httprobe_json_valid
-                            else -> R.string.httprobe_json_invalid
-                        }
-                    Text(
-                        stringResource(validityLabel),
-                        style = MaterialTheme.typography.labelSmall,
-                        color =
-                            when {
-                                jsonUnavailable || formattedJson == null -> MaterialTheme.colorScheme.onSurfaceVariant
-                                formattedJson?.text != null -> StatusGoodDeep
-                                else -> StatusWarnDeep
-                            },
-                    )
-                    Switch(
-                        checked = prettyJson,
-                        onCheckedChange = { onPrettyJsonToggle() },
-                        enabled = formattedJson?.text != null && !jsonUnavailable,
-                        modifier = Modifier.testTag(HttpProbeScreenTestTags.PRETTY_JSON_SWITCH),
-                    )
-                }
-            }
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.small)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(12.dp),
-            ) {
-                Text(
-                    text = (if (prettyJson) formattedJson?.text else null) ?: preview.text.orEmpty(),
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                PrettyJsonRow(
+                    formattedJson = formattedJson,
+                    jsonUnavailable = jsonUnavailable,
+                    prettyJson = prettyJson,
+                    onPrettyJsonToggle = onPrettyJsonToggle,
                 )
             }
+            BodyTextBox(text = (if (prettyJson) formattedJson?.text else null) ?: preview.text.orEmpty())
         }
+    }
+}
+
+@Composable
+private fun BodyHeaderRow(
+    responseBody: String?,
+    onCopy: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.httprobe_response_body),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        if (!responseBody.isNullOrBlank()) {
+            TextButton(onClick = { onCopy(responseBody) }) {
+                Text(stringResource(R.string.httprobe_copy_body), style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BodyTruncatedNotice(shownBytes: Long) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+    ) {
+        Text(
+            text = stringResource(R.string.httprobe_body_truncated, formatBytes(shownBytes)),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        )
+    }
+}
+
+/** The pretty-print switch with the JSON check's outcome; [formattedJson] is null while the check runs. */
+@Composable
+private fun PrettyJsonRow(
+    formattedJson: JsonFormat?,
+    jsonUnavailable: Boolean,
+    prettyJson: Boolean,
+    onPrettyJsonToggle: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(stringResource(R.string.httprobe_pretty_json), style = MaterialTheme.typography.labelMedium)
+        val validityLabel =
+            when {
+                jsonUnavailable -> R.string.httprobe_json_incomplete
+                formattedJson == null -> R.string.httprobe_json_checking
+                formattedJson.text != null -> R.string.httprobe_json_valid
+                else -> R.string.httprobe_json_invalid
+            }
+        Text(
+            stringResource(validityLabel),
+            style = MaterialTheme.typography.labelSmall,
+            color =
+                when {
+                    jsonUnavailable || formattedJson == null -> MaterialTheme.colorScheme.onSurfaceVariant
+                    formattedJson.text != null -> StatusGoodDeep
+                    else -> StatusWarnDeep
+                },
+        )
+        Switch(
+            checked = prettyJson,
+            onCheckedChange = { onPrettyJsonToggle() },
+            enabled = formattedJson?.text != null && !jsonUnavailable,
+            modifier = Modifier.testTag(HttpProbeScreenTestTags.PRETTY_JSON_SWITCH),
+        )
+    }
+}
+
+@Composable
+private fun BodyTextBox(text: String) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.small)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(12.dp),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -1538,93 +1572,38 @@ private fun redirectPlaceholders(): RedirectPlaceholders =
         query = stringResource(R.string.httprobe_query_omitted),
     )
 
+/** String resources for the security check description keys the analyser emits. */
+private val securityDescriptionRes: Map<String, Int> =
+    mapOf(
+        "httprobe_sec_hsts_pass_strong" to R.string.httprobe_sec_hsts_pass_strong,
+        "httprobe_sec_hsts_short" to R.string.httprobe_sec_hsts_short,
+        "httprobe_sec_hsts_invalid" to R.string.httprobe_sec_hsts_invalid,
+        "httprobe_sec_hsts_ignored_http" to R.string.httprobe_sec_hsts_ignored_http,
+        "httprobe_sec_csp_unsafe_inline" to R.string.httprobe_sec_csp_unsafe_inline,
+        "httprobe_sec_csp_ambiguous" to R.string.httprobe_sec_csp_ambiguous,
+        "httprobe_sec_csp_report_only" to R.string.httprobe_sec_csp_report_only,
+        "httprobe_sec_xfo_via_csp" to R.string.httprobe_sec_xfo_via_csp,
+        "httprobe_sec_xss_protection_absent" to R.string.httprobe_sec_xss_protection_absent,
+        "httprobe_sec_xss_protection_deprecated" to R.string.httprobe_sec_xss_protection_deprecated,
+        "httprobe_sec_document_header_not_applicable" to R.string.httprobe_sec_document_header_not_applicable,
+        "httprobe_sec_cookie_flags_complete" to R.string.httprobe_sec_cookie_flags_complete,
+        "httprobe_sec_cookie_missing_secure" to R.string.httprobe_sec_cookie_missing_secure,
+        "httprobe_sec_cookie_missing_httponly" to R.string.httprobe_sec_cookie_missing_httponly,
+        "httprobe_sec_cookie_missing_secure_httponly" to R.string.httprobe_sec_cookie_missing_secure_httponly,
+        "httprobe_sec_cookie_missing_samesite" to R.string.httprobe_sec_cookie_missing_samesite,
+        "httprobe_sec_cookie_samesite_none_requires_secure" to
+            R.string.httprobe_sec_cookie_samesite_none_requires_secure,
+        "httprobe_sec_cookie_secure_from_http" to R.string.httprobe_sec_cookie_secure_from_http,
+        "httprobe_sec_cookie_secure_not_applicable" to R.string.httprobe_sec_cookie_secure_not_applicable,
+        "httprobe_sec_cookie_malformed" to R.string.httprobe_sec_cookie_malformed,
+    )
+
+/** The localized description for [check], or the analyser's own text for a key without a resource. */
 @Composable
-private fun securityDescription(check: SecurityHeaderCheck): String =
-    when (check.descriptionKey) {
-        "httprobe_sec_hsts_pass_strong" -> {
-            stringResource(R.string.httprobe_sec_hsts_pass_strong)
-        }
-
-        "httprobe_sec_hsts_short" -> {
-            stringResource(R.string.httprobe_sec_hsts_short)
-        }
-
-        "httprobe_sec_hsts_invalid" -> {
-            stringResource(R.string.httprobe_sec_hsts_invalid)
-        }
-
-        "httprobe_sec_hsts_ignored_http" -> {
-            stringResource(R.string.httprobe_sec_hsts_ignored_http)
-        }
-
-        "httprobe_sec_csp_unsafe_inline" -> {
-            stringResource(R.string.httprobe_sec_csp_unsafe_inline)
-        }
-
-        "httprobe_sec_csp_ambiguous" -> {
-            stringResource(R.string.httprobe_sec_csp_ambiguous)
-        }
-
-        "httprobe_sec_csp_report_only" -> {
-            stringResource(R.string.httprobe_sec_csp_report_only)
-        }
-
-        "httprobe_sec_xfo_via_csp" -> {
-            stringResource(R.string.httprobe_sec_xfo_via_csp)
-        }
-
-        "httprobe_sec_xss_protection_absent" -> {
-            stringResource(R.string.httprobe_sec_xss_protection_absent)
-        }
-
-        "httprobe_sec_xss_protection_deprecated" -> {
-            stringResource(R.string.httprobe_sec_xss_protection_deprecated)
-        }
-
-        "httprobe_sec_document_header_not_applicable" -> {
-            stringResource(R.string.httprobe_sec_document_header_not_applicable)
-        }
-
-        "httprobe_sec_cookie_flags_complete" -> {
-            stringResource(R.string.httprobe_sec_cookie_flags_complete)
-        }
-
-        "httprobe_sec_cookie_missing_secure" -> {
-            stringResource(R.string.httprobe_sec_cookie_missing_secure)
-        }
-
-        "httprobe_sec_cookie_missing_httponly" -> {
-            stringResource(R.string.httprobe_sec_cookie_missing_httponly)
-        }
-
-        "httprobe_sec_cookie_missing_secure_httponly" -> {
-            stringResource(R.string.httprobe_sec_cookie_missing_secure_httponly)
-        }
-
-        "httprobe_sec_cookie_missing_samesite" -> {
-            stringResource(R.string.httprobe_sec_cookie_missing_samesite)
-        }
-
-        "httprobe_sec_cookie_samesite_none_requires_secure" -> {
-            stringResource(R.string.httprobe_sec_cookie_samesite_none_requires_secure)
-        }
-
-        "httprobe_sec_cookie_secure_from_http" -> {
-            stringResource(R.string.httprobe_sec_cookie_secure_from_http)
-        }
-
-        "httprobe_sec_cookie_secure_not_applicable" -> {
-            stringResource(R.string.httprobe_sec_cookie_secure_not_applicable)
-        }
-
-        "httprobe_sec_cookie_malformed" -> {
-            stringResource(R.string.httprobe_sec_cookie_malformed)
-        }
-
-        else -> {
-            check.description
-        }
-    }
+private fun securityDescription(check: SecurityHeaderCheck): String {
+    val res = check.descriptionKey?.let(securityDescriptionRes::get)
+    return if (res != null) stringResource(res) else check.description
+}
 
 @Composable
 private fun SecurityRatingIcon(

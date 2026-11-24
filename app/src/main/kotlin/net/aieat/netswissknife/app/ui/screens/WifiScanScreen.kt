@@ -651,6 +651,84 @@ internal fun buildWifiShareText(
         }
     }
 
+@Composable
+private fun wifiApCountText(
+    shownApCount: Int,
+    totalApCount: Int,
+): String =
+    if (shownApCount == totalApCount) {
+        pluralStringResource(R.plurals.wifi_aps_count, totalApCount, totalApCount)
+    } else {
+        pluralStringResource(R.plurals.wifi_aps_of_total, totalApCount, shownApCount, totalApCount)
+    }
+
+/** Copy and Share actions for the whole scan result. */
+@Composable
+private fun WifiShareActionsRow(result: WifiScanResult) {
+    val context = LocalContext.current
+    val copiedMessage = stringResource(R.string.lan_copied)
+    val shareSubject = stringResource(R.string.wifi_screen_title)
+    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+        TextButton(onClick = {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val text = buildWifiShareText(result, wifiShareLabels(context.resources))
+            clipboard.setPrimaryClip(ClipData.newPlainText("Wi-Fi scan", text))
+            Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
+        }) { Text(stringResource(R.string.action_copy)) }
+        TextButton(onClick = {
+            context.shareText(
+                buildWifiShareText(result, wifiShareLabels(context.resources)),
+                shareSubject,
+            )
+        }) { Text(stringResource(R.string.action_share)) }
+    }
+}
+
+/** The best 2.4 GHz channel, shown only while the 2.4 GHz band is selected and a best channel is known. */
+@Composable
+private fun WifiBestChannelSection(state: WifiScanUiState.Success) {
+    if (state.bandFilter == WifiBand.BAND_2_4GHZ) {
+        val bestCh = state.result.bestChannel24GHz
+        if (bestCh != null) {
+            WifiBestChannelCallout(channel = bestCh)
+        }
+    }
+}
+
+/** The show/hide toggle for the channel spectrum and, when expanded, the spectrum card. */
+@Composable
+private fun WifiSpectrumSection(
+    band: WifiBand,
+    aps: List<WifiAccessPoint>,
+    colorNetworks: List<WifiNetwork>,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    TextButton(
+        onClick = onToggle,
+        modifier = Modifier.testTag(WifiScreenTestTags.SPECTRUM_TOGGLE),
+    ) {
+        Icon(
+            if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            stringResource(
+                if (expanded) R.string.wifi_spectrum_hide else R.string.wifi_spectrum_show,
+            ),
+        )
+    }
+    if (expanded) {
+        WifiSpectrumCard(
+            band = band,
+            aps = aps,
+            colorNetworks = colorNetworks,
+        )
+    }
+}
+
 @Composable private fun WifiSuccessScreen(
     state: WifiScanUiState.Success,
     autoRefresh: Boolean,
@@ -671,12 +749,7 @@ internal fun buildWifiShareText(
     val visibleBssids = networks.flatMap { network -> network.accessPoints.map { it.bssid } }.toSet()
     val shownApCount = state.filteredAccessPoints.count { it.bssid in visibleBssids }
     val totalApCount = state.result.accessPoints.size
-    val apCountText =
-        if (shownApCount == totalApCount) {
-            pluralStringResource(R.plurals.wifi_aps_count, totalApCount, totalApCount)
-        } else {
-            pluralStringResource(R.plurals.wifi_aps_of_total, totalApCount, shownApCount, totalApCount)
-        }
+    val apCountText = wifiApCountText(shownApCount, totalApCount)
     val spectrumBand =
         spectrumBandFor(
             state.bandFilter,
@@ -685,9 +758,6 @@ internal fun buildWifiShareText(
         )
     val spectrumAps = state.filteredAccessPoints.filter { it.bssid in visibleBssids && it.band == spectrumBand }
     val spectrumAvailable = spectrumBand != null && bandFreqRange(spectrumBand) != null && spectrumAps.isNotEmpty()
-    val context = LocalContext.current
-    val copiedMessage = stringResource(R.string.lan_copied)
-    val shareSubject = stringResource(R.string.wifi_screen_title)
     var showHelp by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -732,20 +802,7 @@ internal fun buildWifiShareText(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                    TextButton(onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val text = buildWifiShareText(state.result, wifiShareLabels(context.resources))
-                        clipboard.setPrimaryClip(ClipData.newPlainText("Wi-Fi scan", text))
-                        Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
-                    }) { Text(stringResource(R.string.action_copy)) }
-                    TextButton(onClick = {
-                        context.shareText(
-                            buildWifiShareText(state.result, wifiShareLabels(context.resources)),
-                            shareSubject,
-                        )
-                    }) { Text(stringResource(R.string.action_share)) }
-                }
+                WifiShareActionsRow(state.result)
 
                 state.result.connectedNetwork?.let { connectionInfo ->
                     WifiConnectedNetworkCard(connectionInfo)
@@ -761,37 +818,16 @@ internal fun buildWifiShareText(
                 }
 
                 // Best-channel callout (2.4 GHz only)
-                if (state.bandFilter == WifiBand.BAND_2_4GHZ) {
-                    val bestCh = state.result.bestChannel24GHz
-                    if (bestCh != null) {
-                        WifiBestChannelCallout(channel = bestCh)
-                    }
-                }
+                WifiBestChannelSection(state)
 
                 if (spectrumBand != null && spectrumAvailable) {
-                    TextButton(
-                        onClick = { spectrumExpanded = !spectrumExpanded },
-                        modifier = Modifier.testTag(WifiScreenTestTags.SPECTRUM_TOGGLE),
-                    ) {
-                        Icon(
-                            if (spectrumExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            stringResource(
-                                if (spectrumExpanded) R.string.wifi_spectrum_hide else R.string.wifi_spectrum_show,
-                            ),
-                        )
-                    }
-                    if (spectrumExpanded) {
-                        WifiSpectrumCard(
-                            band = spectrumBand,
-                            aps = spectrumAps,
-                            colorNetworks = state.filteredNetworks,
-                        )
-                    }
+                    WifiSpectrumSection(
+                        band = spectrumBand,
+                        aps = spectrumAps,
+                        colorNetworks = state.filteredNetworks,
+                        expanded = spectrumExpanded,
+                        onToggle = { spectrumExpanded = !spectrumExpanded },
+                    )
                 }
 
                 WifiSortRow(

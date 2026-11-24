@@ -27,7 +27,10 @@ sealed interface HopListRow {
     }
 }
 
-/** The rows for [hops]: two or more consecutive hops without a reply become one [HopListRow.NoReplyRun]. */
+/**
+ * The rows for [hops]: two or more consecutive hops without a reply become one [HopListRow.NoReplyRun].
+ * In a finished trace, the silence after the last reply is always a run, even when it is a single hop.
+ */
 fun hopListRows(
     hops: List<HopResult>,
     finished: Boolean,
@@ -38,23 +41,17 @@ fun hopListRows(
     var silent = mutableListOf<HopResult>()
 
     fun flushSilent() {
-        when {
-            silent.isEmpty() -> {
-                Unit
-            }
-
-            silent.size == 1 && !(finished && silent.first().hopNumber > lastReply) -> {
-                rows += HopListRow.Hop(silent.first())
-            }
-
-            else -> {
-                rows +=
-                    HopListRow.NoReplyRun(
-                        firstHop = silent.first().hopNumber,
-                        lastHop = silent.last().hopNumber,
-                        afterLastReply = finished && silent.first().hopNumber > lastReply,
-                    )
-            }
+        if (silent.isEmpty()) return
+        val afterLastReply = finished && silent.first().hopNumber > lastReply
+        if (silent.size == 1 && !afterLastReply) {
+            rows += HopListRow.Hop(silent.first())
+        } else {
+            rows +=
+                HopListRow.NoReplyRun(
+                    firstHop = silent.first().hopNumber,
+                    lastHop = silent.last().hopNumber,
+                    afterLastReply = afterLastReply,
+                )
         }
         silent = mutableListOf()
     }
