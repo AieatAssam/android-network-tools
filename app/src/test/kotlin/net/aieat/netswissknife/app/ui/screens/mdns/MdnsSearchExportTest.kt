@@ -36,6 +36,7 @@ class MdnsSearchExportTest {
                 isCanceling = false,
                 scanCanceled = false,
                 truncationNote = "Some devices reported more than we show (first 16 addresses per service).",
+                labels = testMdnsShareLabels(),
             )
 
         assertTrue(report.contains("Some devices reported more than we show"), report)
@@ -53,6 +54,7 @@ class MdnsSearchExportTest {
                 isCanceling = false,
                 scanCanceled = false,
                 truncationNote = null,
+                labels = testMdnsShareLabels(),
                 filterQuery = "laserjet",
             )
 
@@ -71,12 +73,39 @@ class MdnsSearchExportTest {
                 isCanceling = false,
                 scanCanceled = false,
                 truncationNote = null,
+                labels = testMdnsShareLabels(),
             )
 
         assertTrue(report.contains("HP LaserJet"), report)
         assertTrue(report.contains("Living Room TV"), report)
         assertTrue(report.contains("mDNS services: 2"), report)
         assertFalse(report.contains("Filter:"), report)
+    }
+
+    @Test
+    fun `export status line follows the scan state and takes its words from the labels`() {
+        val labels = testMdnsShareLabels()
+        val canceled =
+            buildMdnsShareText(
+                services = emptyList(),
+                isScanning = false,
+                isCanceling = false,
+                scanCanceled = true,
+                truncationNote = null,
+                labels = labels,
+            )
+        val scanning =
+            buildMdnsShareText(
+                services = emptyList(),
+                isScanning = true,
+                isCanceling = false,
+                scanCanceled = false,
+                truncationNote = null,
+                labels = labels,
+            )
+
+        assertTrue(canceled.contains(labels.canceled), canceled)
+        assertTrue(scanning.contains(labels.inProgress), scanning)
     }
 
     @Test
@@ -89,4 +118,16 @@ class MdnsSearchExportTest {
         val filtered = filterMdnsServices(byType, "   ")
         assertEquals(2, filtered.values.flatten().size)
     }
+
+    private fun testMdnsShareLabels() =
+        MdnsShareLabels(
+            servicesCount = { count -> "mDNS services: $count" },
+            filter = { query -> "Filter: $query" },
+            stopping = "Stopping scan",
+            inProgress = "Scan in progress",
+            canceled = "Scan canceled; partial results",
+            complete = "Scan complete",
+            addresses = { joined -> "Addresses: $joined" },
+            txt = { key, value -> "TXT $key=$value" },
+        )
 }

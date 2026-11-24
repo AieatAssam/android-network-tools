@@ -8,6 +8,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -33,6 +34,7 @@ import net.aieat.netswissknife.core.network.wifi.WifiScanResult
 import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
 import net.aieat.netswissknife.core.network.wifi.WifiSecurity
 import net.aieat.netswissknife.core.network.wifi.WifiStandard
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -283,7 +285,7 @@ class WifiScanScreenTest {
         composeRule.mainClock.advanceTimeBy(1_000L)
 
         composeRule
-            .onNodeWithText(context.getString(R.string.wifi_connected_network_header))
+            .onNodeWithText(context.getString(R.string.wifi_connected_to_ssid, "HomeNet"))
             .performScrollTo()
             .assertIsDisplayed()
         composeRule.onNodeWithText("fe80::1\n2001:db8::5").assertIsDisplayed()
@@ -318,7 +320,7 @@ class WifiScanScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
 
-        composeRule.onNodeWithText(ApSortOrder.SSID.label).performClick()
+        composeRule.onNodeWithText(context.getString(ApSortOrder.SSID.labelRes)).performClick()
 
         verify(exactly = 1) { viewModel.setSortOrder(ApSortOrder.SSID) }
     }
@@ -393,6 +395,8 @@ class WifiScanScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
 
+        // The spectrum is collapsed by default, so open it before checking its description.
+        composeRule.onNodeWithTag(WifiScreenTestTags.SPECTRUM_TOGGLE).performScrollTo().performClick()
         val spectrumDescription = context.getString(
             R.string.wifi_spectrum_a11y,
             2,
@@ -423,9 +427,8 @@ class WifiScanScreenTest {
         val levelLabel = context.getString(levelResource)
         composeRule.onNodeWithTag(WifiScreenTestTags.AP_DETAIL_CONTENT)
             .performTouchInput { swipeUp() }
-        composeRule.onNodeWithContentDescription(
-            context.getString(R.string.wifi_signal_gauge_a11y, ap.signalQualityPercent, levelLabel)
-        ).assertIsDisplayed()
+        // The detail sheet states the signal level once, as a label next to the dBm value.
+        assertTrue(composeRule.onAllNodesWithText(levelLabel).fetchSemanticsNodes().isNotEmpty())
     }
 
     @Test
@@ -440,6 +443,7 @@ class WifiScanScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
 
+        composeRule.onNodeWithTag(WifiScreenTestTags.SPECTRUM_TOGGLE).performScrollTo().performClick()
         val description = context.getString(
             R.string.wifi_spectrum_a11y,
             1,

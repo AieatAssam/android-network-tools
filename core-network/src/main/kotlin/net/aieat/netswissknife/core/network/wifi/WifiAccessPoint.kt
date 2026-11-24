@@ -39,35 +39,25 @@ data class WifiAccessPoint(
     val displaySsid: String get() = ssid.ifBlank { "<Hidden Network>" }
 
     /**
-     * Signal quality as a percentage [0–100].
-     * Derived from a simple RSSI ladder calibrated to common home/office signals.
-     */
-    val signalQualityPercent: Int get() = when {
-        rssi >= -50 -> 100
-        rssi >= -60 -> (100 - ((-50 - rssi) * 2)).coerceIn(0, 100)
-        rssi >= -70 -> (80  - ((-60 - rssi) * 2)).coerceIn(0, 100)
-        rssi >= -80 -> (60  - ((-70 - rssi) * 2)).coerceIn(0, 100)
-        rssi >= -90 -> (40  - ((-80 - rssi) * 2)).coerceIn(0, 100)
-        else        -> 0
-    }
-
-    /**
      * Coarse quality bucket: EXCELLENT / GOOD / FAIR / WEAK / POOR.
      * Primarily used for colour-coding in the UI layer.
      */
-    val signalLevel: SignalLevel get() = when {
-        rssi >= -50 -> SignalLevel.EXCELLENT
-        rssi >= -60 -> SignalLevel.GOOD
-        rssi >= -70 -> SignalLevel.FAIR
-        rssi >= -80 -> SignalLevel.WEAK
-        else        -> SignalLevel.POOR
-    }
+    val signalLevel: SignalLevel get() = signalLevelForRssi(rssi)
 
     /** Whether the AP operates in the 80+80 MHz split-channel mode. */
     val is80Plus80: Boolean get() = channelWidthMhz == 160 && centerFrequency1 != 0
 }
 
 enum class SignalLevel { EXCELLENT, GOOD, FAIR, WEAK, POOR }
+
+/** Level bucket for an RSSI reading in dBm: -50 and above is EXCELLENT, below -80 is POOR. */
+fun signalLevelForRssi(rssi: Int): SignalLevel = when {
+    rssi >= -50 -> SignalLevel.EXCELLENT
+    rssi >= -60 -> SignalLevel.GOOD
+    rssi >= -70 -> SignalLevel.FAIR
+    rssi >= -80 -> SignalLevel.WEAK
+    else        -> SignalLevel.POOR
+}
 
 /**
  * Pure-Kotlin helpers for converting raw scan data to channel and band information.

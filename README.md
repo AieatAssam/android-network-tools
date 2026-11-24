@@ -102,13 +102,13 @@ Wi-Fi environment analysis with SSID grouping and spectrum visualisation.
 - A hidden network is named `<Hidden: BSSID>` once; no separate Hidden badge repeats it
 - The hero states the access-point count; the scan is started by a labelled **Scan** button, and the time of the last scan is in the Updated line
 - Access points grouped by SSID + security; mesh/dual-band routers appear as one entry with a per-BSSID drill-down
-- **Spectrum Analyser** — frequency-domain triangle chart per AP (X = MHz, Y = RSSI −100 to −30 dBm) with channel gridlines and one SSID label per network at its strongest peak. Labels are ellipsised to a fixed width and stacked upward when they would collide; a label with no free position is left off, and the network list below is the legend. Each network gets a stable accent colour derived from its SSID hash
-- Band tab-row switches between detected 2.4 / 5 / 6 GHz bands; spectrum and network list update per band. The hero names the band only when a single band is detected, so each band is named once on the screen
+- **Spectrum Analyser** (collapsed by default; its toggle opens it) — frequency-domain triangle chart of the chosen band's APs (X = MHz, Y = RSSI −100 to −30 dBm) with channel gridlines and one SSID label per network at its strongest peak. Labels are ellipsised to a fixed width and stacked upward when they would collide; a label with no free position is left off, and the network list below is the legend. Each network gets a stable accent colour derived from its SSID hash
+- Band tab-row starts on **All**; choosing a detected 2.4 / 5 / 6 GHz band narrows the spectrum and network list to that band. In the All view each network row shows its band badge. The hero names the band only when a single band is detected, so each band is named once on the screen
 - Best-channel callout recommends the least-congested of channels 1, 6, and 11 when 2.4 GHz is active. Each candidate is scored from every 2.4 GHz AP whose channel overlaps it (±4 channels), including channels with no AP of their own, so a channel is not recommended just because nothing is on it. The callout is hidden when no 2.4 GHz AP was scanned
 - Search (SSID, BSSID or vendor) narrows both the network list and the spectrum; a search with no match shows a message. Clear empties the search and closes the keyboard
 - Expandable network cards show each BSSID with channel, width, RSSI, and vendor; tap any BSSID for full detail sheet. Reorders from a refresh animate, and expanding a network pins the order until every card is collapsed
-- Detail sheet: signal arc gauge, band/channel/width/standard, security capability tokens, live connection stats (IP, TX/RX speed) when connected. "Standard max (theoretical)" is a PHY ceiling, not this link's rate: Wi-Fi 4 shows 289 Mbps at 20 MHz and 600 Mbps at 40 MHz (4 streams); other standards show their ceiling, which needs the widest channel and the most streams. Scan results do not report spatial streams, so a per-link rate is not shown
-- Each refresh requests a platform scan; auto-refresh is configurable (Off / 15 / 30 / 60 seconds, default 30 seconds). Android throttles foreground scans to four per two minutes, so the screen shows result age and when a request was throttled; Location Services must be enabled.
+- Detail sheet: signal in dBm with a level label (excellent to poor), band/channel/width/standard, security capability tokens. When connected, a Connected card lists the link facts once (BSSID, band and channel, signal, link speed, TX/RX speed, IP, IPv6, gateway, DNS). "Standard max (theoretical)" is a PHY ceiling, not this link's rate: Wi-Fi 4 shows 289 Mbps at 20 MHz and 600 Mbps at 40 MHz (4 streams); other standards show their ceiling, which needs the widest channel and the most streams. Scan results do not report spatial streams, so a per-link rate is not shown
+- Each refresh requests a platform scan; auto-refresh is configurable (Off / 15 / 30 / 60 seconds, default 30 seconds). Android throttles foreground scans to four per two minutes, so the screen shows result age (kept up to date while the screen is visible) and when a request was throttled; Location Services must be enabled.
 - Rotating the device does not cancel a scan in progress; leaving the screen or backgrounding the app does.
 
 ### TLS Inspector
@@ -192,16 +192,17 @@ LAN service discovery via multicast DNS (RFC 6762 / DNS-SD RFC 6763).
 - Two-phase discovery: enumerates service types via `_services._dns-sd._udp.local.`, then instances per type, then SRV/TXT/A/AAAA records per instance
 - Supported service examples: `_http._tcp`, `_airplay._tcp`, `_ipp._tcp`, `_homekit._tcp`, `_spotify-connect._tcp`, and any other DNS-SD service
 - Per-service details: display name, hostname, port, IP addresses (IPv4 and IPv6), and TXT record key-value pairs
-- Live streaming results: services appear as they are discovered, grouped by service type with animated list entries
-- Expandable service items show full TXT record details on tap
-- Fixed 8-second scan window per Scan (there is no duration control); scan can be stopped at any time. Clear removes all results
+- Live streaming results: services appear as they are discovered, grouped by service type (friendly name and icon, such as Printer or AirPlay; unknown types keep their raw name) or, with the **By device** toggle, by device (hostname, else first address, else instance name)
+- Only services with TXT records expand on tap; the first 5 entries show, with a **Show all N** control for the rest. Services without TXT records have no expand control
+- Fixed 8-second scan window per Scan (there is no duration control); scan can be stopped at any time, and a progress bar with elapsed seconds shows how far the window has run. Clear removes all results
 - Multicast discovery runs only on the selected Wi-Fi or Ethernet network, never on a VPN or cellular path. If no such network is available, the scan stops with a plain message saying a VPN or mobile data cannot discover local devices
 - If the network changes during a scan after services were found, the scan stops, keeps those services, and shows a note that the network changed; with no services found, it shows a plain message and a retry path
 - Instance names are shown decoded: DNS-SD escapes such as `\032` (space), `\226\128\153` (UTF-8 for ’) and `\(...\)` become readable text; malformed escapes are shown exactly as received
-- Search filters the list by service type, name, hostname, IP address, and TXT key or value; a search with no matches shows an empty-state message with a Clear search action
+- Search filters the list by service type, name, hostname, IP address, and TXT key or value; a search with no matches shows an empty-state message with a Clear search action; while a filter is active the count reads "N of M services"
 - Copy and Share at the foot of the list export only the services currently shown (the active search is noted as a `Filter:` line)
 - Per-scan caps: 64 service types, 256 services, 16 addresses or 1 KB of addresses per service, 4 KB of TXT data per service, 1024 queries, and 512 records per packet. If a cap is reached, a neutral note names it and says whether all services found are shown; a complete scan that stays within the caps shows no note
-- Once services are found, the hero folds to its title and counts so the list starts near the top of the screen. The whole screen scrolls, including the results, so the list is never confined to a short inner window in landscape or at large font sizes
+- Once services are found, the hero folds to its title and counts so the list starts near the top of the screen. The whole screen scrolls, including the results (there is no pull-to-refresh; Scan starts a new scan), so the list is never confined to a short inner window in landscape or at large font sizes
+- A failed scan shows a plain-language reason with **Retry** (starts a new scan) and **Dismiss** (clears the error)
 - Requires Wi-Fi multicast lock (`CHANGE_WIFI_MULTICAST_STATE`) for reliable reception on Android
 
 ### Subnet Calculator
