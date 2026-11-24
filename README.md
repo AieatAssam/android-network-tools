@@ -135,11 +135,12 @@ SNMP-based network topology discovery via BFS traversal.
 - Per-node data: sysDescr, sysName, sysLocation, uptime, vendor, model, firmware version
 - Interface enumeration with speed, MAC address, and operational status (UP/DOWN)
 - VLAN discovery via Cisco VTP MIB and IEEE 802.1Q standard MIB
-- Interactive force-layout canvas with pan/zoom gestures and node detail bottom sheet
+- Interactive hop-ring canvas: the seed sits at the centre, each further hop sits on an outer ring, and devices that do not respond to SNMP are placed on the outermost ring. Pan and pinch to zoom, tap a node for its detail sheet, and use the fit button to reset the view to the whole graph
+- Filled nodes are queried devices, outlined circles are reported neighbours that were not queried, and a dashed ring marks a device whose SNMP did not respond. A legend in the corner explains the markers that are on screen
 - Recent seed IPs are saved locally for quick reuse
 - The last discovery (its seed and final state) is kept while the app is open, so leaving the tool and coming back shows the same result. A discovery still running when the tool is left is kept as a canceled, partial result. Community strings and v3 passwords are never kept
 - **Discover Topology** sits below the SNMP configuration card, outside its scroll area, and the keyboard Done action on the seed IP field starts discovery; Cancel appears in the same place while a scan runs. The failure or result card starts directly under Discover
-- Configurable max hops (1–10), timeout, and SNMP v3 auth/priv protocols (MD5, SHA-1/256/512; DES, AES-128/192/256)
+- Configurable max hops (1–10) and SNMP v3 auth/priv protocols (MD5, SHA-1/256/512; DES, AES-128/192/256). The per-request SNMP timeout is fixed at 3 seconds with one retry, and discovery is refused up front if its worst-case duration would exceed 10 minutes
 - Reuses one SNMP4J session per discovery and closes it on completion or cancellation
 - The collapsed SNMP Configuration header names the target and SNMP version, so the folded card still shows what was scanned
 - LLDP neighbour addresses are decoded from the LLDP management-address index; CDP accepts dotted and hex-octet cache addresses

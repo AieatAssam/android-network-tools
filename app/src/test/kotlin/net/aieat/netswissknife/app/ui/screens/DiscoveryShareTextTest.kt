@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens
 
 import net.aieat.netswissknife.app.ui.screens.mdns.buildMdnsShareText
+import net.aieat.netswissknife.app.ui.screens.topology.TopologyReportLabels
 import net.aieat.netswissknife.app.ui.screens.topology.topologyReport
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 import net.aieat.netswissknife.core.network.topology.TopologyGraph
@@ -55,8 +56,33 @@ class DiscoveryShareTextTest {
     @Test
     fun `partial topology export does not invent query time`() {
         val graph = TopologyGraph(nodes = emptyList(), links = emptyList(), seedIp = "192.168.1.1", queriedAt = 0L)
-        val report = topologyReport(graph, "Discovery canceled; partial results.")
+        val report = topologyReport(graph, "Discovery canceled; partial results.", englishTopologyLabels)
         assertTrue(report.contains("Discovery canceled; partial results."))
         assertFalse(report.contains("Queried:"))
     }
+
+    @Test
+    fun `topology export renders labels from the supplied templates`() {
+        val graph = TopologyGraph(nodes = emptyList(), links = emptyList(), seedIp = "192.168.1.1", queriedAt = 0L)
+        val labels = englishTopologyLabels.copy(title = "Topologie réseau · %1\$s")
+        val report = topologyReport(graph, null, labels)
+        assertTrue(report.startsWith("Topologie réseau · 192.168.1.1"))
+        assertTrue(report.contains("Nodes: 0 · Links: 0"))
+    }
+
+    private val englishTopologyLabels =
+        TopologyReportLabels(
+            title = "Network topology · %1\$s",
+            queried = "Queried: %1\$s",
+            counts = "Nodes: %1\$d · Links: %2\$d",
+            truncated = "Truncated: %1\$s",
+            snmpErrors = "Some SNMP tables returned errors.",
+            vendor = "Vendor: %1\$s",
+            model = "Model: %1\$s",
+            snmp = "SNMP: %1\$s",
+            reachable = "reachable",
+            unavailable = "unavailable",
+            interfaceLine = "Interface %1\$s: %2\$s",
+            vlanLine = "VLAN %1\$s: %2\$s",
+        )
 }

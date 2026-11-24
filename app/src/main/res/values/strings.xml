@@ -761,6 +761,40 @@
     <string name="topology_search_nodes">Search nodes</string>
     <string name="topology_partial_results">Partial results. Some details were omitted because of resource limits or SNMP errors.</string>
     <string name="topology_vlan_label">%1$d: %2$s</string>
+    <string name="topology_config_title">SNMP configuration</string>
+    <string name="topology_idle_hint">Enter a seed IP and configure SNMP settings above</string>
+    <string name="topology_no_nodes_yet">No nodes discovered yet</string>
+    <string name="topology_legend_queried">Queried device</string>
+    <string name="topology_legend_reported">Reported neighbour, not queried</string>
+    <string name="topology_legend_unreachable">SNMP not responding</string>
+    <string name="topology_failure_generic">Topology discovery failed.</string>
+    <string name="topology_failure_no_result">Topology discovery ended without a result.</string>
+    <string name="topology_failure_interrupted">Topology discovery was interrupted.</string>
+    <string name="topology_report_status_running">Discovery in progress; partial results.</string>
+    <string name="topology_report_status_stopping">Discovery stopping; partial results.</string>
+    <string name="topology_report_status_canceled">Discovery canceled; partial results.</string>
+    <string name="topology_report_status_time_limit">Discovery time limit reached; partial results.</string>
+    <string name="topology_report_title">Network topology · %1$s</string>
+    <string name="topology_report_queried">Queried: %1$s</string>
+    <string name="topology_report_counts">Nodes: %1$d · Links: %2$d</string>
+    <string name="topology_report_truncated">Truncated: %1$s</string>
+    <string name="topology_report_snmp_errors">Some SNMP tables returned errors.</string>
+    <string name="topology_report_vendor">Vendor: %1$s</string>
+    <string name="topology_report_model">Model: %1$s</string>
+    <string name="topology_report_snmp">SNMP: %1$s</string>
+    <string name="topology_report_reachable">reachable</string>
+    <string name="topology_report_unavailable">unavailable</string>
+    <string name="topology_report_interface">Interface %1$s: %2$s</string>
+    <string name="topology_report_vlan">VLAN %1$s: %2$s</string>
+    <string name="topology_node_detail_vendor">Vendor</string>
+    <string name="topology_node_detail_model">Model</string>
+    <string name="topology_node_detail_firmware">Firmware</string>
+    <string name="topology_node_detail_location">Location</string>
+    <string name="topology_node_detail_uptime">Uptime</string>
+    <string name="topology_node_snmp_unreachable">SNMP not reachable</string>
+    <string name="topology_neighbour_ports">%1$s to %2$s</string>
+    <string name="topology_neighbour_local_port">Local: %1$s</string>
+    <string name="topology_neighbour_remote_port">Remote: %1$s</string>
 
     <!-- TLS Inspector Screen -->
     <string name="tls_screen_title">TLS Inspector</string>
@@ -888,7 +922,7 @@
     <string name="lan_subnet_narrowed_hint">Your network (%1$s) is too large to scan within 10 minutes, so the range around this device is filled in. Edit it to scan another part.</string>
     <string name="lan_scan_suggested_button">Scan %1$s</string>
     <string name="lan_scan_time_limit_subtitle">The scan reached its time limit. These are partial results.</string>
-    <string name="topology_budget_exceeded">Topology discovery settings exceed the 10-minute limit. Reduce max hops, timeout, or retries.</string>
+    <string name="topology_budget_exceeded">Topology discovery would exceed the 10-minute limit. Turn off neighbour queries and try again.</string>
     <string name="topology_time_limit_partial_status">Time limit reached. Showing the devices and links discovered so far.</string>
     <string name="whois_idle_title">Enter a domain or IP to look up</string>
     <string name="whois_error_title">Lookup failed</string>
@@ -1426,22 +1460,22 @@
     <!-- Topology help -->
     <string name="help_topology_title">Network Topology</string>
     <string name="help_topology_concept_heading">What is network topology discovery?</string>
-    <string name="help_topology_concept_body">Switches and routers understand SNMP (Simple Network Management Protocol), a standard way for network gear to report its status and configuration - like each device having its own public status page a tool can read. This app asks the seed device "who are you connected to?" and shows its reported links. Neighbor queries are off by default. If you enable them, the app also queries advertised LLDP/CDP IP addresses using the same SNMP profile, extending the map hop by hop.</string>
+    <string name="help_topology_concept_body">Switches and routers understand SNMP (Simple Network Management Protocol), a standard way for network gear to report its status and configuration, like each device having its own public status page a tool can read. This app asks the seed device "who are you connected to?" and shows its reported links. Neighbor queries are off by default. If you enable them, the app also queries advertised LLDP/CDP IP addresses using the same SNMP profile, extending the map hop by hop.</string>
     <string name="help_topology_what_heading">What it does</string>
     <string name="help_topology_what_body">Uses SNMP to query a seed switch or router and display its reported neighbor links in an interactive topology graph. Neighbor queries require you to enable the option before the app uses the same SNMP profile on advertised LLDP/CDP IP addresses.</string>
     <string name="help_topology_params_heading">Key parameters</string>
     <string name="help_topology_results_heading">Reading the results</string>
     <string-array name="help_topology_params_bullets">
-        <item>Target IP - the IP of the first device to query, the starting point for the map.</item>
-        <item>SNMP version - v1, v2c, or v3; v3 adds authentication and encryption the older versions lack.</item>
-        <item>Community string - a shared password required for v1/v2c (default is \'public\', a notoriously insecure default many devices still ship with - change it if you can).</item>
+        <item>Target IP: the IP of the first device to query, the starting point for the map.</item>
+        <item>SNMP version: v1, v2c, or v3; v3 adds authentication and encryption the older versions lack.</item>
+        <item>Community string: a shared password required for v1/v2c (default is \'public\', a notoriously insecure default many devices still ship with). Change it if you can.</item>
         <item>SNMP v3 privacy requires authentication first; auth and privacy passwords are kept in memory for the scan and are never logged.</item>
-        <item>Max hops - how many device-to-device introductions to follow when neighbor queries are enabled.</item>
-        <item>Query advertised LLDP/CDP neighbors - off by default. Turn it on to use the configured SNMP profile to query advertised IP addresses. Leave it off to show reported links without querying their devices.</item>
+        <item>Max hops: how many device-to-device introductions to follow when neighbor queries are enabled.</item>
+        <item>Query advertised LLDP/CDP neighbors: off by default. Turn it on to use the configured SNMP profile to query advertised IP addresses. Leave it off to show reported links without querying their devices.</item>
     </string-array>
     <string-array name="help_topology_results_bullets">
-        <item>Filled nodes represent queried devices. Outlined markers show reported neighbors that were not queried. Lines represent SNMP-reported links.</item>
-        <item>Pinch to zoom, drag to pan around the graph.</item>
+        <item>Filled nodes are queried devices. Outlined circles are reported neighbors that were not queried. A dashed ring marks a device whose SNMP did not respond. Lines are SNMP-reported links.</item>
+        <item>Pinch to zoom, drag to pan around the graph, and use the fit button to reset the view.</item>
         <item>Tap a node to view its system information, interfaces, VLANs, and neighbours.</item>
         <item>Useful for mapping an office network, spotting unexpected devices, or documenting infrastructure before troubleshooting a connectivity issue.</item>
     </string-array>
