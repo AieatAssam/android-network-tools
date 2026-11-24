@@ -320,7 +320,7 @@
         <item quantity="one">%1$d port selected</item>
         <item quantity="other">%1$d ports selected</item>
     </plurals>
-    <string name="ports_timeout_label">Timeout (ms)</string>
+    <string name="ports_timeout_label">Timeout: %1$d ms</string>
     <string name="ports_concurrency_label">Concurrency</string>
     <string name="ports_concurrency_high_warning">High concurrency may overwhelm devices on the local network</string>
     <string name="ports_aggressive_probes_label">Protocol greetings and TLS subject</string>
@@ -352,17 +352,21 @@
         <item quantity="one">%1$d / %2$d port</item>
         <item quantity="other">%1$d / %2$d ports</item>
     </plurals>
+    <plurals name="ports_open_found_so_far">
+        <item quantity="one">%1$d open port found so far</item>
+        <item quantity="other">%1$d open ports found so far</item>
+    </plurals>
     <string name="ports_ms_suffix">ms</string>
+    <string name="ports_no_reply">No reply</string>
     <string name="ports_banner_truncated_content_description">Banner truncated: %1$s</string>
     <string name="ports_no_open_ports">No open ports found</string>
     <string name="ports_open_label">OPEN</string>
     <string name="ports_closed_label">CLOSED</string>
     <string name="ports_filtered_label">FILTERED</string>
     <string name="ports_section_open">Open Ports</string>
-    <string name="ports_section_all">All Results</string>
-    <string name="ports_show_all">Show all ports</string>
-    <string name="ports_show_all_with_counts">Show all (%1$d closed, %2$d filtered)</string>
-    <string name="ports_show_open">Show open only</string>
+    <string name="ports_section_closed_filtered">Closed and filtered</string>
+    <string name="ports_show_results">Show</string>
+    <string name="ports_hide_results">Hide</string>
     <string name="ports_resolved_ip">Resolved IP: %1$s</string>
 
     <!-- LAN Scanner Screen -->
@@ -918,7 +922,7 @@
     <string name="whois_lifecycle_paused_message">The lookup stopped when WHOIS left the foreground. Retry when ready.</string>
     <string name="ports_scan_budget_exceeded">This scan may exceed the 15-minute limit. Increase concurrency or reduce the port range or timeout.</string>
     <string name="ports_scan_deadline_partial">The 15-minute time limit was reached. Showing the results completed so far.</string>
-    <string name="ports_scan_stopped_partial">Stopped at %1$d of %2$d ports. Showing the results collected so far.</string>
+    <string name="ports_scanned_of">%1$d of %2$d</string>
     <string name="ports_scan_stopped_early">Scan stopped early. Showing the results collected so far.</string>
     <string name="traceroute_time_limit_reached">Time limit reached. Showing hops found so far.</string>
     <string name="traceroute_unreachable_from_device">Host unreachable from this network (no route / destination host unreachable)</string>
@@ -933,18 +937,23 @@
     <string name="whois_retry">Retry</string>
     <string name="whois_relay_chain">Query Chain</string>
     <string name="whois_hop_latency_ms">%1$d ms</string>
-    <string name="whois_querying_server">Querying %1$s…</string>
     <string name="whois_raw_responses">Raw RDAP/WHOIS Responses</string>
     <string name="whois_rdap_fallback_note">RDAP could not answer (%1$s), so WHOIS answered instead.</string>
     <string name="whois_lifecycle">Lifecycle</string>
     <string name="whois_registered">Registered</string>
     <string name="whois_updated">Updated</string>
     <string name="whois_expires">Expires</string>
+    <string name="whois_date_unknown">Not reported</string>
     <string name="whois_domain_status">Domain Status</string>
     <string name="whois_name_servers">Name Servers</string>
     <string name="whois_dnssec">DNSSEC</string>
     <string name="whois_dnssec_signed">Signed</string>
     <string name="whois_dnssec_unsigned">Unsigned</string>
+    <string name="whois_role_iana">IANA</string>
+    <string name="whois_role_registry">Registry</string>
+    <string name="whois_role_registrar">Registrar</string>
+    <string name="whois_role_rir">RIR</string>
+    <string name="whois_role_rdap">RDAP</string>
     <string name="whois_registrant">Registrant</string>
     <string name="whois_net_range">Network Range</string>
     <string name="whois_org">Organization</string>
@@ -1238,7 +1247,7 @@
     <string name="share_subject_traceroute">Traceroute – %1$s</string>
     <string name="share_subject_ports">Port scan – %1$s</string>
     <string name="share_subject_tls">TLS: %1$s:%2$d</string>
-    <string name="share_subject_whois">WHOIS – %1$s</string>
+    <string name="share_subject_whois">WHOIS: %1$s</string>
     <string name="share_subject_lan">LAN scan – %1$s</string>
     <string name="share_subject_http">HTTP: %1$s</string>
     <string name="share_subject_dns">DNS %1$s – %2$s</string>
@@ -1661,6 +1670,7 @@
     <string name="speedtest_partial_heading">Results so far</string>
 
     <string name="speedtest_mbps_suffix">Mbps</string>
+    <string name="speedtest_gauge_scale">Scale: 0 to %1$d Mbps</string>
     <string name="speedtest_ms_suffix">ms</string>
 
     <string name="speedtest_latency_min">Min</string>

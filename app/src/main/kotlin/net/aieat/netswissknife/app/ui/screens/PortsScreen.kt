@@ -3,15 +3,9 @@ package net.aieat.netswissknife.app.ui.screens
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -42,7 +36,6 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -114,6 +107,7 @@ import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionR
 import net.aieat.netswissknife.app.ui.components.scrollIntoViewOnFocus
 import net.aieat.netswissknife.app.ui.format.humanDurationText
 import net.aieat.netswissknife.app.ui.format.resolvedIpToShow
+import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
 import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.app.ui.i18n.uiText
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
@@ -128,6 +122,7 @@ import net.aieat.netswissknife.core.network.portscan.PortScanResult
 import net.aieat.netswissknife.core.network.portscan.PortScanSummary
 import net.aieat.netswissknife.core.network.portscan.PortStatus
 import net.aieat.netswissknife.core.network.portscan.TlsSubjectSanitizer
+import kotlin.math.roundToInt
 
 object PortsScreenTestTags {
     const val HOST_FIELD = "ports_host_field"
@@ -215,6 +210,15 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
     val context = LocalContext.current
     var showAll by rememberSaveable { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
+    val finishedSummary = (uiState as? PortScanUiState.Finished)?.summary
+    val finishedOpen = remember(finishedSummary) {
+        finishedSummary?.results.orEmpty().filter { it.status == PortStatus.OPEN }
+    }
+    val finishedClosedAndFiltered = remember(finishedSummary) {
+        finishedSummary?.results.orEmpty().filter { it.status != PortStatus.OPEN }
+    }
+    val liveResults = (uiState as? PortScanUiState.Scanning)?.liveResults.orEmpty()
+    val liveOpen = remember(liveResults) { liveResults.filter { it.status == PortStatus.OPEN } }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().alpha(screenAlpha),
@@ -307,10 +311,10 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                     is PortScanUiState.Error -> {
                         PortScanErrorCard(
                             message =
-                                if (state.isBudgetLimit) {
-                                    stringResource(R.string.ports_scan_budget_exceeded)
-                                } else {
-                                    state.message
+                                when {
+                                    state.isBudgetLimit -> stringResource(R.string.ports_scan_budget_exceeded)
+                                    state.info != null -> ErrorTextMapper.map(state.info, state.message).asString()
+                                    else -> stringResource(R.string.err_unknown)
                                 },
                             onRetry = { requestLocalNetworkPermission(host) },
                             onClear = viewModel::onClear,
@@ -338,14 +342,8 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
             }
             if (finished.completion == PortScanUiState.Completion.USER_STOPPED) {
                 item {
-                    val requested = finished.requestedPorts
                     Text(
-                        text =
-                            if (requested != null) {
-                                stringResource(R.string.ports_scan_stopped_partial, summary.totalPorts, requested)
-                            } else {
-                                stringResource(R.string.ports_scan_stopped_early)
-                            },
+                        text = stringResource(R.string.ports_scan_stopped_early),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.fillMaxWidth(),
@@ -358,6 +356,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                 PortScanSummaryCard(
                     summary = summary,
                     report = buildScanReport(summary, durationText),
+                    requestedPorts = finished.requestedPorts,
                     onShare = {
                         context.shareText(
                             text = buildScanReport(summary, durationText),
@@ -369,8 +368,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
             }
 
             // ── Open Ports Section ──────────────────────────────────────────
-            val openPorts = summary.results.filter { it.status == PortStatus.OPEN }
-            if (openPorts.isNotEmpty()) {
+            if (finishedOpen.isNotEmpty()) {
                 item {
                     Text(
                         text = stringResource(R.string.ports_section_open),
@@ -379,14 +377,13 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                         modifier = Modifier.padding(vertical = 4.dp),
                     )
                 }
-                items(openPorts, key = { it.port }) { portResult ->
+                items(finishedOpen, key = { it.port }) { portResult ->
                     PortResultRow(portResult, showStatusBadge = false)
                 }
             }
 
             // ── All Results Section ─────────────────────────────────────────
-            val allNonOpen = summary.results.filter { it.status != PortStatus.OPEN }
-            if (allNonOpen.isNotEmpty()) {
+            if (finishedClosedAndFiltered.isNotEmpty()) {
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -394,34 +391,30 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = stringResource(R.string.ports_section_all),
+                            text = stringResource(R.string.ports_section_closed_filtered),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                         )
                         TextButton(onClick = { showAll = !showAll }) {
                             Text(
                                 if (showAll) {
-                                    stringResource(R.string.ports_show_open)
+                                    stringResource(R.string.ports_hide_results)
                                 } else {
-                                    stringResource(
-                                        R.string.ports_show_all_with_counts,
-                                        summary.closedPorts,
-                                        summary.filteredPorts,
-                                    )
+                                    stringResource(R.string.ports_show_results)
                                 },
                             )
                         }
                     }
                 }
                 if (showAll) {
-                    items(allNonOpen, key = { it.port }) { portResult ->
+                    items(finishedClosedAndFiltered, key = { it.port }) { portResult ->
                         PortResultRow(portResult)
                     }
                 }
             }
 
             // Empty state
-            if (summary.results.none { it.status == PortStatus.OPEN }) {
+            if (finishedOpen.isEmpty()) {
                 item {
                     Box(
                         modifier =
@@ -443,9 +436,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
 
         // ── Live results during scan ────────────────────────────────────────
         if (uiState is PortScanUiState.Scanning) {
-            val scanning = uiState as PortScanUiState.Scanning
-            val openLive = scanning.liveResults.filter { it.status == PortStatus.OPEN }
-            if (openLive.isNotEmpty()) {
+            if (liveOpen.isNotEmpty()) {
                 item {
                     Text(
                         text = stringResource(R.string.ports_section_open),
@@ -454,7 +445,7 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                         modifier = Modifier.padding(vertical = 4.dp),
                     )
                 }
-                items(openLive, key = { it.port }) { portResult ->
+                items(liveOpen, key = { it.port }) { portResult ->
                     PortResultRow(portResult, showStatusBadge = false)
                 }
             }
@@ -542,6 +533,7 @@ private fun PortScanInputCard(
                     KeyboardActions(onDone = {
                         if (!isScanning && normalizedHost != null) onStartScan()
                     }),
+                enabled = !isScanning,
                 isError = isHostInvalid,
                 supportingText =
                     if (hostProblemRes != null) {
@@ -560,6 +552,8 @@ private fun PortScanInputCard(
                 onHostSelected = onHostChange,
                 onRemoveHost = onRemoveRecentHost,
                 onClearAll = onClearRecentHosts,
+                selectionEnabled = !isScanning,
+                actionsEnabled = !isScanning,
             )
 
             // Preset selector
@@ -702,15 +696,14 @@ private fun PortScanInputCard(
             // Timeout slider
             Column {
                 Text(
-                    text = "${stringResource(R.string.ports_timeout_label)}: $timeoutMs ms",
+                    text = stringResource(R.string.ports_timeout_label, timeoutMs),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Slider(
                     value = timeoutMs.toFloat(),
-                    onValueChange = { onTimeoutChange(it.toInt()) },
+                    onValueChange = { onTimeoutChange(roundTimeoutMs(it)) },
                     valueRange = 200f..10000f,
-                    steps = 49,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -863,19 +856,6 @@ private fun PortScanProgressCard(state: PortScanUiState.Scanning) {
         label = "ScanProgress",
     )
 
-    // Pulsing animation for the indicator
-    val infiniteTransition = rememberInfiniteTransition(label = "ScanPulse")
-    val pulse by infiniteTransition.animateFloat(
-        initialValue = 0.85f,
-        targetValue = 1.0f,
-        animationSpec =
-            infiniteRepeatable(
-                tween(800, easing = LinearEasing),
-                RepeatMode.Reverse,
-            ),
-        label = "ScanPulseScale",
-    )
-
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -890,12 +870,6 @@ private fun PortScanProgressCard(state: PortScanUiState.Scanning) {
                     text = stringResource(R.string.ports_scanning_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                )
-                val loadingCd = stringResource(R.string.a11y_loading)
-                CircularProgressIndicator(
-                    modifier = Modifier.size(28.dp).semantics { contentDescription = loadingCd },
-                    strokeCap = StrokeCap.Round,
-                    strokeWidth = 3.dp,
                 )
             }
 
@@ -923,8 +897,7 @@ private fun PortScanProgressCard(state: PortScanUiState.Scanning) {
             )
 
             // Live stats
-            val openSoFar = state.liveResults.count { it.status == PortStatus.OPEN }
-            if (openSoFar > 0) {
+            if (state.openCount > 0) {
                 HorizontalDivider()
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
@@ -936,7 +909,7 @@ private fun PortScanProgressCard(state: PortScanUiState.Scanning) {
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "$openSoFar ${stringResource(R.string.ports_open_ports).lowercase()} found so far",
+                        text = pluralStringResource(R.plurals.ports_open_found_so_far, state.openCount, state.openCount),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Medium,
@@ -973,6 +946,7 @@ private fun PortScanErrorCard(
 private fun PortScanSummaryCard(
     summary: PortScanSummary,
     report: String,
+    requestedPorts: Int?,
     onShare: () -> Unit,
     onClear: () -> Unit,
 ) {
@@ -1050,7 +1024,9 @@ private fun PortScanSummaryCard(
                 )
                 StatChip(
                     label = stringResource(R.string.ports_total_scanned),
-                    value = summary.totalPorts.toString(),
+                    value =
+                        requestedPorts?.let { stringResource(R.string.ports_scanned_of, summary.totalPorts, it) }
+                            ?: summary.totalPorts.toString(),
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
@@ -1097,14 +1073,6 @@ private fun PortResultRow(
     result: PortScanResult,
     showStatusBadge: Boolean = true,
 ) {
-    var targetAlpha by remember { mutableStateOf(0f) }
-    LaunchedEffect(Unit) { targetAlpha = 1f }
-    val animatedAlpha by animateFloatAsState(
-        targetValue = targetAlpha,
-        animationSpec = spring(stiffness = Spring.StiffnessLow),
-        label = "port_row_alpha",
-    )
-
     // Filtered means no answer, which is neutral; the tertiary tint read as an error on the list (PHA-14).
     val statusColor =
         when (result.status) {
@@ -1123,8 +1091,7 @@ private fun PortResultRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(vertical = 2.dp)
-                .alpha(animatedAlpha),
+                .padding(vertical = 2.dp),
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -1234,7 +1201,12 @@ private fun PortResultRow(
 
             // Response time
             Text(
-                text = "${result.responseTimeMs}${stringResource(R.string.ports_ms_suffix)}",
+                text =
+                    if (result.status == PortStatus.FILTERED) {
+                        stringResource(R.string.ports_no_reply)
+                    } else {
+                        "${result.responseTimeMs}${stringResource(R.string.ports_ms_suffix)}"
+                    },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontFamily = FontFamily.Monospace,
@@ -1282,3 +1254,6 @@ internal fun buildScanReport(
             appendLine("No open ports found.")
         }
     }
+
+/** Timeout slider positions snap to 100 ms steps between 200 and 10 000 ms. */
+internal fun roundTimeoutMs(value: Float): Int = ((value / 100f).roundToInt() * 100).coerceIn(200, 10_000)

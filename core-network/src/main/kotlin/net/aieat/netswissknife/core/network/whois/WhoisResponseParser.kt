@@ -3,7 +3,6 @@ package net.aieat.netswissknife.core.network.whois
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
 import java.util.Locale
 
 object WhoisResponseParser {
@@ -124,17 +123,14 @@ object WhoisResponseParser {
         if (raw.isNullOrBlank()) return null
         val trimmed = raw.trim()
         for (fmt in DATE_FORMATS) {
-            try {
-                return try {
-                    java.time.OffsetDateTime.parse(trimmed, fmt)
-                        .toInstant().toEpochMilli()
-                } catch (_: DateTimeParseException) {
-                    LocalDate.parse(trimmed, fmt)
-                        .atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-                }
-            } catch (_: Exception) {
-                // try next format
-            }
+            val epochMs = runCatching {
+                java.time.OffsetDateTime.parse(trimmed, fmt).toInstant().toEpochMilli()
+            }.recoverCatching {
+                java.time.LocalDateTime.parse(trimmed, fmt).toInstant(ZoneOffset.UTC).toEpochMilli()
+            }.recoverCatching {
+                LocalDate.parse(trimmed, fmt).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+            }.getOrNull()
+            if (epochMs != null) return epochMs
         }
         return null
     }

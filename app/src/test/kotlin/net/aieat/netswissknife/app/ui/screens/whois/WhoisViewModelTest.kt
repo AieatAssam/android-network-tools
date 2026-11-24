@@ -159,6 +159,43 @@ class WhoisViewModelTest {
         }
 
         @Test
+        fun `editing to a different query clears a finished result`() = runTest {
+            coEvery { whoisLookupUseCase(any(), any()) } returns NetworkResult.Success(stubResult)
+            viewModel.onQueryChange("example.com")
+            viewModel.lookup()
+            assertNotNull(viewModel.uiState.value.result)
+
+            viewModel.onQueryChange("other.com")
+
+            val state = viewModel.uiState.value
+            assertNull(state.result)
+            assertTrue(state.hopStates.isEmpty())
+        }
+
+        @Test
+        fun `editing to a different query clears a lookup error`() = runTest {
+            coEvery { whoisLookupUseCase(any(), any()) } returns NetworkResult.Error("lookup failed")
+            viewModel.onQueryChange("example.com")
+            viewModel.lookup()
+            assertEquals("lookup failed", viewModel.uiState.value.error)
+
+            viewModel.onQueryChange("other.com")
+
+            assertNull(viewModel.uiState.value.error)
+        }
+
+        @Test
+        fun `formatting-only edits keep a finished result`() = runTest {
+            coEvery { whoisLookupUseCase(any(), any()) } returns NetworkResult.Success(stubResult)
+            viewModel.onQueryChange("example.com")
+            viewModel.lookup()
+
+            viewModel.onQueryChange(" example.com ")
+
+            assertNotNull(viewModel.uiState.value.result)
+        }
+
+        @Test
         fun `blank query does not trigger lookup`() = runTest {
             viewModel.onQueryChange("  ")
             viewModel.lookup()

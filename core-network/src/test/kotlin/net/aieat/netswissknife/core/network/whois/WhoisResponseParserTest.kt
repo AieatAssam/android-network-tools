@@ -124,4 +124,34 @@ class WhoisResponseParserTest {
         val response = "ReferralServer: whois://whois.ripe.net"
         assertEquals("whois.ripe.net", WhoisResponseParser.parseRirReferral(response))
     }
+
+    @Test
+    fun `a local date-time without an offset is read as UTC`() {
+        assertEquals(
+            java.time.LocalDateTime.of(2024, 5, 1, 10, 30).toInstant(ZoneOffset.UTC).toEpochMilli(),
+            WhoisResponseParser.parseDate("2024-05-01T10:30:00"),
+        )
+    }
+
+    @Test
+    fun `parsed dates do not depend on the device time zone`() {
+        val deviceZone = java.util.TimeZone.getDefault()
+        try {
+            listOf("America/Los_Angeles", "Asia/Tokyo").forEach { zone ->
+                java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone(zone))
+                assertEquals(
+                    LocalDate.of(1995, 8, 14).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+                    WhoisResponseParser.parseDate("1995-08-14"),
+                    zone,
+                )
+                assertEquals(
+                    java.time.Instant.parse("1995-08-14T10:00:00Z").toEpochMilli(),
+                    WhoisResponseParser.parseDate("1995-08-14T10:00:00"),
+                    zone,
+                )
+            }
+        } finally {
+            java.util.TimeZone.setDefault(deviceZone)
+        }
+    }
 }

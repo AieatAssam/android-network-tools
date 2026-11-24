@@ -37,7 +37,7 @@ import net.aieat.netswissknife.core.network.whois.WhoisServer
 import net.aieat.netswissknife.core.network.whois.WhoisServerRole
 import net.aieat.netswissknife.core.network.whois.answeringProtocol
 
-enum class HopStatus { PENDING, QUERYING, DONE, FAILED, SKIPPED }
+enum class HopStatus { PENDING, DONE, FAILED, SKIPPED }
 
 data class HopUiState(
     val server: WhoisServer,
@@ -129,9 +129,8 @@ class WhoisViewModel @Inject constructor(
         _uiState.update { state ->
             val effectiveQueryChanged = lookupIdentity(value) != lookupIdentity(state.query)
             val invalid = isWhoisQueryInvalid(value)
-            if (state.isCanceled && effectiveQueryChanged) {
-                // The canceled card and its partial relay chain belong to the query that
-                // was stopped. Once the user changes the input, Retry must not appear to
+            if ((state.isCanceled || state.result != null || state.error != null) && effectiveQueryChanged) {
+                // The canceled card and its partial relay chain belong to the query that produced it. Once the user changes the input, Retry must not appear to
                 // retry that old operation while actually submitting a different query.
                 state.copy(
                     query = value,
@@ -244,10 +243,7 @@ class WhoisViewModel @Inject constructor(
                 if (operationSession !== session || hop.operationId != session.budget.operationId) return@collect
                 _uiState.update { state ->
                     val existing = state.hopStates
-                    // Mark previous QUERYING → DONE, then add new hop as DONE
-                    val updated = existing.map { h ->
-                        if (h.status == HopStatus.QUERYING) h.copy(status = HopStatus.DONE) else h
-                    } + HopUiState(
+                    val updated = existing + HopUiState(
                         server = hop.server,
                         status = if (hop.error != null) HopStatus.FAILED else HopStatus.DONE,
                         queryTimeMs = hop.queryTimeMs,

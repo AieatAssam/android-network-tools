@@ -23,6 +23,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.cancel
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
+import net.aieat.netswissknife.app.data.ToolSessionMemory
 import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.Transport
@@ -325,6 +326,53 @@ class SpeedTestViewModelTest {
         assertTrue(share.contains("Latency under download load: 28.0 ms avg / 1 samples"))
         assertTrue(share.contains("Latency under upload load: 31.0 ms avg / 1 samples"))
         assertFalse(share.contains("null"))
+    }
+
+    @Test
+    fun `a finished result is kept for the next visit to the tool`() = runTest {
+        val memory = ToolSessionMemory()
+        every { useCase(any(), any()) } returns flowOf(
+            SpeedTestEvent.LatencyFinished(latencyStats),
+            SpeedTestEvent.DownloadFinished(downloadResult),
+            SpeedTestEvent.UploadFinished(uploadResult)
+        )
+        val first = SpeedTestViewModel(useCase, dataStore, sessionMemory = memory)
+        first.startTest()
+        val finished = first.uiState.value as SpeedTestUiState.Finished
+
+        val nextVisit = SpeedTestViewModel(useCase, dataStore, sessionMemory = memory)
+
+        assertEquals(finished, nextVisit.uiState.value)
+    }
+
+    @Test
+    fun `leaving the foreground stops a running test and keeps its partial results`() = runTest {
+        every { useCase(any(), any()) } returns flow {
+            emit(SpeedTestEvent.LatencyFinished(latencyStats))
+            emit(SpeedTestEvent.DownloadFinished(downloadResult))
+            awaitCancellation()
+        }
+        viewModel.startTest()
+
+        viewModel.onLifecyclePause()
+
+        val state = viewModel.uiState.value as SpeedTestUiState.Idle
+        assertTrue(state.canceled)
+        assertEquals(downloadResult, state.partial.download)
+    }
+
+    @Test
+    fun `a configuration change keeps a running test going`() = runTest {
+        every { useCase(any(), any()) } returns flow {
+            emit(SpeedTestEvent.LatencyFinished(latencyStats))
+            awaitCancellation()
+        }
+        viewModel.startTest()
+
+        viewModel.onLifecyclePause(configurationChange = true)
+
+        assertTrue(viewModel.uiState.value is SpeedTestUiState.Running)
+        viewModel.onCancel()
     }
 
     @Nested

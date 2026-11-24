@@ -10,6 +10,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +38,8 @@ import net.aieat.netswissknife.core.domain.PortScanParams
 import net.aieat.netswissknife.core.domain.PortScanPreset
 import net.aieat.netswissknife.core.domain.PortScanRange
 import net.aieat.netswissknife.core.domain.PortScanUseCase
+import net.aieat.netswissknife.core.network.ErrorCode
+import net.aieat.netswissknife.core.network.ErrorInfo
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.MonotonicClock
 import net.aieat.netswissknife.core.network.SystemMonotonicClock
@@ -47,6 +50,7 @@ import net.aieat.netswissknife.core.network.operation.OperationRequirement
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.portscan.PortScanResult
 import net.aieat.netswissknife.core.network.portscan.PortScanSummary
+import net.aieat.netswissknife.core.network.portscan.PortStatus
 
 object PortScanDefaults {
     const val CONCURRENCY = 50
@@ -60,6 +64,7 @@ sealed interface PortScanUiState {
         val scannedCount: Int,
         val totalCount: Int,
         val resolvedIp: String? = null,
+        val openCount: Int = liveResults.count { it.status == PortStatus.OPEN },
         val progress: Float = if (totalCount > 0) scannedCount.toFloat() / totalCount else 0f
     ) : PortScanUiState
     data class Finished(
@@ -68,10 +73,19 @@ sealed interface PortScanUiState {
         /** Ports the stopped scan was asked to probe; null when the scan was not stopped early. */
         val requestedPorts: Int? = null,
     ) : PortScanUiState
-    data class Error(val message: String, val isBudgetLimit: Boolean = false) : PortScanUiState
+    /** [message] is the developer text; the screen shows [info] through ErrorTextMapper when it is set. */
+    data class Error(
+        val message: String,
+        val info: ErrorInfo? = null,
+        val isBudgetLimit: Boolean = false,
+    ) : PortScanUiState
 
     enum class Completion { COMPLETE, USER_STOPPED, DEADLINE }
 }
+
+/** Interval between progress emissions while probes are running; the final state is always exact. */
+internal const val SCAN_UI_INTERVAL_MS = 100L
+private const val SCAN_UI_INTERVAL_NANOS = SCAN_UI_INTERVAL_MS * 1_000_000L
 
 /** SavedStateHandle keys for the port scan form inputs; they survive process death and rotation. */
 private const val PORT_PRESET_KEY = "portPreset"
@@ -210,6 +224,15 @@ class PortScanViewModel @Inject constructor(
     private var scanStartedAtNanos: Long? = null
     private var scanOperationSession: OperationSession? = null
 
+    /** Host the running scan was started with; partial results and reports use it, not the form. */
+    private var scanHost: String = ""
+    /** Every result received by the running scan, kept outside the UI state so no emission can drop one. */
+    private val scanResults = mutableListOf<PortScanResult>()
+    private var scanOpenCount = 0
+    private var scanScannedCount = 0
+    private var scanUiEmitNanos = 0L
+    private var scanUiFlushJob: Job? = null
+
     init {
         val handoffConsumed = savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true
         val restoredEdit = savedStateHandle.get<String>(EDITED_HOST_KEY)
@@ -253,7 +276,8 @@ class PortScanViewModel @Inject constructor(
     fun onHostChange(value: String) {
         // The clear icon routes through onHostChange(""); do not discard a
         // handoff while its scan still owns an active operation session.
-        if (value.isEmpty() && (scanOperationSession != null || _uiState.value is PortScanUiState.Scanning)) {
+        // The host of a running scan is fixed; the field is also disabled on screen.
+        if (_uiState.value is PortScanUiState.Scanning || (value.isEmpty() && scanOperationSession != null)) {
             return
         }
         _host.value = value
@@ -328,6 +352,7 @@ class PortScanViewModel @Inject constructor(
     fun onClear() {
         cancelScan(CancellationReason.USER_STOP)
         scanJob?.cancel()
+        cancelScanProgressFlush()
         scanStartedAtNanos = null
         _uiState.value = PortScanUiState.Idle
     }
@@ -382,17 +407,13 @@ class PortScanViewModel @Inject constructor(
     private fun finishPartialScan() {
         val current = _uiState.value
         if (current is PortScanUiState.Scanning) {
-            // Build partial summary from live results
+            cancelScanProgressFlush()
             val startedAtNanos = scanStartedAtNanos ?: monotonicClock.nowNanos()
-            val partial = net.aieat.netswissknife.core.network.portscan.PortScanSummary(
-                host = _host.value,
+            val partial = partialSummary(
+                host = scanHost,
                 resolvedIp = current.resolvedIp,
-                scannedPorts = current.liveResults.map { it.port },
-                openPorts = current.liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.OPEN },
-                closedPorts = current.liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.CLOSED },
-                filteredPorts = current.liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.FILTERED },
-                scanDurationMs = monotonicClock.elapsedMillisSince(startedAtNanos),
-                results = current.liveResults.sortedBy { it.port }
+                results = scanResults.toList(),
+                durationMs = monotonicClock.elapsedMillisSince(startedAtNanos),
             )
             scanStartedAtNanos = null
             _uiState.value = PortScanUiState.Finished(
@@ -403,9 +424,68 @@ class PortScanViewModel @Inject constructor(
         }
     }
 
+    private fun partialSummary(
+        host: String,
+        resolvedIp: String?,
+        results: List<PortScanResult>,
+        durationMs: Long,
+    ): PortScanSummary = PortScanSummary(
+        host = host,
+        resolvedIp = resolvedIp,
+        scannedPorts = results.map { it.port },
+        openPorts = results.count { it.status == PortStatus.OPEN },
+        closedPorts = results.count { it.status == PortStatus.CLOSED },
+        filteredPorts = results.count { it.status == PortStatus.FILTERED },
+        scanDurationMs = durationMs,
+        results = results.sortedBy { it.port },
+    )
+
+    /** Publishes the running scan's state now, using the results collected so far. */
+    private fun publishScanProgress() {
+        cancelScanProgressFlush()
+        emitScanProgress()
+    }
+
+    /**
+     * Publishes at most one progress state per [SCAN_UI_INTERVAL_MS]. A result that arrives inside
+     * the window is published by a trailing job, so a slow final probe never leaves the count stale.
+     */
+    private fun scheduleScanProgress() {
+        val sinceLastNanos = monotonicClock.nowNanos() - scanUiEmitNanos
+        if (sinceLastNanos >= SCAN_UI_INTERVAL_NANOS) {
+            publishScanProgress()
+            return
+        }
+        if (scanUiFlushJob != null) return
+        val remainingMs = ((SCAN_UI_INTERVAL_NANOS - sinceLastNanos) / 1_000_000L).coerceAtLeast(1L)
+        scanUiFlushJob = viewModelScope.launch {
+            delay(remainingMs)
+            scanUiFlushJob = null
+            emitScanProgress()
+        }
+    }
+
+    private fun emitScanProgress() {
+        val current = _uiState.value as? PortScanUiState.Scanning ?: return
+        scanUiEmitNanos = monotonicClock.nowNanos()
+        _uiState.value = PortScanUiState.Scanning(
+            liveResults = scanResults.toList(),
+            scannedCount = scanScannedCount,
+            totalCount = current.totalCount,
+            resolvedIp = current.resolvedIp,
+            openCount = scanOpenCount,
+        )
+    }
+
+    private fun cancelScanProgressFlush() {
+        scanUiFlushJob?.cancel()
+        scanUiFlushJob = null
+    }
+
     fun startScan() {
         cancelScan(CancellationReason.USER_STOP)
         scanJob?.cancel()
+        cancelScanProgressFlush()
         val normalizedHost = HostValidator.normalize(_host.value)
         val hostForScan = normalizedHost ?: _host.value.trim()
         if (normalizedHost != null) _host.value = normalizedHost
@@ -416,10 +496,12 @@ class PortScanViewModel @Inject constructor(
             !linkInfoProvider.localNetworkPermissionAllowed()
         ) {
             scanStartedAtNanos = null
-            _uiState.value = PortScanUiState.Error("Local network permission denied")
+            _uiState.value = PortScanUiState.Error(
+                message = "Local network permission denied",
+                info = ErrorInfo(ErrorCode.LOCAL_NETWORK_PERMISSION_DENIED),
+            )
             return
         }
-        val liveResults = mutableListOf<PortScanResult>()
 
         val params = PortScanParams(
             host = hostForScan,
@@ -460,6 +542,10 @@ class PortScanViewModel @Inject constructor(
         }
 
         scanStartedAtNanos = monotonicClock.nowNanos()
+        scanHost = hostForScan
+        scanResults.clear()
+        scanOpenCount = 0
+        scanScannedCount = 0
         _uiState.value = PortScanUiState.Scanning(
             liveResults = emptyList(),
             scannedCount = 0,
@@ -476,50 +562,47 @@ class PortScanViewModel @Inject constructor(
                     when (result) {
                         is PortScanFlowResult.Started -> {
                             _uiState.value = PortScanUiState.Scanning(
-                                liveResults = liveResults.toList(),
+                                liveResults = emptyList(),
                                 scannedCount = 0,
                                 totalCount = result.totalCount,
                                 resolvedIp = result.resolvedIp
                             )
+                            emitScanProgress()
                         }
                         is PortScanFlowResult.ValidationError -> {
+                            cancelScanProgressFlush()
                             scanStartedAtNanos = null
-                            _uiState.value = PortScanUiState.Error(result.message)
+                            _uiState.value = PortScanUiState.Error(result.message, info = result.info)
                         }
                         is PortScanFlowResult.PortScanned -> {
-                            liveResults.add(result.result)
-                            _uiState.value = PortScanUiState.Scanning(
-                                liveResults = liveResults.toList(),
-                                scannedCount = result.scannedCount,
-                                totalCount = result.totalCount,
-                                resolvedIp = (_uiState.value as? PortScanUiState.Scanning)?.resolvedIp
-                            )
+                            scanResults.add(result.result)
+                            if (result.result.status == PortStatus.OPEN) scanOpenCount++
+                            scanScannedCount = result.scannedCount
+                            scheduleScanProgress()
                             if (!recentSaved && normalizedHost != null) {
                                 saveRecentHostAfterResult(normalizedHost)
                                 recentSaved = true
                             }
                         }
                         is PortScanFlowResult.ScanComplete -> {
+                            cancelScanProgressFlush()
                             scanStartedAtNanos = null
                             _uiState.value = PortScanUiState.Finished(result.summary)
                         }
                     }
                 }
+                publishScanProgress()
             } catch (e: CancellationException) {
                 throw e
             } catch (_: OperationDeadlineExceededException) {
                 if (scanOperationSession !== operationSession) return@launch
-                val scanning = _uiState.value as? PortScanUiState.Scanning
+                cancelScanProgressFlush()
                 val startedAtNanos = scanStartedAtNanos ?: monotonicClock.nowNanos()
-                val partial = PortScanSummary(
-                    host = hostForScan,
-                    resolvedIp = scanning?.resolvedIp,
-                    scannedPorts = liveResults.map { it.port },
-                    openPorts = liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.OPEN },
-                    closedPorts = liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.CLOSED },
-                    filteredPorts = liveResults.count { it.status == net.aieat.netswissknife.core.network.portscan.PortStatus.FILTERED },
-                    scanDurationMs = monotonicClock.elapsedMillisSince(startedAtNanos),
-                    results = liveResults.sortedBy { it.port },
+                val partial = partialSummary(
+                    host = scanHost,
+                    resolvedIp = (_uiState.value as? PortScanUiState.Scanning)?.resolvedIp,
+                    results = scanResults.toList(),
+                    durationMs = monotonicClock.elapsedMillisSince(startedAtNanos),
                 )
                 scanStartedAtNanos = null
                 _uiState.value = PortScanUiState.Finished(
@@ -528,8 +611,11 @@ class PortScanViewModel @Inject constructor(
                 )
             } catch (e: Exception) {
                 if (scanOperationSession !== operationSession) return@launch
+                cancelScanProgressFlush()
                 scanStartedAtNanos = null
-                _uiState.value = PortScanUiState.Error("Scan failed: ${e.message ?: "Unknown error"}")
+                _uiState.value = PortScanUiState.Error(
+                    message = "Scan failed: ${e.message ?: "Unknown error"}",
+                )
             } finally {
                 if (scanOperationSession === operationSession) scanOperationSession = null
             }
