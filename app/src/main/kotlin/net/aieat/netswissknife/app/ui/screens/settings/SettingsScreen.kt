@@ -543,6 +543,11 @@ private fun AttributionsSection() {
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+            // Base map of the Traceroute route map: bundled, offline, public domain.
+            NaturalEarthAttribution(
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
@@ -556,12 +561,7 @@ private data class LibraryInfo(
 
 private val THIRD_PARTY_LIBRARIES =
     listOf(
-        LibraryInfo(
-            "dnsjava",
-            "3.6.5",
-            "BSD 3-Clause",
-            "Copyright (c) 1998-2024, Brian Wellington and the dnsjava contributors",
-        ),
+        LibraryInfo("dnsjava", "3.6.5", "BSD 3-Clause", DNSJAVA_COPYRIGHT),
         LibraryInfo("SNMP4J", "3.13.1", "Apache 2.0"),
         LibraryInfo("icmpenguin", "1.0.0-rc.4", "Apache 2.0"),
         LibraryInfo("Dagger Hilt", "2.60.1", "Apache 2.0"),
@@ -665,3 +665,5 @@ private fun SectionHeader(
         )
     }
 }
+
+private const val DNSJAVA_COPYRIGHT = "Copyright (c) 1998-2024, Brian Wellington and the dnsjava contributors"

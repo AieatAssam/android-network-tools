@@ -45,6 +45,7 @@ jobs:
         run: |
           python3 -B -m unittest discover -s tools/release -p 'test_*.py' -v
           python3 -B -m unittest discover -s tools/oui -p 'test_*.py' -v
+          python3 -B -m unittest discover -s tools/worldmap -p 'test_*.py' -v
 
       # Reviewed baselines freeze the existing backlog. A diagnostic absent from
       # those baselines fails CI; baseline updates require explicit review.
@@ -257,6 +258,7 @@ jobs:
           grep -q '^lib/arm64-v8a/libicmpenguin\.so$' /tmp/release-apk-files.txt
           grep -q '^oui/oui-prefixes\.tsv$' /tmp/release-apk-files.txt
           grep -q '^psl/public_suffix_list\.index$' /tmp/release-apk-files.txt
+          grep -q '^assets/worldmap/land-110m\.bin$' /tmp/release-apk-files.txt
 
       - name: Upload unsigned APK and R8 mapping
         if: always()

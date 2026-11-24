@@ -44,7 +44,8 @@ import net.aieat.netswissknife.core.network.traceroute.TracerouteProbeType
 import net.aieat.netswissknife.core.network.traceroute.TracerouteResult
 import javax.inject.Inject
 
-enum class TracerouteViewMode { Visual, Raw }
+/** Result tabs, in display order: Hop Details, Map, Raw Output. */
+enum class TracerouteViewMode { Visual, Map, Raw }
 
 sealed interface TracerouteUiState {
     object Idle : TracerouteUiState
@@ -240,32 +241,14 @@ class TracerouteViewModel
             savedStateHandle[PACKET_SIZE_KEY] = _packetSize.value
         }
 
-        fun onToggleViewMode() {
-            when (val current = _uiState.value) {
-                is TracerouteUiState.Finished -> {
-                    val next =
-                        if (current.viewMode == TracerouteViewMode.Visual) {
-                            TracerouteViewMode.Raw
-                        } else {
-                            TracerouteViewMode.Visual
-                        }
-                    _uiState.value = current.copy(viewMode = next)
+        /** Show [mode] for the current finished or stopped trace; ignored while there is no result. */
+        fun onSelectViewMode(mode: TracerouteViewMode) {
+            _uiState.value =
+                when (val current = _uiState.value) {
+                    is TracerouteUiState.Finished -> current.copy(viewMode = mode)
+                    is TracerouteUiState.Canceled -> current.copy(viewMode = mode)
+                    else -> return
                 }
-
-                is TracerouteUiState.Canceled -> {
-                    val next =
-                        if (current.viewMode == TracerouteViewMode.Visual) {
-                            TracerouteViewMode.Raw
-                        } else {
-                            TracerouteViewMode.Visual
-                        }
-                    _uiState.value = current.copy(viewMode = next)
-                }
-
-                else -> {
-                    Unit
-                }
-            }
         }
 
         fun onStop() {

@@ -226,6 +226,9 @@ extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension> {
                 classes(
                     "net.aieat.netswissknife.app.ui.screens.whois.RelayChainGeometry",
                     "net.aieat.netswissknife.app.ui.screens.whois.ConnectorSegment",
+                    // Traceroute route map: pure model, geometry and asset parser (no Compose).
+                    "net.aieat.netswissknife.app.ui.screens.traceroute.map.*",
+                    "net.aieat.netswissknife.app.ui.screens.TraceLatencyBand*",
                     "net.aieat.netswissknife.app.data.AppPreferenceKeys",
                     "net.aieat.netswissknife.app.data.RecentHostsRepository",
                     "net.aieat.netswissknife.app.platform.LinkInfoMapper",
