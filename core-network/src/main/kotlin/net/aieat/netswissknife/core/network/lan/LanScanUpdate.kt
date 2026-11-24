@@ -4,6 +4,14 @@ package net.aieat.netswissknife.core.network.lan
 sealed interface LanScanUpdate {
 
     /**
+     * Emitted once, before any probe, with whether this device can read MAC addresses. The same
+     * value reaches the final summary, so the list can show MAC state from the start of the scan.
+     */
+    data class ScanStarted(
+        val macResolutionSupported: Boolean,
+    ) : LanScanUpdate
+
+    /**
      * Emitted each time a host responds to the reachability probe.
      *
      * @param host         The discovered host details.

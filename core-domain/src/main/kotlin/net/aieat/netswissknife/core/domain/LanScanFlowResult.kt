@@ -9,6 +9,11 @@ import net.aieat.netswissknife.core.network.ErrorInfo
 /** Events emitted by [LanScanUseCase] during a scan. */
 sealed interface LanScanFlowResult {
 
+    /** Emitted first, before any probe, with whether MAC addresses can be read on this device. */
+    data class ScanStarted(
+        val macResolutionSupported: Boolean,
+    ) : LanScanFlowResult
+
     /**
      * A responsive host was discovered.
      *

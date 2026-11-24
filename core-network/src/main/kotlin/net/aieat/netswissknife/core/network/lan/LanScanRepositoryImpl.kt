@@ -33,26 +33,6 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 
-private val QUICK_PORTS =
-    listOf(
-        21,
-        22,
-        23,
-        25,
-        53,
-        80,
-        110,
-        139,
-        143,
-        443,
-        445,
-        3306,
-        3389,
-        5900,
-        8080,
-        8443,
-    )
-
 /**
  * Multi-probe LAN discovery repository.
  *
@@ -175,6 +155,15 @@ class LanScanRepositoryImpl(
             OperationRunner.runOrJoin(session) {
                 val ips = SubnetUtils.parseSubnet(request.subnet)
                 val totalCount = ips.size
+                val macSupportedAtStart =
+                    try {
+                        effectiveMacResolver.supported
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        false
+                    }
+                this@channelFlow.send(LanScanUpdate.ScanStarted(macSupportedAtStart))
                 val aliveHosts = mutableListOf<LanHost>()
                 var uncertainDiagnostics: List<LanScanDiagnostic> = emptyList()
                 var uncertainTotal = 0
@@ -553,7 +542,7 @@ class LanScanRepositoryImpl(
         val openPorts = mutableListOf<Int>()
         val resources = currentCoroutineContext()[OperationResourcesContext]?.resources
         val portChecker = effectivePortChecker ?: createPortChecker(binder, socketFactory, resources)
-        for (port in QUICK_PORTS) {
+        for (port in LanQuickPorts.ports) {
             ensureCurrentOperationActive()
             if (portChecker(ip, port, request.timeoutMs)) openPorts += port
             ensureCurrentOperationActive()

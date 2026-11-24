@@ -27,7 +27,7 @@ class LanMapNodesTest {
 
     @Test
     fun `preview shows every node when the list fits the limit`() {
-        val preview = lanMapVisibleNodes(listOf(1, 2, 3), showAll = false, limit = 4)
+        val preview = lanMapVisibleNodes(listOf(1, 2, 3), limit = 4)
 
         assertEquals(listOf(1, 2, 3), preview.visible)
         assertEquals(0, preview.hiddenCount)
@@ -35,23 +35,24 @@ class LanMapNodesTest {
 
     @Test
     fun `preview caps nodes at the limit and counts the rest`() {
-        val preview = lanMapVisibleNodes((1..10).toList(), showAll = false, limit = 4)
+        val preview = lanMapVisibleNodes((1..10).toList(), limit = 4)
 
         assertEquals(listOf(1, 2, 3, 4), preview.visible)
         assertEquals(6, preview.hiddenCount)
     }
 
     @Test
-    fun `show all reveals every node`() {
-        val preview = lanMapVisibleNodes((1..10).toList(), showAll = true, limit = 4)
+    fun `each request for more reveals one further chunk of nodes`() {
+        val firstLimit = lanMapExpandedLimit(LAN_MAP_NODE_LIMIT)
+        val preview = lanMapVisibleNodes((1..100).toList(), limit = firstLimit)
 
-        assertEquals((1..10).toList(), preview.visible)
-        assertEquals(0, preview.hiddenCount)
+        assertEquals(LAN_MAP_NODE_LIMIT * 2, preview.visible.size)
+        assertEquals(100 - LAN_MAP_NODE_LIMIT * 2, preview.hiddenCount)
     }
 
     @Test
     fun `an empty list has no nodes and no hidden count`() {
-        val preview = lanMapVisibleNodes(emptyList<Int>(), showAll = false, limit = 4)
+        val preview = lanMapVisibleNodes(emptyList<Int>(), limit = 4)
 
         assertEquals(emptyList<Int>(), preview.visible)
         assertEquals(0, preview.hiddenCount)

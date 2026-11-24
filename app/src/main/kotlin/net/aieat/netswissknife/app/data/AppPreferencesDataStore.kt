@@ -12,6 +12,12 @@ import androidx.datastore.preferences.preferencesDataStore
 
 val Context.appPreferences: DataStore<Preferences> by preferencesDataStore(name = "app_prefs")
 
+/** Values a screen uses when a preference has never been saved. */
+object AppPreferenceDefaults {
+    /** Timeout the Settings screen shows for an unsaved default. */
+    const val TIMEOUT_MS = 2_000
+}
+
 object AppPreferenceKeys {
     // ── Onboarding ────────────────────────────────────────────────────────────
 

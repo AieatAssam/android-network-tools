@@ -46,6 +46,7 @@ import net.aieat.netswissknife.core.network.operation.OperationDeadlineExceededE
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -188,13 +189,12 @@ class LanScanViewModelTest {
         }
 
     @Test
-    fun `HTTP handoff prefers a discovered conventional port and falls back to port 80`() {
+    fun `HTTP handoff prefers a discovered conventional web port and offers nothing when none is open`() {
         assertEquals(80, preferredHttpProbePort(listOf(443, 8080, 80)))
         assertEquals(8080, preferredHttpProbePort(listOf(443, 8080)))
-        assertEquals(8000, preferredHttpProbePort(listOf(8888, 8000)))
-        assertEquals(8888, preferredHttpProbePort(listOf(8888)))
-        assertEquals(80, preferredHttpProbePort(listOf(443, 8443)))
-        assertEquals(80, preferredHttpProbePort(emptyList()))
+        assertNull(preferredHttpProbePort(listOf(8888, 8000)))
+        assertNull(preferredHttpProbePort(listOf(443, 8443)))
+        assertNull(preferredHttpProbePort(emptyList()))
     }
 
     @Test

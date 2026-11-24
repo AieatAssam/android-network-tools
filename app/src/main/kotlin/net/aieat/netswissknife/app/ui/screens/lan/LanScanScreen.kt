@@ -8,15 +8,9 @@ import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -92,6 +86,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
@@ -100,7 +95,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
@@ -120,6 +114,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlin.math.roundToInt
 import net.aieat.netswissknife.app.ui.components.AppModalBottomSheet
 import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
@@ -149,6 +144,7 @@ import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 import net.aieat.netswissknife.app.ui.navigation.ToolPort
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.network.lan.LanHost
+import net.aieat.netswissknife.core.network.lan.LanQuickPorts
 import net.aieat.netswissknife.core.network.lan.MacSource
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
 import net.aieat.netswissknife.core.network.lan.LanScanDiagnosticReason
@@ -418,9 +414,9 @@ fun LanScreen(
                     is LanScanUiState.Scanning -> {
                         item(key = "lan_progress") { LanScanningContent(state) }
                         if (state.hosts.isNotEmpty()) {
-                            item(key = "lan_live_hosts_header") {
+                            item(key = "lan_devices_header") {
                                 Text(
-                                    text = stringResource(R.string.lan_live_hosts_header),
+                                    text = stringResource(R.string.lan_devices_header),
                                     style = MaterialTheme.typography.titleMedium,
                                     modifier = Modifier.padding(horizontal = 4.dp),
                                 )
@@ -433,7 +429,7 @@ fun LanScreen(
                                     host = host,
                                     expanded = host.ip == state.expandedHostIp,
                                     onClick = { viewModel.onToggleHostExpanded(host.ip) },
-                                    macResolutionSupported = true,
+                                    macResolutionSupported = state.macResolutionSupported,
                                     onScanPorts = viewModel::onScanPorts,
                                     onPingHost = viewModel::onPingHost,
                                     onProbeHttp = viewModel::onProbeHttp,
@@ -674,7 +670,7 @@ private fun LanInputCard(
             LabeledSlider(
                 label = stringResource(R.string.lan_timeout_label, timeoutMs),
                 value = timeoutMs.toFloat(),
-                onValueChange = { onTimeoutChange(it.toInt()) },
+                onValueChange = { onTimeoutChange(snapTimeoutMs(it)) },
                 valueRange = 100f..10_000f,
                 steps = 0,
                 enabled = !isScanning && !isCanceling,
@@ -684,7 +680,7 @@ private fun LanInputCard(
             LabeledSlider(
                 label = stringResource(R.string.lan_concurrency_label, concurrency),
                 value = concurrency.toFloat(),
-                onValueChange = { onConcurrencyChange(it.toInt()) },
+                onValueChange = { onConcurrencyChange(snapConcurrency(it)) },
                 valueRange = 1f..500f,
                 steps = 0,
                 enabled = !isScanning && !isCanceling,
@@ -843,7 +839,7 @@ private fun LanScanningContent(state: LanScanUiState.Scanning) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        PulsingIndicator()
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         Text(
                             text = stringResource(R.string.lan_scanning_title),
                             style = MaterialTheme.typography.titleMedium,
@@ -902,39 +898,6 @@ private fun LanCancelingContent() {
             )
         }
     }
-}
-
-@Composable
-private fun PulsingIndicator() {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1.2f,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(600, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-        label = "pulse_scale",
-    )
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = 1f,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(600),
-                repeatMode = RepeatMode.Reverse,
-            ),
-        label = "pulse_alpha",
-    )
-    Box(
-        modifier =
-            Modifier
-                .size(16.dp)
-                .scale(scale)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = alpha)),
-    )
 }
 
 // ── Finished ──────────────────────────────────────────────────────────────────
@@ -1561,8 +1524,8 @@ private fun NetworkTopologyCard(
     hosts: List<LanHost>,
     onNodeClick: (String) -> Unit,
 ) {
-    var showAll by rememberSaveable { mutableStateOf(false) }
-    val preview = lanMapVisibleNodes(items = hosts, showAll = showAll)
+    var nodeLimit by rememberSaveable { mutableIntStateOf(LAN_MAP_NODE_LIMIT) }
+    val preview = lanMapVisibleNodes(items = hosts, limit = nodeLimit)
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
@@ -1602,7 +1565,7 @@ private fun NetworkTopologyCard(
                                         }
 
                                         is LanMapCell.More -> {
-                                            MoreDevicesNode(count = cell.count, onClick = { showAll = true })
+                                            MoreDevicesNode(count = cell.count, onClick = { nodeLimit = lanMapExpandedLimit(nodeLimit) })
                                         }
                                     }
                                 }
@@ -1754,6 +1717,8 @@ private fun HostCard(
                 .fillMaxWidth()
                 .animateContentSize(spring(stiffness = Spring.StiffnessMediumLow))
                 .testTag("lan_host_card_${host.ip}")
+                // Clip before the click so the ripple stays inside the card's rounded corners.
+                .clip(MaterialTheme.shapes.medium)
                 .combinedClickable(
                     onClick = onClick,
                     onLongClickLabel = copyActionLabel,
@@ -1982,11 +1947,6 @@ private fun HostDetailPanel(
     ) {
         HorizontalDivider()
         Spacer(Modifier.height(4.dp))
-        Text(
-            text = stringResource(R.string.lan_details_title),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
 
         host.hostname?.let {
             DetailRow(label = stringResource(R.string.lan_detail_hostname), value = it)
@@ -2021,7 +1981,7 @@ private fun HostDetailPanel(
         } else {
             DetailRow(
                 label = stringResource(R.string.lan_open_ports_title, 0),
-                value = stringResource(R.string.lan_no_open_ports),
+                value = stringResource(R.string.lan_no_open_ports, LanQuickPorts.ports.size),
             )
         }
 
@@ -2036,16 +1996,17 @@ private fun HostDetailPanel(
             ) {
                 Text(stringResource(R.string.lan_action_scan_ports))
             }
-            val httpPort = preferredHttpProbePort(host.openPorts)
-            TextButton(
-                onClick = { onProbeHttp(host.ip, httpPort) },
-                modifier = Modifier.testTag("lan_action_http"),
-            ) {
-                Text(stringResource(R.string.lan_action_probe_http_port, httpPort))
+            preferredHttpProbePort(host.openPorts)?.let { httpPort ->
+                TextButton(
+                    onClick = { onProbeHttp(host.ip, httpPort) },
+                    modifier = Modifier.testTag("lan_action_http"),
+                ) {
+                    Text(stringResource(R.string.lan_action_probe_http_port, httpPort))
+                }
             }
             host.openPorts
                 .distinct()
-                .filter(::isLikelyTlsPort)
+                .filter { it in LanQuickPorts.ports && isLikelyTlsPort(it) }
                 .sorted()
                 .forEach { port ->
                     TextButton(
@@ -2068,6 +2029,19 @@ private fun HostDetailPanel(
 }
 
 internal fun isLikelyTlsPort(port: Int): Boolean = port in likelyTlsPorts
+
+/** Timeout slider positions: 100 ms steps across the scanner's supported range. */
+internal fun snapTimeoutMs(value: Float): Int = ((value / 100f).roundToInt() * 100).coerceIn(100, 10_000)
+
+/** Concurrency slider positions: every value up to 16, then multiples of 8 up to 496. */
+internal fun snapConcurrency(value: Float): Int {
+    val rounded = value.roundToInt()
+    return if (rounded <= 16) {
+        rounded.coerceAtLeast(1)
+    } else {
+        (((rounded + 4) / 8) * 8).coerceIn(16, 496)
+    }
+}
 
 @Suppress("MagicNumber")
 private val likelyTlsPorts =
@@ -2182,15 +2156,9 @@ private fun LanErrorContent(
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 @Composable
+/** Only the gateway is identified by role. Other devices get one neutral icon, since the scan cannot tell their type. */
 private fun hostIcon(host: LanHost): ImageVector =
-    when {
-        host.isGateway -> Icons.Default.Router
-        host.vendor?.contains("Apple", ignoreCase = true) == true -> Icons.Default.Computer
-        host.vendor?.contains("Raspberry", ignoreCase = true) == true -> Icons.Default.SmartToy
-        host.openPorts.contains(80) || host.openPorts.contains(443) -> Icons.Default.Computer
-        host.openPorts.contains(22) -> Icons.Default.Computer
-        else -> Icons.Default.DeviceHub
-    }
+    if (host.isGateway) Icons.Default.Router else Icons.Default.DeviceHub
 
 private fun portServiceName(port: Int): String =
     when (port) {
