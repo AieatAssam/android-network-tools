@@ -224,23 +224,13 @@ fun MdnsDiscoveryScreen(
 
             if (uiState.networkInterrupted) {
                 item(key = "interrupted") {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.Top,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Text(
-                            text = stringResource(R.string.mdns_interrupted_notice),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    MdnsNoticeRow(stringResource(R.string.mdns_interrupted_notice))
+                }
+            }
+
+            if (uiState.resultsClearedForNetworkChange) {
+                item(key = "network_changed") {
+                    MdnsNoticeRow(stringResource(R.string.mdns_network_changed_notice))
                 }
             }
 
@@ -869,11 +859,14 @@ private fun LazyListScope.serviceResultItems(
         searchQuery = searchQuery,
         onSearchChange = onSearchChange,
     )
-    item(key = "report") {
-        ResultActionsRow(
-            copyText = report,
-            onShare = onShare,
-        )
+    // Copy and Share export the filtered list, so they are hidden when the filter leaves nothing to export.
+    if (filteredByType.isNotEmpty()) {
+        item(key = "report") {
+            ResultActionsRow(
+                copyText = report,
+                onShare = onShare,
+            )
+        }
     }
     serviceGroupItems(
         groups = groups,
@@ -884,6 +877,27 @@ private fun LazyListScope.serviceResultItems(
     )
     item(key = "end_spacer") {
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun MdnsNoticeRow(text: String) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Icon(
+            imageVector = Icons.Default.Info,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

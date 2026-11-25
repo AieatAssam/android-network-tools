@@ -28,18 +28,21 @@ data class NetworkStatus(
     val hasLocalNetwork: Boolean = false,
     val vpnActive: Boolean = false,
     val transport: Transport? = null,
+    /** Identifies the local network that scans use; a different value means a different network. */
+    val networkId: String? = null,
 )
 
 /** Pure network choice and status mapping, independent of Android framework objects. */
 object NetworkSelection {
     private val localTransportPreference = listOf(Transport.WIFI, Transport.ETHERNET, Transport.CELLULAR)
-    private val transportPreference = listOf(
-        Transport.WIFI,
-        Transport.ETHERNET,
-        Transport.CELLULAR,
-        Transport.VPN,
-        Transport.OTHER,
-    )
+    private val transportPreference =
+        listOf(
+            Transport.WIFI,
+            Transport.ETHERNET,
+            Transport.CELLULAR,
+            Transport.VPN,
+            Transport.OTHER,
+        )
 
     fun selectLocal(networks: List<NetworkSnapshot>): NetworkSnapshot? =
         localTransportPreference.firstNotNullOfOrNull { preferred ->
@@ -57,18 +60,24 @@ object NetworkSelection {
         val active = activeNetworkId?.let { id -> networks.firstOrNull { it.id == id } }
         val localNetwork = selectLocal(networks)
         return NetworkStatus(
-            hasInternet = active?.capabilities?.hasInternet
-                ?: networks.any { it.capabilities.hasInternet },
-            hasValidatedInternet = active?.capabilities?.hasValidatedInternet
-                ?: networks.any { it.capabilities.hasValidatedInternet },
+            hasInternet =
+                active?.capabilities?.hasInternet
+                    ?: networks.any { it.capabilities.hasInternet },
+            hasValidatedInternet =
+                active?.capabilities?.hasValidatedInternet
+                    ?: networks.any { it.capabilities.hasValidatedInternet },
             hasLocalNetwork = localNetwork != null,
+            networkId = localNetwork?.id,
             vpnActive = networks.any { Transport.VPN in it.capabilities.transports },
-            transport = localNetwork?.capabilities?.let(::preferredTransport)
-                ?: active?.capabilities?.let(::preferredTransport)
-                ?: networks.firstOrNull()?.capabilities?.let(::preferredTransport),
+            transport =
+                localNetwork?.capabilities?.let(::preferredTransport)
+                    ?: active?.capabilities?.let(::preferredTransport)
+                    ?: networks.firstOrNull()?.capabilities?.let(::preferredTransport),
         )
     }
 
-    private fun preferredTransport(capabilities: CapabilitySnapshot): Transport? =
-        transportPreference.firstOrNull { it in capabilities.transports }
+    private fun preferredTransport(capabilities: CapabilitySnapshot): Transport? {
+        val supported = transportPreference.filter { it in capabilities.transports }
+        return supported.firstOrNull()
+    }
 }

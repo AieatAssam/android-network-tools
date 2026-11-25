@@ -13,6 +13,8 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.job
@@ -28,6 +30,9 @@ import net.aieat.netswissknife.app.mdns.MdnsIoOperation
 import net.aieat.netswissknife.app.mdns.MdnsNoLocalNetworkException
 import net.aieat.netswissknife.app.mdns.MdnsPacketIoException
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.Transport
 import net.aieat.netswissknife.core.domain.MdnsDiscoveryUseCase
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 import net.aieat.netswissknife.core.network.mdns.MdnsTruncationReason
@@ -482,6 +487,110 @@ class MdnsDiscoveryViewModelTest {
                 assertNull(state.errorReason)
                 assertEquals(NetworkErrorKind.GENERAL, state.networkErrorKind)
                 assertEquals(listOf(first), state.services)
+                viewModel.viewModelScope.coroutineContext.job
+                    .cancelAndJoin()
+            }
+    }
+
+    @Nested
+    @DisplayName("network changes")
+    inner class NetworkChanges {
+        private val first = stubService(name = "first")
+        private val networkState = MutableStateFlow(NetworkStatus(networkId = "wifi-a", transport = Transport.WIFI))
+
+        private fun viewModelOnNetwork(): MdnsDiscoveryViewModel {
+            val provider =
+                object : NetworkStatusProvider {
+                    override val status: StateFlow<NetworkStatus> = networkState
+                }
+            return MdnsDiscoveryViewModel(useCase, provider).also { viewModel = it }
+        }
+
+        @Test
+        fun `a change of network clears the services found on the old network`() =
+            runTest {
+                every { useCase(any(), any()) } returns
+                    flowOf(
+                        MdnsUpdate.ServiceFound(first),
+                        MdnsUpdate.DiscoveryComplete(totalFound = 1),
+                    )
+                viewModelOnNetwork().startScan()
+                assertEquals(listOf(first), viewModel.uiState.value.services)
+
+                networkState.value = NetworkStatus(networkId = "wifi-b", transport = Transport.WIFI)
+
+                val state = viewModel.uiState.value
+                assertTrue(state.services.isEmpty())
+                assertTrue(state.servicesByType.isEmpty())
+                assertTrue(state.resultsClearedForNetworkChange)
+                assertFalse(state.isScanning)
+                viewModel.viewModelScope.coroutineContext.job
+                    .cancelAndJoin()
+            }
+
+        @Test
+        fun `losing the network clears the services too`() =
+            runTest {
+                every { useCase(any(), any()) } returns flowOf(MdnsUpdate.ServiceFound(first))
+                viewModelOnNetwork().startScan()
+
+                networkState.value = NetworkStatus()
+
+                val current = viewModel.uiState.value
+                assertTrue(current.services.isEmpty())
+                assertTrue(current.resultsClearedForNetworkChange)
+                viewModel.viewModelScope.coroutineContext.job
+                    .cancelAndJoin()
+            }
+
+        @Test
+        fun `the same network reported again keeps the services`() =
+            runTest {
+                every { useCase(any(), any()) } returns flowOf(MdnsUpdate.ServiceFound(first))
+                viewModelOnNetwork().startScan()
+
+                networkState.value =
+                    NetworkStatus(networkId = "wifi-a", hasInternet = false, transport = Transport.WIFI)
+
+                assertEquals(listOf(first), viewModel.uiState.value.services)
+                assertFalse(viewModel.uiState.value.resultsClearedForNetworkChange)
+                viewModel.viewModelScope.coroutineContext.job
+                    .cancelAndJoin()
+            }
+
+        @Test
+        fun `a change during a scan stops it so its later services are never merged`() =
+            runTest {
+                val live = MutableSharedFlow<MdnsUpdate>(extraBufferCapacity = 8)
+                every { useCase(any(), any()) } returns live
+                viewModelOnNetwork().startScan()
+                live.tryEmit(MdnsUpdate.ServiceFound(first))
+                assertEquals(listOf(first), viewModel.uiState.value.services)
+
+                networkState.value = NetworkStatus(networkId = "wifi-b", transport = Transport.WIFI)
+                live.tryEmit(MdnsUpdate.ServiceFound(stubService(name = "late")))
+
+                val state = viewModel.uiState.value
+                assertFalse(state.isScanning)
+                assertTrue(state.services.isEmpty())
+                viewModel.viewModelScope.coroutineContext.job
+                    .cancelAndJoin()
+            }
+
+        @Test
+        fun `a scan started on the new network lists only its own services`() =
+            runTest {
+                every { useCase(any(), any()) } returns flowOf(MdnsUpdate.ServiceFound(first))
+                viewModelOnNetwork().startScan()
+                networkState.value = NetworkStatus(networkId = "wifi-b", transport = Transport.WIFI)
+
+                val second = stubService(name = "second")
+                every { useCase(any(), any()) } returns flowOf(MdnsUpdate.ServiceFound(second))
+                viewModel.startScan()
+
+                val state = viewModel.uiState.value
+                assertEquals(listOf(second), state.services)
+                assertFalse(state.resultsClearedForNetworkChange)
                 viewModel.viewModelScope.coroutineContext.job
                     .cancelAndJoin()
             }

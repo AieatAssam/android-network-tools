@@ -60,6 +60,15 @@ class NetworkSelectionTest {
     }
 
     @Test
+    fun `status identifies the local network so a change of network can be detected`() {
+        val vpn = network("vpn", Transport.VPN, notVpn = false, hasInternet = true)
+        val wifi = network("wifi-a", Transport.WIFI)
+
+        assertEquals("wifi-a", NetworkSelection.status(listOf(vpn, wifi), activeNetworkId = "vpn").networkId)
+        assertNull(NetworkSelection.status(listOf(vpn)).networkId)
+    }
+
+    @Test
     fun `reports the active transport when no local network exists`() {
         val cellular = network("cellular", Transport.CELLULAR, hasInternet = true, hasValidatedInternet = true)
         val status = NetworkSelection.status(listOf(cellular), activeNetworkId = "cellular")
@@ -78,15 +87,17 @@ class NetworkSelectionTest {
 
     @Test
     fun `status falls back to reported network capabilities without an active id`() {
-        val other = NetworkSnapshot(
-            id = "other",
-            capabilities = CapabilitySnapshot(
-                transports = setOf(Transport.OTHER),
-                hasInternet = true,
-                notVpn = true,
-                hasValidatedInternet = true,
-            ),
-        )
+        val other =
+            NetworkSnapshot(
+                id = "other",
+                capabilities =
+                    CapabilitySnapshot(
+                        transports = setOf(Transport.OTHER),
+                        hasInternet = true,
+                        notVpn = true,
+                        hasValidatedInternet = true,
+                    ),
+            )
 
         val status = NetworkSelection.status(listOf(other), activeNetworkId = "unknown")
 
@@ -99,15 +110,17 @@ class NetworkSelectionTest {
 
     @Test
     fun `keeps Internet capability separate from validation`() {
-        val captivePortalWifi = NetworkSnapshot(
-            id = "wifi",
-            capabilities = CapabilitySnapshot(
-                transports = setOf(Transport.WIFI),
-                hasInternet = true,
-                hasValidatedInternet = false,
-                notVpn = true,
-            ),
-        )
+        val captivePortalWifi =
+            NetworkSnapshot(
+                id = "wifi",
+                capabilities =
+                    CapabilitySnapshot(
+                        transports = setOf(Transport.WIFI),
+                        hasInternet = true,
+                        hasValidatedInternet = false,
+                        notVpn = true,
+                    ),
+            )
 
         val status = NetworkSelection.status(listOf(captivePortalWifi), activeNetworkId = "wifi")
 
@@ -124,11 +137,12 @@ class NetworkSelectionTest {
         hasValidatedInternet: Boolean = hasInternet,
     ) = NetworkSnapshot(
         id = id,
-        capabilities = CapabilitySnapshot(
-            transports = setOf(transport),
-            hasInternet = hasInternet,
-            notVpn = notVpn,
-            hasValidatedInternet = hasValidatedInternet,
-        ),
+        capabilities =
+            CapabilitySnapshot(
+                transports = setOf(transport),
+                hasInternet = hasInternet,
+                notVpn = notVpn,
+                hasValidatedInternet = hasValidatedInternet,
+            ),
     )
 }
