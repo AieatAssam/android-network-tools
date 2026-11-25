@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lan
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Router
@@ -71,7 +72,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
@@ -132,6 +132,7 @@ import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.format.humanDurationText
+import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.app.ui.navigation.HostTool
 import net.aieat.netswissknife.app.ui.navigation.NavRoutes
 import net.aieat.netswissknife.app.ui.navigation.ToolDestination
@@ -142,6 +143,7 @@ import net.aieat.netswissknife.app.ui.navigation.ToolPort
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.util.shareText
+import net.aieat.netswissknife.core.network.lan.DEFAULT_PRESENCE_PORTS
 import net.aieat.netswissknife.core.network.lan.LanHost
 import net.aieat.netswissknife.core.network.lan.LanQuickPorts
 import net.aieat.netswissknife.core.network.lan.LanScanDiagnosticReason
@@ -260,6 +262,8 @@ fun LanScreen(
     val subnetNarrowedFrom by viewModel.subnetNarrowedFrom.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val hostSortOrder by viewModel.hostSortOrder.collectAsStateWithLifecycle()
+    val activeFilter by viewModel.hostFilter.collectAsStateWithLifecycle()
+    val concurrencyRaisedFrom by viewModel.concurrencyRaisedFrom.collectAsStateWithLifecycle()
     val recentSubnets by viewModel.recentSubnets.collectAsStateWithLifecycle()
 
     // Back closes an open host row first, so the scan results stay on screen.
@@ -306,7 +310,6 @@ fun LanScreen(
 
     val isRefreshing = uiState is LanScanUiState.Scanning || uiState is LanScanUiState.Canceling
     var editSettings by rememberSaveable { mutableStateOf(false) }
-    var activeFilter by rememberSaveable { mutableStateOf(HostFilter.All) }
     LaunchedEffect(isRefreshing) {
         if (isRefreshing) editSettings = false
     }
@@ -325,6 +328,14 @@ fun LanScreen(
             is LanScanUiState.Canceled -> state.expandedHostIp
             else -> null
         }
+    // Sorting and filtering run only when the hosts or the choices change, not on every progress tick.
+    val visibleHosts =
+        remember(completedSummary?.hosts, searchQuery, activeFilter, hostSortOrder) {
+            completedSummary?.let { lanVisibleHosts(it.hosts, searchQuery, activeFilter, hostSortOrder) }.orEmpty()
+        }
+    val liveHosts = (uiState as? LanScanUiState.Scanning)?.hosts
+    val sortedLiveHosts =
+        remember(liveHosts, hostSortOrder) { liveHosts?.let { sortLanHosts(it, hostSortOrder) }.orEmpty() }
     // A map tap expands the device and switches to the list. The scroll waits for the rows to compose,
     // so it runs in an effect after that switch. Expanding never collapses.
     var pendingRevealIp by remember { mutableStateOf<String?>(null) }
@@ -332,15 +343,11 @@ fun LanScreen(
         pendingRevealIp = ip
         viewModel.onRevealHost(ip)
     }
-    LaunchedEffect(pendingRevealIp, resultView, completedSummary, searchQuery, activeFilter, hostSortOrder) {
+    LaunchedEffect(pendingRevealIp, resultView, visibleHosts) {
         val ip = pendingRevealIp ?: return@LaunchedEffect
         if (resultView == LanResultView.LIST) {
-            completedSummary?.let { summary ->
-                val index =
-                    lanVisibleHosts(summary.hosts, searchQuery, activeFilter, hostSortOrder)
-                        .indexOfFirst { it.ip == ip }
-                if (index >= 0) listState.animateScrollToItem(LAN_HOST_ITEMS_FIRST_INDEX + index)
-            }
+            val index = visibleHosts.indexOfFirst { it.ip == ip }
+            if (index >= 0) listState.animateScrollToItem(LAN_HOST_ITEMS_FIRST_INDEX + index)
             pendingRevealIp = null
         }
     }
@@ -392,15 +399,15 @@ fun LanScreen(
                             concurrency = concurrency,
                             isSubnetLoading = isSubnetLoading,
                             subnetNarrowedFrom = subnetNarrowedFrom,
+                            concurrencyRaisedFrom = concurrencyRaisedFrom,
                             isScanning = uiState is LanScanUiState.Scanning,
                             isCanceling = uiState is LanScanUiState.Canceling,
                             recentSubnets = recentSubnets,
                             onSubnetChange = viewModel::onSubnetChange,
                             onTimeoutChange = viewModel::onTimeoutChange,
                             onConcurrencyChange = viewModel::onConcurrencyChange,
-                            onRefreshSubnet = viewModel::refreshSubnet,
+                            onDetectSubnet = viewModel::detectSubnet,
                             onStartScan = viewModel::startScan,
-                            onStopScan = viewModel::onStopScan,
                             onRemoveRecentSubnet = viewModel::removeRecentSubnet,
                             onClearRecentSubnets = viewModel::clearRecentSubnets,
                         )
@@ -408,11 +415,11 @@ fun LanScreen(
                 }
                 when (val state = uiState) {
                     LanScanUiState.Idle -> {
-                        item(key = "lan_idle") { LanIdleContent() }
+                        item(key = "lan_idle") { LanIdleContent(subnet = subnet, isSubnetLoading = isSubnetLoading) }
                     }
 
                     is LanScanUiState.Scanning -> {
-                        item(key = "lan_progress") { LanScanningContent(state) }
+                        item(key = "lan_progress") { LanScanningContent(state, onStop = viewModel::onStopScan) }
                         if (state.hosts.isNotEmpty()) {
                             item(key = "lan_devices_header") {
                                 Text(
@@ -422,7 +429,7 @@ fun LanScreen(
                                 )
                             }
                             items(
-                                items = sortLanHosts(state.hosts, hostSortOrder),
+                                items = sortedLiveHosts,
                                 key = { "host-${it.ip}" },
                             ) { host ->
                                 HostCard(
@@ -452,8 +459,9 @@ fun LanScreen(
                                 summary = state.summary,
                                 showDiagnostics = state.showDiagnostics,
                                 searchQuery = searchQuery,
+                                visibleHosts = visibleHosts,
                                 activeFilter = activeFilter,
-                                onFilterChange = { activeFilter = it },
+                                onFilterChange = viewModel::onHostFilterChange,
                                 sortOrder = hostSortOrder,
                                 onSortOrderChange = viewModel::onHostSortOrderChange,
                                 onSearchQueryChange = viewModel::onSearchQueryChange,
@@ -476,8 +484,9 @@ fun LanScreen(
                                 summary = state.summary,
                                 showDiagnostics = state.showDiagnostics,
                                 searchQuery = searchQuery,
+                                visibleHosts = visibleHosts,
                                 activeFilter = activeFilter,
-                                onFilterChange = { activeFilter = it },
+                                onFilterChange = viewModel::onHostFilterChange,
                                 sortOrder = hostSortOrder,
                                 onSortOrderChange = viewModel::onHostSortOrderChange,
                                 onSearchQueryChange = viewModel::onSearchQueryChange,
@@ -512,7 +521,7 @@ fun LanScreen(
                                     if (state.isBudgetLimit) {
                                         stringResource(R.string.lan_scan_estimate_too_large)
                                     } else {
-                                        state.message
+                                        state.text.asString()
                                     },
                                 onRetry = viewModel::startScan,
                                 onClear = viewModel::onClear,
@@ -525,7 +534,7 @@ fun LanScreen(
                 // The map and the list show the same filtered hosts, so only the selected view is composed.
                 completedSummary?.takeIf { resultView == LanResultView.LIST }?.let { summary ->
                     items(
-                        items = lanVisibleHosts(summary.hosts, searchQuery, activeFilter, hostSortOrder),
+                        items = visibleHosts,
                         key = { "host-${it.ip}" },
                     ) { host ->
                         HostCard(
@@ -590,15 +599,15 @@ private fun LanInputCard(
     concurrency: Int,
     isSubnetLoading: Boolean,
     subnetNarrowedFrom: String?,
+    concurrencyRaisedFrom: Int?,
     isScanning: Boolean,
     isCanceling: Boolean,
     recentSubnets: List<String>,
     onSubnetChange: (String) -> Unit,
     onTimeoutChange: (Int) -> Unit,
     onConcurrencyChange: (Int) -> Unit,
-    onRefreshSubnet: () -> Unit,
+    onDetectSubnet: () -> Unit,
     onStartScan: () -> Unit,
-    onStopScan: () -> Unit,
     onRemoveRecentSubnet: (String) -> Unit,
     onClearRecentSubnets: () -> Unit,
 ) {
@@ -620,14 +629,12 @@ private fun LanInputCard(
                 label = { Text(stringResource(R.string.lan_subnet_label)) },
                 placeholder = { Text(stringResource(R.string.lan_subnet_placeholder)) },
                 leadingIcon = {
-                    Icon(Icons.Default.Wifi, contentDescription = null)
+                    IconButton(onClick = onDetectSubnet, enabled = !isSubnetLoading && !isScanning && !isCanceling) {
+                        Icon(Icons.Default.MyLocation, contentDescription = stringResource(R.string.lan_detect_subnet))
+                    }
                 },
                 trailingIcon = {
-                    if (subnet.isNotEmpty()) {
-                        IconButton(onClick = { onSubnetChange("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
-                        }
-                    } else if (isSubnetLoading) {
+                    if (isSubnetLoading) {
                         val loadingCd = stringResource(R.string.a11y_loading)
                         CircularProgressIndicator(
                             modifier =
@@ -637,12 +644,9 @@ private fun LanInputCard(
                                     .semantics { contentDescription = loadingCd },
                             strokeWidth = 2.dp,
                         )
-                    } else {
-                        IconButton(onClick = onRefreshSubnet) {
-                            Icon(
-                                Icons.Default.Refresh,
-                                contentDescription = stringResource(R.string.lan_detect_subnet),
-                            )
+                    } else if (subnet.isNotEmpty()) {
+                        IconButton(onClick = { onSubnetChange("") }) {
+                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                         }
                     }
                 },
@@ -685,6 +689,13 @@ private fun LanInputCard(
                 steps = 0,
                 enabled = !isScanning && !isCanceling,
             )
+            concurrencyRaisedFrom?.let { saved ->
+                Text(
+                    text = stringResource(R.string.lan_concurrency_raised_hint, saved),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             // Action button
             if (isCanceling) {
@@ -697,13 +708,7 @@ private fun LanInputCard(
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.lan_canceling_title))
                 }
-            } else if (isScanning) {
-                ToolStopButton(
-                    text = stringResource(R.string.lan_stop_button),
-                    onClick = onStopScan,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            } else {
+            } else if (!isScanning) {
                 Button(
                     onClick = hapticAction(onStartScan),
                     modifier = Modifier.fillMaxWidth(),
@@ -789,7 +794,10 @@ private fun LabeledSlider(
 // ── Idle ──────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun LanIdleContent() {
+private fun LanIdleContent(
+    subnet: String,
+    isSubnetLoading: Boolean,
+) {
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier =
@@ -806,9 +814,15 @@ private fun LanIdleContent() {
                 modifier = Modifier.size(56.dp),
             )
             Text(
-                text = stringResource(R.string.lan_idle_title),
+                text =
+                    when {
+                        isSubnetLoading -> stringResource(R.string.lan_idle_detecting_title)
+                        subnet.isBlank() -> stringResource(R.string.lan_idle_title)
+                        else -> stringResource(R.string.lan_idle_ready_title, subnet.trim())
+                    },
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
             )
             Text(
                 text = stringResource(R.string.lan_idle_subtitle),
@@ -822,7 +836,10 @@ private fun LanIdleContent() {
 // ── Scanning ──────────────────────────────────────────────────────────────────
 
 @Composable
-private fun LanScanningContent(state: LanScanUiState.Scanning) {
+private fun LanScanningContent(
+    state: LanScanUiState.Scanning,
+    onStop: () -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Progress card
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
@@ -839,7 +856,7 @@ private fun LanScanningContent(state: LanScanUiState.Scanning) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        LanScanProgressIndicator(state)
                         Text(
                             text = stringResource(R.string.lan_scanning_title),
                             style = MaterialTheme.typography.titleMedium,
@@ -856,30 +873,46 @@ private fun LanScanningContent(state: LanScanUiState.Scanning) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                val animProgress by animateFloatAsState(
-                    targetValue = state.progress,
-                    animationSpec = AppMotion.effect(300),
-                    label = "scan_progress",
-                )
-                LinearProgressIndicator(
-                    progress = { animProgress },
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp)),
-                    strokeCap = StrokeCap.Round,
-                )
                 Text(
                     text = pluralStringResource(R.plurals.lan_hosts_found_format, state.hosts.size, state.hosts.size),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Medium,
                 )
+                ToolStopButton(
+                    text = stringResource(R.string.lan_stop_button),
+                    onClick = onStop,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }
 }
+
+/** The scan's only progress indicator: the share of addresses checked, or a spinner until the count is known. */
+@Composable
+private fun LanScanProgressIndicator(state: LanScanUiState.Scanning) {
+    val modifier = Modifier.size(PROGRESS_INDICATOR_SIZE)
+    if (state.totalCount == 0) {
+        CircularProgressIndicator(modifier = modifier, strokeWidth = PROGRESS_INDICATOR_STROKE)
+        return
+    }
+    val animProgress by animateFloatAsState(
+        targetValue = state.progress,
+        animationSpec = AppMotion.effect(PROGRESS_ANIMATION_MS),
+        label = "scan_progress",
+    )
+    CircularProgressIndicator(
+        progress = { animProgress },
+        modifier = modifier,
+        strokeWidth = PROGRESS_INDICATOR_STROKE,
+        strokeCap = StrokeCap.Round,
+    )
+}
+
+private val PROGRESS_INDICATOR_SIZE = 24.dp
+private val PROGRESS_INDICATOR_STROKE = 3.dp
+private const val PROGRESS_ANIMATION_MS = 300
 
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
@@ -901,8 +934,6 @@ private fun LanCancelingContent() {
 }
 
 // ── Finished ──────────────────────────────────────────────────────────────────
-
-private enum class HostFilter { All, Gateway, HasPorts }
 
 internal fun sortLanHosts(
     hosts: List<LanHost>,
@@ -943,14 +974,14 @@ private fun ipSortKey(ip: String): Long =
 
 @Composable
 private fun HostFilterChips(
-    activeFilter: HostFilter,
-    onFilterChange: (HostFilter) -> Unit,
+    activeFilter: LanHostFilter,
+    onFilterChange: (LanHostFilter) -> Unit,
 ) {
     val labels =
         mapOf(
-            HostFilter.All to R.string.lan_filter_all,
-            HostFilter.Gateway to R.string.lan_filter_gateway,
-            HostFilter.HasPorts to R.string.lan_filter_has_ports,
+            LanHostFilter.All to R.string.lan_filter_all,
+            LanHostFilter.Gateway to R.string.lan_filter_gateway,
+            LanHostFilter.HasPorts to R.string.lan_filter_has_ports,
         )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         labels.forEach { (filter, labelRes) ->
@@ -1016,33 +1047,6 @@ private fun HostSortMenu(
     }
 }
 
-/** Visible hosts: filtered by the search and filter, then sorted. The list and the map both use it. */
-private fun lanVisibleHosts(
-    hosts: List<LanHost>,
-    searchQuery: String,
-    activeFilter: HostFilter,
-    order: LanHostSortOrder,
-): List<LanHost> = sortLanHosts(filterLanHosts(hosts, searchQuery, activeFilter), order)
-
-private fun filterLanHosts(
-    hosts: List<LanHost>,
-    searchQuery: String,
-    activeFilter: HostFilter,
-): List<LanHost> =
-    hosts.filter { host ->
-        val passesFilter =
-            when (activeFilter) {
-                HostFilter.All -> true
-                HostFilter.Gateway -> host.isGateway
-                HostFilter.HasPorts -> host.openPorts.isNotEmpty()
-            }
-        val passesSearch =
-            searchQuery.isBlank() ||
-                listOfNotNull(host.ip, host.hostname, host.vendor, host.macAddress)
-                    .any { it.contains(searchQuery, ignoreCase = true) }
-        passesFilter && passesSearch
-    }
-
 private const val LAN_HOST_ITEMS_FIRST_INDEX = 4
 private const val LAN_MAP_NODE_WIDTH_DP = 72
 
@@ -1061,8 +1065,9 @@ private fun LanFinishedContent(
     summary: LanScanSummary,
     showDiagnostics: Boolean,
     searchQuery: String,
-    activeFilter: HostFilter,
-    onFilterChange: (HostFilter) -> Unit,
+    visibleHosts: List<LanHost>,
+    activeFilter: LanHostFilter,
+    onFilterChange: (LanHostFilter) -> Unit,
     sortOrder: LanHostSortOrder,
     onSortOrderChange: (LanHostSortOrder) -> Unit,
     onSearchQueryChange: (String) -> Unit,
@@ -1076,12 +1081,6 @@ private fun LanFinishedContent(
     subtitle: String? = null,
     isCanceled: Boolean = false,
 ) {
-    val visibleHosts =
-        remember(summary.hosts, searchQuery, activeFilter, sortOrder) {
-            lanVisibleHosts(summary.hosts, searchQuery, activeFilter, sortOrder)
-        }
-    val filtered = searchQuery.isNotBlank() || activeFilter != HostFilter.All
-
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         var entered by rememberSaveable { mutableStateOf(false) }
         LaunchedEffect(Unit) { entered = true }
@@ -1113,7 +1112,6 @@ private fun LanFinishedContent(
             LanDevicesHeader(
                 shown = visibleHosts.size,
                 total = summary.hosts.size,
-                filtered = filtered,
                 trailing = { LanResultViewToggle(selected = resultView, onSelect = onResultViewChange) },
             )
             HostSortMenu(activeSort = sortOrder, onSortChange = onSortOrderChange)
@@ -1329,7 +1327,7 @@ private fun LanUncertainProbesSheet(
             }
             item {
                 Text(
-                    text = stringResource(R.string.lan_uncertain_probes_body),
+                    text = stringResource(R.string.lan_uncertain_probes_body, DEFAULT_PRESENCE_PORTS.size),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1399,9 +1397,9 @@ private fun LanNoHostsCard() {
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
 private fun LanNoMatchCard(
     searchQuery: String,
-    activeFilter: HostFilter,
+    activeFilter: LanHostFilter,
     onSearchQueryChange: (String) -> Unit,
-    onFilterChange: (HostFilter) -> Unit,
+    onFilterChange: (LanHostFilter) -> Unit,
 ) {
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -1416,7 +1414,7 @@ private fun LanNoMatchCard(
                 text =
                     stringResource(
                         when {
-                            searchQuery.isNotBlank() && activeFilter != HostFilter.All -> {
+                            searchQuery.isNotBlank() && activeFilter != LanHostFilter.All -> {
                                 R.string.lan_no_search_filter_results
                             }
 
@@ -1436,7 +1434,7 @@ private fun LanNoMatchCard(
             TextButton(
                 onClick = {
                     onSearchQueryChange("")
-                    onFilterChange(HostFilter.All)
+                    onFilterChange(LanHostFilter.All)
                 },
             ) {
                 Text(stringResource(R.string.lan_show_all_devices))
@@ -1450,7 +1448,6 @@ private fun LanNoMatchCard(
 private fun LanDevicesHeader(
     shown: Int,
     total: Int,
-    filtered: Boolean,
     trailing: @Composable () -> Unit,
 ) {
     Row(
@@ -1464,13 +1461,11 @@ private fun LanDevicesHeader(
             fontWeight = FontWeight.SemiBold,
         )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (filtered) {
-                Text(
-                    text = stringResource(R.string.lan_devices_filtered_count, shown, total),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                text = stringResource(R.string.lan_devices_filtered_count, shown, total),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             trailing()
         }
     }
@@ -1831,6 +1826,13 @@ private fun HostCompactHeader(
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
+            if (host.isThisDevice) {
+                Text(
+                    stringResource(R.string.lan_this_device_label),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             val pingMs = host.pingTimeMs
@@ -1966,6 +1968,10 @@ private fun HostDetailPanel(
         }
         host.vendor?.let {
             DetailRow(label = stringResource(R.string.lan_detail_vendor), value = it)
+        }
+        val foundBy = lanPresenceLabels(host.discoveredVia).map { stringResource(it) }
+        if (foundBy.isNotEmpty()) {
+            DetailRow(label = stringResource(R.string.lan_detail_found_by), value = foundBy.joinToString())
         }
 
         if (host.openPorts.isNotEmpty()) {

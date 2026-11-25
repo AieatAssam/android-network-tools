@@ -11,6 +11,7 @@ package net.aieat.netswissknife.core.network.lan
  * @param pingTimeMs  Round-trip time in milliseconds of an ICMP reply, or null when no ICMP reply was measured
  *                    (TCP, mDNS or NetBIOS confirmation alone does not measure latency).
  * @param isGateway   True if this host is the active network's default gateway.
+ * @param isThisDevice True if this host is the device running the scan.
  */
 data class LanHost(
     val ip: String,
@@ -22,4 +23,5 @@ data class LanHost(
     val isGateway: Boolean = false,
     val discoveredVia: Set<DiscoveryMethod> = emptySet(),
     val macSource: MacSource = if (macAddress == null) MacSource.NONE else MacSource.ARP,
+    val isThisDevice: Boolean = false,
 )

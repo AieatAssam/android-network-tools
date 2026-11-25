@@ -44,7 +44,7 @@ object LanScanOperationBudget {
             }
         val reverseDns = if (enableNameProbes) timeout else 0L
         val quickPorts = minOf(timeoutMs, QUICK_PORT_TIMEOUT_CAP_MS).toLong() * QUICK_PORT_COUNT
-        val perHostAllowance = timeout + tcpPresence + localNamePresence + reverseDns + quickPorts
+        val perHostAllowance = 2L * timeout + tcpPresence + localNamePresence + reverseDns + quickPorts
         val workerWaves = (targetCount.toLong() + concurrency - 1L) / concurrency
         val raw = workerWaves * perHostAllowance
         val withMargin = raw + (raw * SCHEDULING_MARGIN_PERCENT + 99L) / 100L

@@ -63,9 +63,9 @@ class LanScanViewModelTest {
         val oneWave = LanScanTimeBudget.estimate(targetCount = 50, timeoutMs = 1_000, concurrency = 50)
         val slower = LanScanTimeBudget.estimate(targetCount = 50, timeoutMs = 2_000, concurrency = 50)
 
-        // 1s ICMP + 10 x 400ms TCP + 2 x 300ms name + 1s reverse DNS + 16 x 500ms ports.
-        assertEquals(19_250L, oneWave.timeoutMillis)
-        assertEquals(37_500L, twoWaves.timeoutMillis)
+        // 2 x 1s ICMP + 10 x 400ms TCP + 2 x 300ms name + 1s reverse DNS + 16 x 500ms ports.
+        assertEquals(20_500L, oneWave.timeoutMillis)
+        assertEquals(40_000L, twoWaves.timeoutMillis)
         assertTrue(slower.timeoutMillis > oneWave.timeoutMillis)
         assertTrue(
             LanScanTimeBudget.estimate(65_534, 1_000, 1).exceedsHardCeiling,

@@ -66,11 +66,13 @@ internal fun rememberNetInfoSummaryLabels(): NetInfoSummaryLabels {
         publicIpv4 = stringResource(R.string.netinfo_public_ipv4),
         publicIpv6 = stringResource(R.string.netinfo_public_ipv6),
         hostname = stringResource(R.string.netinfo_hostname),
+        noReverseDns = stringResource(R.string.netinfo_no_reverse_dns),
         location = stringResource(R.string.netinfo_location),
         asn = stringResource(R.string.netinfo_asn),
         notChecked = stringResource(R.string.netinfo_not_checked),
         notAvailable = stringResource(R.string.netinfo_not_available),
         noActiveNetwork = stringResource(R.string.netinfo_no_network_title),
+        deprecated = stringResource(R.string.netinfo_address_deprecated),
         scopeName = { scope -> scopeNames.getValue(scope) },
         transportName = { transport -> transportNames.getValue(transport) },
     )

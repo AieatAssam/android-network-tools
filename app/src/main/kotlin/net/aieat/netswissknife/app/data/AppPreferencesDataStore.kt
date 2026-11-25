@@ -59,6 +59,9 @@ object AppPreferenceKeys {
     /** LAN host result ordering. */
     val LAN_HOST_SORT_ORDER = stringPreferencesKey("lan_host_sort_order")
 
+    /** LAN device list filter. */
+    val LAN_HOST_FILTER = stringPreferencesKey("lan_host_filter")
+
     // ── Recent hosts (ordered pipe-delimited lists, max 5 entries each) ───────
     val RECENT_PING_HOSTS = stringPreferencesKey("recent_ping_hosts")
     val RECENT_DNS_HOSTS = stringPreferencesKey("recent_dns_hosts")

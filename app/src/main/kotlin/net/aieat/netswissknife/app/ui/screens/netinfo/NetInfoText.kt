@@ -44,7 +44,8 @@ internal fun addressLabel(address: LocalAddress): String {
         } else {
             stringResource(R.string.netinfo_family_ipv6)
         }
-    return "$family · ${stringResource(scopeLabelRes(address.scope))}"
+    val label = "$family · ${stringResource(scopeLabelRes(address.scope))}"
+    return if (address.deprecated) "$label · ${stringResource(R.string.netinfo_address_deprecated)}" else label
 }
 
 @Composable

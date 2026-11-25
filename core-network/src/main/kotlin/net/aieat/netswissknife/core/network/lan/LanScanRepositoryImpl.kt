@@ -36,9 +36,10 @@ import java.net.Socket
 /**
  * Multi-probe LAN discovery repository.
  *
- * Each host gets one ICMP attempt, a sequential TCP presence probe, and optional
- * NetBIOS/mDNS presence probes. Name/MAC/port enrichment runs only after presence is
- * established. The final ARP pass is intentionally after all workers complete so the
+ * Each host gets an ICMP echo, a sequential TCP presence probe, optional NetBIOS/mDNS
+ * presence probes and a second ICMP echo. The second echo catches hosts whose first
+ * reply was lost to ARP resolution or Wi-Fi power save. Name/MAC/port enrichment runs
+ * only after presence is established. The final ARP pass is intentionally after all workers complete so the
  * probes can populate the kernel neighbour cache first.
  */
 class LanScanRepositoryImpl(
@@ -77,7 +78,8 @@ class LanScanRepositoryImpl(
         } ?: icmpProbe
 
     companion object {
-        private const val MAX_DIAGNOSTIC_DETAILS = 100
+        /** Detail rows kept for the uncertain list: every address of a /22, the count beyond it. */
+        private const val MAX_DIAGNOSTIC_DETAILS = 1_024
 
         private fun createPortChecker(
             binder: NetworkBinder,
@@ -433,24 +435,8 @@ class LanScanRepositoryImpl(
 
         val tcp = effectiveTcpProbe.probe(ip, request.presencePorts, request.timeoutMs)
         ensureCurrentOperationActive()
-        when (tcp) {
-            is TcpPresence.Open -> {
-                return PresenceResult(
-                    presenceFromEvidence(listOf(PresenceEvidence.TcpConnection(tcp.port))),
-                )
-            }
-
-            is TcpPresence.Refused -> {
-                Unit
-            }
-
-            TcpPresence.None -> {
-                Unit
-            }
-
-            else -> {
-                Unit
-            }
+        if (tcp is TcpPresence.Open) {
+            return PresenceResult(presenceFromEvidence(listOf(PresenceEvidence.TcpConnection(tcp.port))))
         }
 
         val tcpDiagnostic = tcpDiagnostic(ip, tcp)
@@ -480,6 +466,12 @@ class LanScanRepositoryImpl(
                     )
                 }
             }
+        }
+        // By now ARP has resolved and a sleeping Wi-Fi client has been woken by the probes above.
+        val secondRtt = effectiveIcmpProbe.echo(ip, request.timeoutMs)
+        ensureCurrentOperationActive()
+        if (secondRtt != null) {
+            return PresenceResult(presenceFromEvidence(listOf(PresenceEvidence.IcmpEcho(secondRtt))))
         }
         return PresenceResult(null, tcpDiagnostic)
     }
@@ -539,14 +531,7 @@ class LanScanRepositoryImpl(
                 null
             }
         ensureCurrentOperationActive()
-        val openPorts = mutableListOf<Int>()
-        val resources = currentCoroutineContext()[OperationResourcesContext]?.resources
-        val portChecker = effectivePortChecker ?: createPortChecker(binder, socketFactory, resources)
-        for (port in LanQuickPorts.ports) {
-            ensureCurrentOperationActive()
-            if (portChecker(ip, port, request.timeoutMs)) openPorts += port
-            ensureCurrentOperationActive()
-        }
+        val openPorts = quickOpenPorts(ip, request.timeoutMs)
         return LanHost(
             ip = ip,
             hostname = hostname,
@@ -555,8 +540,24 @@ class LanScanRepositoryImpl(
             openPorts = openPorts,
             pingTimeMs = presence.pingMs,
             isGateway = ip == request.gatewayIp,
+            isThisDevice = ip == request.localIp,
             discoveredVia = presence.methods.toSet(),
             macSource = if (mac == null) MacSource.NONE else MacSource.ARP,
         )
+    }
+
+    private suspend fun quickOpenPorts(
+        ip: String,
+        timeoutMs: Int,
+    ): List<Int> {
+        val openPorts = mutableListOf<Int>()
+        val resources = currentCoroutineContext()[OperationResourcesContext]?.resources
+        val portChecker = effectivePortChecker ?: createPortChecker(binder, socketFactory, resources)
+        for (port in LanQuickPorts.ports) {
+            ensureCurrentOperationActive()
+            if (portChecker(ip, port, timeoutMs)) openPorts += port
+            ensureCurrentOperationActive()
+        }
+        return openPorts
     }
 }

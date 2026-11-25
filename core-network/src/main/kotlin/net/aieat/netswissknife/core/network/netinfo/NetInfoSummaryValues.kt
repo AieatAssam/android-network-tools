@@ -10,7 +10,8 @@ internal object NetInfoSummaryValues {
     ): String {
         val scope = labels.scopeName(address.scope)
         val mask = address.subnetMask?.let { ", mask $it" } ?: ""
-        return "${address.address}/${address.prefixLength} ($scope$mask)"
+        val deprecated = if (address.deprecated) ", ${labels.deprecated}" else ""
+        return "${address.address}/${address.prefixLength} ($scope$mask$deprecated)"
     }
 
     fun macText(

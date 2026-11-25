@@ -62,6 +62,10 @@ class LanScanUseCase(
             params.gatewayIp
                 ?.trim()
                 ?.takeIf { SubnetUtils.contains(subnet, it) }
+        val localIp =
+            params.localIp
+                ?.trim()
+                ?.takeIf { SubnetUtils.contains(subnet, it) }
 
         val request =
             LanScanRequest(
@@ -70,6 +74,7 @@ class LanScanUseCase(
                 concurrency = params.concurrency,
                 gatewayIp = gatewayIp,
                 enableNameProbes = params.enableNameProbes,
+                localIp = localIp,
             )
         if (LanScanOperationBudget
                 .estimate(

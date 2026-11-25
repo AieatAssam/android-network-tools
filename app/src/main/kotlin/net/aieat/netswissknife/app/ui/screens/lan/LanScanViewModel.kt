@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.data.AppPreferenceDefaults
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
@@ -32,6 +33,8 @@ import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.NoOpNetworkStatusProvider
 import net.aieat.netswissknife.app.platform.toNetworkErrorKind
+import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
+import net.aieat.netswissknife.app.ui.i18n.UiText
 import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 import net.aieat.netswissknife.app.util.AppLogger
 import net.aieat.netswissknife.core.domain.LanScanFlowResult
@@ -61,6 +64,13 @@ private const val DEFAULT_LAN_SUBNET = "192.168.1.0/24"
 
 /** Broadest prefix the scanner accepts; validation rejects anything wider. */
 private const val MIN_SCANNABLE_PREFIX = 16
+
+/** Accepted form ranges; values outside them get the validator's field errors instead. */
+private const val MIN_SCAN_TIMEOUT_MS = 100
+private const val MAX_SCAN_TIMEOUT_MS = 10_000
+private const val MAX_SCAN_CONCURRENCY = 500
+private val SCAN_TIMEOUT_RANGE_MS = MIN_SCAN_TIMEOUT_MS..MAX_SCAN_TIMEOUT_MS
+private val SCAN_CONCURRENCY_RANGE = 1..MAX_SCAN_CONCURRENCY
 
 /** Cleartext HTTP ports, in preference order, that the scanner probes. */
 private val HTTP_PROBE_CANDIDATES = listOf(80, 8080)
@@ -141,6 +151,8 @@ sealed interface LanScanUiState {
         val isBudgetLimit: Boolean = false,
         /** A smaller range around this device that fits the scan limit, offered after a budget error. */
         val suggestedSubnet: String? = null,
+        /** What the error card shows. [message] stays as the diagnostic copy. */
+        val text: UiText = UiText.Plain(message),
     ) : LanScanUiState
 }
 
@@ -204,6 +216,73 @@ internal data class LanScanSessionSnapshot(
     val state: LanScanUiState,
     val resultView: LanResultView = LanResultView.DEFAULT,
 )
+
+/** The hosts found so far in [current], as a summary of a scan that is stopping early. */
+private fun lanPartialSummary(
+    subnet: String,
+    current: LanScanUiState.Scanning,
+    durationMs: Long,
+): LanScanSummary {
+    val hosts = current.hosts
+    return LanScanSummary(
+        subnet = subnet,
+        totalScanned = current.scannedCount,
+        aliveHosts = hosts.size,
+        scanDurationMs = durationMs,
+        hosts = hosts,
+        uncertainHosts = current.uncertainDiagnostics,
+        uncertainCount = current.uncertainCount,
+    )
+}
+
+/**
+ * The early size warning for well-formed [params] that would exceed the scan ceiling, with this
+ * device's /24 as a suggestion when that fits. Null when the scan may start.
+ */
+private fun lanOverCeilingError(
+    params: LanScanParams,
+    localIp: String?,
+): LanScanUiState.Error? {
+    fun exceeds(cidr: String) = lanExceedsScanCeiling(cidr, params.timeoutMs, params.concurrency)
+    val wellFormed = params.timeoutMs in SCAN_TIMEOUT_RANGE_MS && params.concurrency in SCAN_CONCURRENCY_RANGE
+    if (!wellFormed || !exceeds(params.subnet)) return null
+    return LanScanUiState.Error(
+        LanScanOperationBudget.OVER_CEILING_MESSAGE,
+        isBudgetLimit = true,
+        suggestedSubnet =
+            LocalSubnet
+                .hostSlice(params.subnet, localIp)
+                ?.takeIf { it != params.subnet && !exceeds(it) },
+    )
+}
+
+/**
+ * True when [cidr] would exceed the hard scan ceiling at [timeoutMs] and [concurrency]. Prefixes
+ * broader than /16 fail ordinary validation, so they count as oversized here.
+ */
+private fun lanExceedsScanCeiling(
+    cidr: String,
+    timeoutMs: Int,
+    concurrency: Int,
+): Boolean {
+    if (!SubnetUtils.isValidCidr(cidr)) {
+        val prefix = cidr.substringAfter('/', "").trim().toIntOrNull()
+        return prefix != null && prefix < MIN_SCANNABLE_PREFIX && LocalSubnet.hostSlice(cidr, null) != null
+    }
+    val params =
+        LanScanParams(
+            subnet = cidr,
+            timeoutMs = timeoutMs.coerceIn(SCAN_TIMEOUT_RANGE_MS),
+            concurrency = concurrency.coerceIn(SCAN_CONCURRENCY_RANGE),
+        )
+    return LanScanTimeBudget
+        .estimate(
+            targetCount = SubnetUtils.parseSubnet(params.subnet).size,
+            timeoutMs = params.timeoutMs,
+            concurrency = params.concurrency,
+            enableNameProbes = params.enableNameProbes,
+        ).exceedsHardCeiling
+}
 
 @HiltViewModel
 class LanScanViewModel
@@ -270,6 +349,12 @@ class LanScanViewModel
         /** The detected network when it was too large to scan and the default was narrowed. */
         val subnetNarrowedFrom: StateFlow<String?> = _subnetNarrowedFrom.asStateFlow()
 
+        private var concurrencyEdited = restoredConcurrency != null
+        private val _concurrencyRaisedFrom = MutableStateFlow<Int?>(null)
+
+        /** The saved concurrency when it was raised so the detected subnet fits the scan limit. */
+        val concurrencyRaisedFrom: StateFlow<Int?> = _concurrencyRaisedFrom.asStateFlow()
+
         /** This device's IPv4 address from the last detection, used to pick a local /24. */
         private var localIp: String? = null
         private var settingsLoad: Job? = null
@@ -282,6 +367,9 @@ class LanScanViewModel
 
         private val _hostSortOrder = MutableStateFlow(LanHostSortOrder.IP)
         val hostSortOrder: StateFlow<LanHostSortOrder> = _hostSortOrder.asStateFlow()
+
+        private val _hostFilter = MutableStateFlow(LanHostFilter.All)
+        val hostFilter: StateFlow<LanHostFilter> = _hostFilter.asStateFlow()
 
         private val _resultView = MutableStateFlow(restoredResultView)
 
@@ -356,6 +444,7 @@ class LanScanViewModel
                     _hostSortOrder.value = prefs[AppPreferenceKeys.LAN_HOST_SORT_ORDER]
                         ?.let { stored -> runCatching { LanHostSortOrder.valueOf(stored) }.getOrNull() }
                         ?: LanHostSortOrder.IP
+                    _hostFilter.value = LanHostFilter.fromStoredName(prefs[AppPreferenceKeys.LAN_HOST_FILTER])
                 }
             refreshSubnet()
         }
@@ -368,6 +457,7 @@ class LanScanViewModel
         }
 
         private fun setSubnet(value: String) {
+            clearInputError()
             _subnet.value = value
             savedStateHandle[LAN_SUBNET_KEY] = value
         }
@@ -379,13 +469,22 @@ class LanScanViewModel
         }
 
         fun onTimeoutChange(value: Int) {
+            clearInputError()
             _timeoutMs.value = value
             savedStateHandle[LAN_TIMEOUT_KEY] = value
         }
 
         fun onConcurrencyChange(value: Int) {
+            clearInputError()
+            concurrencyEdited = true
+            _concurrencyRaisedFrom.value = null
             _concurrency.value = value
             savedStateHandle[LAN_CONCURRENCY_KEY] = value
+        }
+
+        /** An error card describes the inputs that produced it, so it goes once they change. */
+        private fun clearInputError() {
+            if (_uiState.value is LanScanUiState.Error) _uiState.value = LanScanUiState.Idle
         }
 
         fun onSearchQueryChange(value: String) {
@@ -404,6 +503,17 @@ class LanScanViewModel
         fun onHostSortOrderChange(value: LanHostSortOrder) {
             _hostSortOrder.value = value
             viewModelScope.launch { dataStore.edit { it[AppPreferenceKeys.LAN_HOST_SORT_ORDER] = value.name } }
+        }
+
+        fun onHostFilterChange(value: LanHostFilter) {
+            _hostFilter.value = value
+            viewModelScope.launch { dataStore.edit { it[AppPreferenceKeys.LAN_HOST_FILTER] = value.name } }
+        }
+
+        /** Replaces the subnet with the one detected from the active network. */
+        fun detectSubnet() {
+            setSubnet("")
+            refreshSubnet()
         }
 
         /** Detects the current subnet from active network interfaces on an IO thread. */
@@ -451,32 +561,25 @@ class LanScanViewModel
                 LocalSubnet
                     .hostSlice(detected, localIp)
                     ?.takeIf { it != detected && exceedsScanCeiling(detected) }
-            setSubnet(slice ?: detected)
+            val subnet = slice ?: detected
+            if (!concurrencyEdited && exceedsScanCeiling(subnet)) raiseConcurrencyToFit(subnet)
+            setSubnet(subnet)
             _subnetNarrowedFrom.value = detected.takeIf { slice != null }
         }
 
-        /**
-         * True when [cidr] would exceed the hard scan ceiling at the current settings. Prefixes
-         * broader than /16 fail ordinary validation, so they count as oversized here.
-         */
+        /** A fresh form whose saved concurrency cannot scan [subnet] in time gets the lowest value that can. */
+        private fun raiseConcurrencyToFit(subnet: String) {
+            val saved = _concurrency.value
+            val raised =
+                lanConcurrencyToFit(SubnetUtils.parseSubnet(subnet).size, _timeoutMs.value, saved) ?: return
+            _concurrency.value = raised
+            savedStateHandle[LAN_CONCURRENCY_KEY] = raised
+            _concurrencyRaisedFrom.value = saved
+        }
+
         private fun exceedsScanCeiling(cidr: String): Boolean {
-            if (!SubnetUtils.isValidCidr(cidr)) {
-                val prefix = cidr.substringAfter('/', "").trim().toIntOrNull()
-                return prefix != null && prefix < MIN_SCANNABLE_PREFIX && LocalSubnet.hostSlice(cidr, null) != null
-            }
-            val params =
-                LanScanParams(
-                    subnet = cidr,
-                    timeoutMs = _timeoutMs.value.coerceIn(100, 10_000),
-                    concurrency = _concurrency.value.coerceIn(1, 500),
-                )
-            return LanScanTimeBudget
-                .estimate(
-                    targetCount = SubnetUtils.parseSubnet(params.subnet).size,
-                    timeoutMs = params.timeoutMs,
-                    concurrency = params.concurrency,
-                    enableNameProbes = params.enableNameProbes,
-                ).exceedsHardCeiling
+            val timeoutMs = _timeoutMs.value
+            return lanExceedsScanCeiling(cidr, timeoutMs, _concurrency.value)
         }
 
         fun removeRecentSubnet(subnet: String) {
@@ -506,22 +609,13 @@ class LanScanViewModel
                     timeoutMs = _timeoutMs.value,
                     concurrency = _concurrency.value,
                     gatewayIp = _gatewayIp.value,
+                    localIp = localIp,
                 )
 
             // Preserve the normal validator's field-specific errors for malformed values. Only
             // well-formed ranges get the early size warning, including prefixes broader than /16.
-            if (params.timeoutMs in 100..10_000 && params.concurrency in 1..500 &&
-                exceedsScanCeiling(params.subnet)
-            ) {
-                _uiState.value =
-                    LanScanUiState.Error(
-                        LanScanOperationBudget.OVER_CEILING_MESSAGE,
-                        isBudgetLimit = true,
-                        suggestedSubnet =
-                            LocalSubnet
-                                .hostSlice(params.subnet, localIp)
-                                ?.takeIf { it != params.subnet && !exceedsScanCeiling(it) },
-                    )
+            lanOverCeilingError(params, localIp)?.let { error ->
+                _uiState.value = error
                 return
             }
 
@@ -557,7 +651,11 @@ class LanScanViewModel
                                 is LanScanFlowResult.ValidationError -> {
                                     AppLogger.w(TAG, "startScan: validation error – ${result.message}")
                                     discardLive()
-                                    _uiState.value = LanScanUiState.Error(result.message)
+                                    _uiState.value =
+                                        LanScanUiState.Error(
+                                            result.message,
+                                            text = ErrorTextMapper.map(result.info, result.message),
+                                        )
                                 }
 
                                 is LanScanFlowResult.HostFound -> {
@@ -620,8 +718,9 @@ class LanScanViewModel
                         AppLogger.e(TAG, "startScan: unexpected exception during scan", e)
                         _uiState.value =
                             LanScanUiState.Error(
-                                "Scan failed: ${e.message ?: "Unknown error"}",
+                                e.message ?: e.javaClass.simpleName,
                                 e.toNetworkErrorKind(),
+                                text = UiText.Res(R.string.lan_error_unexpected),
                             )
                     } finally {
                         if (scanOperationSession === operationSession) {
@@ -717,16 +816,9 @@ class LanScanViewModel
         ): LanScanUiState.Finished {
             flushLive()
             val current = _uiState.value as? LanScanUiState.Scanning
-            val partialHosts = current?.hosts ?: hosts.toList()
             val summary =
-                LanScanSummary(
-                    subnet = _subnet.value,
-                    totalScanned = current?.scannedCount ?: 0,
-                    aliveHosts = partialHosts.size,
-                    scanDurationMs = SystemMonotonicClock.elapsedMillisSince(scanStartNanos),
-                    hosts = partialHosts,
-                    uncertainHosts = current?.uncertainDiagnostics ?: diagnostics.toList(),
-                    uncertainCount = current?.uncertainCount ?: diagnostics.size,
+                partialSummaryOf(
+                    current ?: LanScanUiState.Scanning(hosts.toList(), 0, 0, diagnostics.size, diagnostics.toList()),
                 )
             return LanScanUiState.Finished(
                 summary,
@@ -763,16 +855,10 @@ class LanScanViewModel
         }
 
         /** The hosts found so far, as a summary of a scan that is being stopped early. */
-        private fun partialSummaryOf(current: LanScanUiState.Scanning): LanScanSummary =
-            LanScanSummary(
-                subnet = _subnet.value,
-                totalScanned = current.scannedCount,
-                aliveHosts = current.hosts.size,
-                scanDurationMs = SystemMonotonicClock.elapsedMillisSince(scanStartNanos),
-                hosts = current.hosts,
-                uncertainHosts = current.uncertainDiagnostics,
-                uncertainCount = current.uncertainCount,
-            )
+        private fun partialSummaryOf(current: LanScanUiState.Scanning): LanScanSummary {
+            val durationMs = SystemMonotonicClock.elapsedMillisSince(scanStartNanos)
+            return lanPartialSummary(_subnet.value, current, durationMs)
+        }
 
         private fun cancelWithPartial(reason: CancellationReason) {
             flushLive()
