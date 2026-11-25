@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.traceroute.map
 
+import kotlin.math.abs
 import kotlin.math.hypot
 
 /** An axis-aligned rectangle in canvas pixels. */
@@ -21,6 +22,17 @@ data class PixelBox(
         widthPx: Float,
         heightPx: Float,
     ): Boolean = left >= 0f && top >= 0f && right <= widthPx && bottom <= heightPx
+
+    /** True when ([x], [y]) is in the box, grown where needed to reach [minHalfSize] each way from its centre. */
+    fun contains(
+        x: Float,
+        y: Float,
+        minHalfSize: Float,
+    ): Boolean {
+        val halfWidth = maxOf((right - left) / 2f, minHalfSize)
+        val halfHeight = maxOf((bottom - top) / 2f, minHalfSize)
+        return abs(x - centerX) <= halfWidth && abs(y - centerY) <= halfHeight
+    }
 
     companion object {
         fun around(
@@ -157,6 +169,22 @@ object MapLabelLayout {
         val stop = nearestPointIndex(points, x, y, radiusPx) ?: return null
         return clusters.indexOfFirst { stop in it.members }.takeIf { it >= 0 }
     }
+
+    /**
+     * The cluster a tap at ([x], [y]) selects: the one with a marker within [radiusPx], else the one whose
+     * label is under the tap. A label is hit within [radiusPx] of its centre as well, so a short label is
+     * as easy to tap as a marker.
+     */
+    fun hitCluster(
+        clusters: List<MarkerCluster>,
+        points: List<ScreenPoint>,
+        labels: List<PlacedLabel>,
+        x: Float,
+        y: Float,
+        radiusPx: Float,
+    ): Int? =
+        clusterAt(clusters, points, x, y, radiusPx)
+            ?: labels.firstOrNull { it.box.contains(x, y, radiusPx) }?.cluster
 
     private fun boxFor(
         anchor: LabelAnchor,

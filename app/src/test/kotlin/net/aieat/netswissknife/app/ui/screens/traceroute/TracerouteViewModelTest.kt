@@ -1102,6 +1102,33 @@ class TracerouteViewModelTest {
             }
             assertEquals(3_500, SliderScale.TIMEOUT_MS.snap(3_300f))
         }
+
+        @Test
+        fun `packet size moves between presets, and the 56 B default is one of them`() {
+            val scale = SliderScale.PACKET_SIZE
+            assertEquals(56, scale.valueAt(scale.positionOf(56)))
+            assertEquals(8, scale.steps)
+            assertEquals(0f..9f, scale.positions)
+            assertEquals(28, scale.valueAt(-1f))
+            assertEquals(1472, scale.valueAt(12f))
+            assertEquals(576, scale.valueAt(6.4f))
+            scale.presets.forEach { assertTrue(it in scale.range, "$it") }
+        }
+
+        @Test
+        fun `a packet size off the presets rests on the nearest one`() {
+            val scale = SliderScale.PACKET_SIZE
+            assertEquals(2f, scale.positionOf(70))
+            assertEquals(1f, scale.positionOf(60))
+            assertEquals(0f, scale.positionOf(0))
+        }
+
+        @Test
+        fun `a scale without presets keeps its own values as positions`() {
+            assertEquals(5f..64f, SliderScale.MAX_HOPS.positions)
+            assertEquals(13f, SliderScale.MAX_HOPS.positionOf(13))
+            assertEquals(13, SliderScale.MAX_HOPS.valueAt(12.6f))
+        }
     }
 
     @Nested

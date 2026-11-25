@@ -1281,8 +1281,9 @@ internal fun buildTlsPemShareText(result: TlsInspectorResult): String =
         .joinToString(separator = "\n", postfix = "\n")
 
 /**
- * The role a certificate plays in the chain as served. Servers usually omit the root, so only a
- * self-signed last entry is one.
+ * The role a certificate plays in the chain as served. A root is self-signed (subject equals issuer),
+ * wherever the server puts it; the last certificate sent is often an intermediate or a cross-signed root,
+ * which another CA issued.
  */
 internal enum class TlsCertificateRole { LEAF, INTERMEDIATE, ROOT }
 
@@ -1292,7 +1293,7 @@ internal fun certificateRoleOf(
 ): TlsCertificateRole =
     when {
         index == 0 -> TlsCertificateRole.LEAF
-        index == chain.lastIndex && chain[index].isSelfSigned -> TlsCertificateRole.ROOT
+        chain[index].isSelfSigned -> TlsCertificateRole.ROOT
         else -> TlsCertificateRole.INTERMEDIATE
     }
 

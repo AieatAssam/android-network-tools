@@ -48,7 +48,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,16 +71,10 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.screens.wifi.WifiRefreshIntervalPicker
 import net.aieat.netswissknife.app.ui.theme.AppMotion
-import kotlin.math.roundToInt
 
 object SettingsScreenTestTags {
     const val DEFAULT_CONCURRENCY_SLIDER = "settings_default_concurrency_slider"
 }
-
-private val PING_COUNT_RANGE = 1..100
-private val CONCURRENCY_RANGE = 1..500
-private val TIMEOUT_RANGE_MS = 500..10_000
-private const val TIMEOUT_STEP_MS = 500
 
 @Composable
 fun SettingsScreen(
@@ -269,25 +262,25 @@ private fun DefaultsSection(
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             SliderSetting(
                 value = pingCount,
-                range = PING_COUNT_RANGE,
-                step = 1,
+                steps = SettingSteps.PING_COUNT,
                 label = { stringResource(R.string.settings_ping_count_label, it) },
+                valueText = { it.toString() },
                 usage = stringResource(R.string.settings_ping_count_usage),
                 onValueCommit = onPingCountChange,
             )
             SliderSetting(
                 value = timeoutMs,
-                range = TIMEOUT_RANGE_MS,
-                step = TIMEOUT_STEP_MS,
+                steps = SettingSteps.TIMEOUT_MS,
                 label = { stringResource(R.string.settings_timeout_label, it) },
+                valueText = { stringResource(R.string.settings_timeout_value, it) },
                 usage = stringResource(R.string.settings_timeout_usage),
                 onValueCommit = onTimeoutChange,
             )
             SliderSetting(
                 value = concurrency,
-                range = CONCURRENCY_RANGE,
-                step = 1,
+                steps = SettingSteps.CONCURRENCY,
                 label = { stringResource(R.string.settings_concurrency_label, it) },
+                valueText = { it.toString() },
                 usage = stringResource(R.string.settings_concurrency_usage),
                 onValueCommit = onConcurrencyChange,
                 testTag = SettingsScreenTestTags.DEFAULT_CONCURRENCY_SLIDER,
@@ -306,30 +299,21 @@ private fun DefaultsSection(
 }
 
 /**
- * Maps a continuous slider position to the nearest multiple of [step] inside [range].
- * The slider drags continuously, but only the snapped value is written to the preference store.
+ * A default that steps through [steps], with tick marks, the current value above and the range below.
+ * The thumb follows the finger and the preference is written once, when the finger lifts.
  */
-internal fun snapSliderValue(
-    raw: Float,
-    step: Int,
-    range: IntRange,
-): Int = ((raw / step).roundToInt() * step).coerceIn(range.first, range.last)
-
 @Composable
 private fun SliderSetting(
     value: Int,
-    range: IntRange,
-    step: Int,
+    steps: SettingSteps,
     label: @Composable (Int) -> String,
+    valueText: @Composable (Int) -> String,
     usage: String,
     onValueCommit: (Int) -> Unit,
     testTag: String? = null,
 ) {
-    // The thumb follows a local drag position and the preference is written once, when the
-    // finger lifts. Writing on every change made the thumb lag behind the DataStore round trip.
-    var dragPosition by remember(value) { mutableFloatStateOf(value.toFloat()) }
-    val shownValue = snapSliderValue(dragPosition, step, range)
-    val shownLabel = label(shownValue)
+    var position by remember(value, steps) { mutableIntStateOf(steps.indexOf(value)) }
+    val shownLabel = label(steps.shownValue(value, position))
     Column {
         Text(
             text = shownLabel,
@@ -337,11 +321,11 @@ private fun SliderSetting(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Slider(
-            value = dragPosition,
-            onValueChange = { dragPosition = it },
-            onValueChangeFinished = { onValueCommit(snapSliderValue(dragPosition, step, range)) },
-            valueRange = range.first.toFloat()..range.last.toFloat(),
-            steps = 0,
+            value = position.toFloat(),
+            onValueChange = { position = steps.indexOf(steps.valueAt(it)) },
+            onValueChangeFinished = { onValueCommit(steps.values[position]) },
+            valueRange = 0f..steps.lastIndex.toFloat(),
+            steps = steps.sliderSteps,
             modifier =
                 Modifier
                     .fillMaxWidth()
@@ -349,6 +333,18 @@ private fun SliderSetting(
                         contentDescription = shownLabel
                     }.then(testTag?.let { Modifier.testTag(it) } ?: Modifier),
         )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                text = valueText(steps.min),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = valueText(steps.max),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Text(
             text = usage,
             style = MaterialTheme.typography.labelSmall,
@@ -471,6 +467,7 @@ private fun OnboardingResetSection(onReset: () -> Unit) {
 private fun AboutSection() {
     val uriHandler = LocalUriHandler.current
     val sourceCodeUrl = stringResource(R.string.settings_source_code_link)
+    val privacyPolicyUrl = stringResource(R.string.settings_privacy_policy_link)
 
     SectionHeader(stringResource(R.string.settings_about_section))
 
@@ -495,38 +492,57 @@ private fun AboutSection() {
                 )
             }
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { uriHandler.openUri(sourceCodeUrl) }
-                        .heightIn(min = 48.dp)
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_source_code_label),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.settings_source_code_url),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        textDecoration = TextDecoration.Underline,
-                    )
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
+            AboutLinkRow(
+                label = stringResource(R.string.settings_source_code_label),
+                linkText = stringResource(R.string.settings_source_code_url),
+                onClick = { uriHandler.openUri(sourceCodeUrl) },
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            AboutLinkRow(
+                label = stringResource(R.string.settings_privacy_policy_label),
+                linkText = stringResource(R.string.settings_privacy_policy_link_text),
+                onClick = { uriHandler.openUri(privacyPolicyUrl) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun AboutLinkRow(
+    label: String,
+    linkText: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = linkText,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                textDecoration = TextDecoration.Underline,
+            )
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }
