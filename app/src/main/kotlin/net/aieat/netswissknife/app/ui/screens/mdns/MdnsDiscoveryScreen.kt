@@ -325,7 +325,7 @@ fun MdnsDiscoveryScreen(
                                 ErrorCard(
                                     message = stringResource(uiState.errorReason.messageRes()),
                                     onRetry = { viewModel.startScan() },
-                                    onDismiss = { viewModel.reset() },
+                                    onDismiss = { viewModel.dismissError() },
                                 )
                             }
                         }
@@ -869,6 +869,12 @@ private fun LazyListScope.serviceResultItems(
         searchQuery = searchQuery,
         onSearchChange = onSearchChange,
     )
+    item(key = "report") {
+        ResultActionsRow(
+            copyText = report,
+            onShare = onShare,
+        )
+    }
     serviceGroupItems(
         groups = groups,
         groupByDevice = groupByDevice,
@@ -876,12 +882,6 @@ private fun LazyListScope.serviceResultItems(
         onPingHost = onPingHost,
         onHttpProbe = onHttpProbe,
     )
-    item(key = "report") {
-        ResultActionsRow(
-            copyText = report,
-            onShare = onShare,
-        )
-    }
     item(key = "end_spacer") {
         Spacer(Modifier.height(16.dp))
     }
@@ -1052,7 +1052,8 @@ private fun ServiceGroupHeader(
     onClick: () -> Unit,
 ) {
     val typeInfo = if (groupByDevice) null else mdnsServiceTypeInfo(groupKey)
-    val title = typeInfo?.let { stringResource(it.labelRes) } ?: groupKey
+    val namedLabelRes = typeInfo?.takeIf { it.known }?.labelRes
+    val title = namedLabelRes?.let { stringResource(it) } ?: groupKey
     val rotation by animateFloatAsState(
         targetValue = if (isExpanded) 180f else 0f,
         animationSpec = AppMotion.effect(200),
@@ -1085,7 +1086,7 @@ private fun ServiceGroupHeader(
         Spacer(Modifier.width(8.dp))
         ServiceGroupTitle(
             title = title,
-            serviceType = groupKey.takeIf { typeInfo != null },
+            serviceType = groupKey.takeIf { namedLabelRes != null },
             modifier = Modifier.weight(1f),
         )
         ServiceGroupCountBadge(count)
@@ -1332,7 +1333,7 @@ private fun ServiceHostActions(
     }
 }
 
-/** One ping chip per distinct, valid address the service announced. */
+/** One ping chip per distinct, reachable address the service announced; unscoped link-local IPv6 is skipped. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ServiceAddressChips(
@@ -1343,7 +1344,8 @@ private fun ServiceAddressChips(
         service.ipAddresses
             .mapNotNull { address ->
                 ToolHost.parse(address)?.takeIf {
-                    HostValidator.isValidIpv4(it.value) || HostValidator.isValidIpv6(it.value)
+                    (HostValidator.isValidIpv4(it.value) || HostValidator.isValidIpv6(it.value)) &&
+                        !isUnscopedLinkLocalIpv6(it.value)
                 }
             }.distinctBy { it.canonical }
     if (validAddresses.isNotEmpty()) {

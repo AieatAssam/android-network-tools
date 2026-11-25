@@ -72,6 +72,20 @@ data class MdnsDiscoveryUiState(
     val networkInterrupted: Boolean = false,
 )
 
+/**
+ * Services accumulate across scans until Clear, so a rescan starts from what is already listed.
+ * Everything else describes one scan and is reset here: completion, cancellation, network
+ * interruption and errors. Truncation notes are kept as a union because they also describe
+ * services that are still listed.
+ */
+internal fun MdnsDiscoveryUiState.startingScan(): MdnsDiscoveryUiState =
+    MdnsDiscoveryUiState(
+        isScanning = true,
+        services = services,
+        servicesByType = servicesByType,
+        truncationReasons = truncationReasons,
+    )
+
 @HiltViewModel
 class MdnsDiscoveryViewModel
     @Inject
@@ -118,7 +132,7 @@ class MdnsDiscoveryViewModel
             val session = MdnsOperation.newSession(timeoutMs = scanWindowMs)
             operationSession = session
 
-            _uiState.value = MdnsDiscoveryUiState(isScanning = true)
+            _uiState.update { previous -> previous.startingScan() }
 
             val startTime = SystemMonotonicClock.nowNanos()
 
@@ -169,7 +183,7 @@ class MdnsDiscoveryViewModel
                                             state.copy(
                                                 scanComplete = true,
                                                 totalFound = update.totalFound,
-                                                truncationReasons = update.truncationReasons,
+                                                truncationReasons = state.truncationReasons + update.truncationReasons,
                                                 networkInterrupted = update.networkInterrupted,
                                             )
                                         }
@@ -230,6 +244,13 @@ class MdnsDiscoveryViewModel
             }
             scanJob?.cancel(OperationCancellationException(reason))
             scanJob = null
+        }
+
+        /** Clears a failed scan's message only; the services found so far stay listed. */
+        fun dismissError() {
+            _uiState.update { state ->
+                state.copy(error = null, errorReason = null, networkErrorKind = NetworkErrorKind.GENERAL)
+            }
         }
 
         fun reset() {

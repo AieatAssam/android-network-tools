@@ -234,7 +234,7 @@ class MdnsDiscoveryScreenTest {
     }
 
     @Test
-    fun socketSetupFailure_showsErrorAndDismissResets() {
+    fun socketSetupFailure_showsErrorAndDismissClearsOnlyTheError() {
         val viewModel =
             fakeViewModel(
                 state = MdnsDiscoveryUiState(error = "setsockopt failed: ENODEV"),
@@ -250,7 +250,8 @@ class MdnsDiscoveryScreenTest {
         composeRule.onNodeWithText("setsockopt failed: ENODEV").assertDoesNotExist()
         composeRule.onNodeWithText(context.getString(R.string.mdns_error_dismiss)).performClick()
 
-        verify(exactly = 1) { viewModel.reset() }
+        verify(exactly = 1) { viewModel.dismissError() }
+        verify(exactly = 0) { viewModel.reset() }
     }
 
     @Test

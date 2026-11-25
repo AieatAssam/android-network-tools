@@ -12,6 +12,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.job
@@ -38,6 +39,8 @@ import net.aieat.netswissknife.core.network.operation.OperationRequirement
 import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -411,6 +414,76 @@ class MdnsDiscoveryViewModelTest {
                 viewModel.reset()
 
                 assertEquals(MdnsDiscoveryUiState(), viewModel.uiState.value)
+            }
+    }
+
+    @Nested
+    @DisplayName("repeated scans")
+    inner class RepeatedScans {
+        private val first = stubService(name = "first")
+        private val second = stubService(name = "second")
+        private val third = stubService(name = "third")
+
+        @Test
+        fun `a new scan keeps earlier services and clears the per-scan state`() =
+            runTest {
+                every { useCase(any(), any()) } returns
+                    flowOf(
+                        MdnsUpdate.ServiceFound(first),
+                        MdnsUpdate.ServiceFound(second),
+                        MdnsUpdate.DiscoveryComplete(
+                            totalFound = 2,
+                            truncationReasons = setOf(MdnsTruncationReason.QUERY_LIMIT),
+                            networkInterrupted = true,
+                        ),
+                    )
+                viewModel.startScan()
+                val rescan = MutableSharedFlow<MdnsUpdate>(extraBufferCapacity = 8)
+                every { useCase(any(), any()) } returns rescan
+
+                viewModel.startScan()
+
+                val started = viewModel.uiState.value
+                assertTrue(started.isScanning)
+                assertEquals(listOf(first, second), started.services)
+                assertEquals(setOf(MdnsTruncationReason.QUERY_LIMIT), started.truncationReasons)
+                assertFalse(started.scanComplete)
+                assertFalse(started.scanCanceled)
+                assertFalse(started.networkInterrupted)
+                assertNull(started.error)
+                assertNull(started.errorReason)
+
+                val updatedSecond = second.copy(hostname = "second-2.local")
+                rescan.tryEmit(MdnsUpdate.ServiceFound(updatedSecond))
+                rescan.tryEmit(MdnsUpdate.ServiceFound(third))
+
+                val during = viewModel.uiState.value
+                assertEquals(listOf(first, updatedSecond, third), during.services)
+                assertEquals(mapOf(first.serviceType to listOf(first, updatedSecond, third)), during.servicesByType)
+                viewModel.viewModelScope.coroutineContext.job
+                    .cancelAndJoin()
+            }
+
+        @Test
+        fun `a failed scan keeps the listed services until the error is dismissed`() =
+            runTest {
+                every { useCase(any(), any()) } returns
+                    flow {
+                        emit(MdnsUpdate.ServiceFound(first))
+                        throw IllegalStateException("socket closed")
+                    }
+                viewModel.startScan()
+                assertEquals("socket closed", viewModel.uiState.value.error)
+
+                viewModel.dismissError()
+
+                val state = viewModel.uiState.value
+                assertNull(state.error)
+                assertNull(state.errorReason)
+                assertEquals(NetworkErrorKind.GENERAL, state.networkErrorKind)
+                assertEquals(listOf(first), state.services)
+                viewModel.viewModelScope.coroutineContext.job
+                    .cancelAndJoin()
             }
     }
 }

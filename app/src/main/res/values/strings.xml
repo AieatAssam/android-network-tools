@@ -551,7 +551,8 @@
     <!-- Wi-Fi Scanner Screen -->
     <string name="wifi_screen_title">Wi-Fi Scanner</string>
     <string name="wifi_search_label">Search SSID, BSSID or vendor</string>
-    <string name="wifi_search_no_match">No networks match \"%1$s\". Clear the search to see every network.</string>
+    <string name="wifi_search_no_match">No networks match \"%1$s\"</string>
+    <string name="wifi_search_clear">Clear search</string>
     <string name="wifi_scan_button">Scan</string>
     <string name="wifi_no_permission_title">Location Permission Required</string>
     <string name="wifi_no_permission_body">Android requires Location permission to scan for nearby Wi-Fi networks. Your location is not sent anywhere.</string>
@@ -594,6 +595,7 @@
     <string name="wifi_detail_standard">Standard</string>
     <string name="wifi_detail_max_speed">Standard max (theoretical)</string>
     <string name="wifi_max_rate_at_width">Up to %1$s at %2$d MHz</string>
+    <string name="wifi_max_rate_at_width_streams">Up to %1$s at %2$d MHz with %3$d spatial streams</string>
     <string name="wifi_max_rate_ceiling">Up to %1$s (theoretical ceiling)</string>
     <string name="wifi_detail_vendor">Vendor</string>
     <string name="wifi_detail_security">Security</string>
@@ -889,6 +891,10 @@
     <string name="topology_v3_priv_aes256">AES-256</string>
     <string name="topology_v3_priv_password_label">Priv Password</string>
     <string name="topology_v3_priv_requires_auth">Privacy requires an authentication protocol.</string>
+    <string name="topology_community_blank">Enter a community string for SNMP v1 or v2c.</string>
+    <string name="topology_v3_username_blank">Enter a username for SNMP v3.</string>
+    <string name="topology_v3_auth_password_blank">Enter the authentication password.</string>
+    <string name="topology_v3_priv_password_blank">Enter the privacy password.</string>
     <string name="topology_max_hops_label">Max Hops: %1$d</string>
     <string name="topology_query_neighbors_label">Query advertised LLDP/CDP neighbors</string>
     <string name="topology_query_neighbors_description">Off by default. Turn on to send SNMP queries using this profile to IP addresses advertised by discovered LLDP/CDP devices. Reported links remain visible when off.</string>
@@ -897,6 +903,7 @@
     <string name="topology_discover_button">Discover Topology</string>
     <string name="topology_discover_disabled_target">Enter a target IP to enable Discover Topology.</string>
     <string name="topology_discover_disabled_v3">Choose the SNMPv3 authentication and privacy settings to enable Discover Topology.</string>
+    <string name="topology_discover_disabled_credentials">Fill in the highlighted SNMP fields to enable Discover Topology.</string>
     <string name="topology_cancel_button">Cancel discovery</string>
     <string name="topology_canceling_button">Canceling…</string>
     <string name="topology_canceling_status">Canceling discovery. Keeping discovered nodes until cleanup finishes.</string>
@@ -1692,22 +1699,22 @@
     <!-- Wi-Fi Scanner help -->
     <string name="help_wifi_title">Wi-Fi Scanner</string>
     <string name="help_wifi_concept_heading">What is a Wi-Fi channel?</string>
-    <string name="help_wifi_concept_body">Wi-Fi radios talk over slices of radio frequency called channels, similar to how radio stations each get their own frequency so they don\'t talk over each other. Every network you see is a named group (SSID) that can be broadcast by one or more physical radios, each with its own hardware address (BSSID) - a mesh system or dual-band router shows up as one SSID but several BSSIDs. 2.4 GHz channels travel further through walls but there are only 3 that don\'t overlap, so they get crowded; 5 GHz and 6 GHz have far more non-overlapping channels and are faster, at the cost of shorter range.</string>
+    <string name="help_wifi_concept_body">Wi-Fi radios talk over slices of radio frequency called channels, similar to how radio stations each get their own frequency so they don\'t talk over each other. Every network you see is a named group (SSID) that can be broadcast by one or more physical radios, each with its own hardware address (BSSID). A mesh system or dual-band router shows up as one SSID but several BSSIDs. 2.4 GHz channels travel further through walls but there are only 3 that don\'t overlap, so they get crowded; 5 GHz and 6 GHz have far more non-overlapping channels and are faster, at the cost of shorter range.</string>
     <string name="help_wifi_what_heading">What it does</string>
     <string name="help_wifi_what_body">Triggers a platform Wi-Fi scan, groups nearby access points by network (SSID), and displays channel utilisation on a spectrum chart. Location Services and the Android Wi-Fi scan permissions are required; your location is not recorded or sent.</string>
     <string name="help_wifi_params_heading">Key parameters</string>
     <string name="help_wifi_results_heading">Reading the results</string>
     <string-array name="help_wifi_params_bullets">
-        <item>Scan - request a fresh platform scan.</item>
-        <item>Auto-refresh - choose Off, 15, 30, or 60 seconds.</item>
+        <item>Scan: request a fresh platform scan.</item>
+        <item>Auto-refresh: choose Off, 15, 30, or 60 seconds.</item>
         <item>If Android throttles a request, the screen shows the cached result age.</item>
         <item>Location Services must be enabled for Android to return scan results.</item>
-        <item>Band filter - show only 2.4 GHz, 5 GHz, or 6 GHz networks.</item>
-        <item>Sort - order by signal strength, channel, or SSID.</item>
+        <item>Band filter: show only the networks on one detected band (2.4 GHz, 5 GHz or 6 GHz). A band gets a tab once it is seen.</item>
+        <item>Sort: order by signal strength, channel, or SSID.</item>
     </string-array>
     <string-array name="help_wifi_results_bullets">
         <item>The spectrum chart shows AP signal curves by frequency.</item>
-        <item>Overlapping curves mean channel congestion - multiple networks competing for the same slice of spectrum.</item>
+        <item>Overlapping curves mean channel congestion: multiple networks competing for the same slice of spectrum.</item>
         <item>The Best Channel callout recommends the least-congested 2.4 GHz channel.</item>
         <item>Tap a network to expand per-BSSID details; tap an AP row for full connection detail.</item>
     </string-array>
@@ -1842,14 +1849,15 @@
     <string name="help_mdns_params_heading">Key parameters</string>
     <string name="help_mdns_results_heading">Reading the results</string>
     <string-array name="help_mdns_params_bullets">
-        <item>Scan - starts an 8-second discovery window; run it multiple times to catch devices that announce infrequently.</item>
-        <item>Stop - end the current scan early.</item>
-        <item>Clear - remove all results from the list.</item>
+        <item>Scan: runs an 8-second discovery window. Run it again to catch devices that announce infrequently; each scan adds to the list.</item>
+        <item>Stop: ends the current scan early.</item>
+        <item>Clear: removes every result from the list.</item>
     </string-array>
     <string-array name="help_mdns_results_bullets">
-        <item>Services are grouped by type (e.g. _http._tcp, _airplay._tcp).</item>
+        <item>Group switches the list between By type, which groups services by service type such as _http._tcp or _airplay._tcp, and By device, which groups them by hostname, address, or instance name.</item>
         <item>Tap a group to expand it and see individual service instances.</item>
         <item>Each instance shows its hostname, IP address, port, and any TXT record properties.</item>
+        <item>Copy and Share sit above the groups and export the list as it is currently filtered.</item>
     </string-array>
 
     <!-- Speed Test help -->

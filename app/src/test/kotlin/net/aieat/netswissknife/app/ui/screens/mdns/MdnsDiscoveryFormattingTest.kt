@@ -116,4 +116,23 @@ class MdnsDiscoveryFormattingTest {
         assertEquals(1f, mdnsScanProgress(12_000L, 8_000L))
         assertEquals(0f, mdnsScanProgress(4_000L, 0L))
     }
+
+    @Test
+    fun `unscoped link-local IPv6 addresses are recognised across the fe80 to febf range`() {
+        assertTrue(isUnscopedLinkLocalIpv6("fe80::f47e:c4ce:5d9:d27a"))
+        assertTrue(isUnscopedLinkLocalIpv6("FE80::1"))
+        assertTrue(isUnscopedLinkLocalIpv6("febf::1"))
+        assertTrue(isUnscopedLinkLocalIpv6("fe80:0:0:0:1:2:3:4"))
+    }
+
+    @Test
+    fun `scoped, global, IPv4 and near-miss addresses are not treated as unscoped link-local`() {
+        assertFalse(isUnscopedLinkLocalIpv6("fe80::1%wlan0"))
+        assertFalse(isUnscopedLinkLocalIpv6("fec0::1"))
+        assertFalse(isUnscopedLinkLocalIpv6("fd00::1"))
+        assertFalse(isUnscopedLinkLocalIpv6("2001:db8::1"))
+        assertFalse(isUnscopedLinkLocalIpv6("::1"))
+        assertFalse(isUnscopedLinkLocalIpv6("169.254.10.20"))
+        assertFalse(isUnscopedLinkLocalIpv6("0fe80::1"))
+    }
 }

@@ -65,6 +65,7 @@ import net.aieat.netswissknife.app.ui.components.scrollIntoViewOnFocus
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
 import net.aieat.netswissknife.app.util.shareText
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.HostValidator
 import net.aieat.netswissknife.core.network.topology.*
 import java.util.Locale
@@ -179,10 +180,9 @@ private fun TopologyScreenContent(
             null
         }
     val dismissKeyboard = rememberDismissKeyboard()
-    val canStartDiscovery =
-        !isInProgress && normalizedTargetIp != null &&
-            !(v3PrivProto != V3PrivProtocol.NONE && v3AuthProto == V3AuthProtocol.NONE)
     val maxConfigHeight = LocalConfiguration.current.screenHeightDp.dp * 0.4f
+    val configScrollState = rememberScrollState()
+    val configCardColor = CardDefaults.elevatedCardColors().containerColor
 
     fun currentTopologyParams() =
         TopologyParams(
@@ -200,24 +200,33 @@ private fun TopologyScreenContent(
             retries = 1,
         )
 
+    val credentialErrors = topologyCredentialErrors(currentTopologyParams())
+    val canStartDiscovery = !isInProgress && normalizedTargetIp != null && credentialErrors.isEmpty()
+    val disabledReasonRes = topologyDisabledReasonRes(normalizedTargetIp != null, credentialErrors)
+    // A failure from an earlier run is hidden once any form input differs from the inputs it ran with.
+    var failedRunParams by remember { mutableStateOf<TopologyParams?>(null) }
+    val shownUiState = uiState.withoutStaleFailure(failedRunParams, currentTopologyParams())
+
     // Shared by the Discover button and the keyboard Done action, so both start the same scan.
     fun startDiscoveryIfReady() {
         if (!canStartDiscovery) return
-        onStartDiscovery(currentTopologyParams())
+        val params = currentTopologyParams()
+        failedRunParams = params
+        onStartDiscovery(params)
         configExpanded = false
     }
 
     val selectedNode =
-        when (uiState) {
-            is TopologyUiState.Discovering -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
-            is TopologyUiState.Canceling -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
-            is TopologyUiState.Canceled -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
-            is TopologyUiState.TimeLimit -> uiState.nodes.find { it.ip == uiState.selectedNodeIp }
-            is TopologyUiState.Done -> uiState.graph.nodes.find { it.ip == uiState.selectedNodeIp }
+        when (shownUiState) {
+            is TopologyUiState.Discovering -> shownUiState.nodes.find { it.ip == shownUiState.selectedNodeIp }
+            is TopologyUiState.Canceling -> shownUiState.nodes.find { it.ip == shownUiState.selectedNodeIp }
+            is TopologyUiState.Canceled -> shownUiState.nodes.find { it.ip == shownUiState.selectedNodeIp }
+            is TopologyUiState.TimeLimit -> shownUiState.nodes.find { it.ip == shownUiState.selectedNodeIp }
+            is TopologyUiState.Done -> shownUiState.graph.nodes.find { it.ip == shownUiState.selectedNodeIp }
             else -> null
         }
     val announcementPhase =
-        when (val state = uiState) {
+        when (val state = shownUiState) {
             is TopologyUiState.Idle -> {
                 null
             }
@@ -264,7 +273,9 @@ private fun TopologyScreenContent(
         NetworkStatusBanner(
             status = networkStatus,
             scope = NetworkStatusScope.LOCAL_NETWORK,
-            permissionDenied = (uiState as? TopologyUiState.Failure)?.networkErrorKind == NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED,
+            permissionDenied =
+                (shownUiState as? TopologyUiState.Failure)?.networkErrorKind ==
+                    NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED,
             onGrantPermission = onGrantPermission,
             modifier = Modifier.padding(horizontal = 16.dp),
         )
@@ -281,7 +292,8 @@ private fun TopologyScreenContent(
             Column(
                 modifier =
                     Modifier
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(configScrollState)
+                        .drawScrollCue(configScrollState, configCardColor)
                         .padding(16.dp),
             ) {
                 Row(
@@ -388,6 +400,13 @@ private fun TopologyScreenContent(
                                 value = community,
                                 onValueChange = { community = it },
                                 label = { Text(stringResource(R.string.topology_community_label)) },
+                                isError = ErrorCode.SNMP_COMMUNITY_BLANK in credentialErrors,
+                                supportingText =
+                                    if (ErrorCode.SNMP_COMMUNITY_BLANK in credentialErrors) {
+                                        { Text(stringResource(R.string.topology_community_blank)) }
+                                    } else {
+                                        null
+                                    },
                                 modifier = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
                                 singleLine = true,
                                 visualTransformation =
@@ -413,6 +432,13 @@ private fun TopologyScreenContent(
                                     value = v3Username,
                                     onValueChange = { v3Username = it },
                                     label = { Text(stringResource(R.string.topology_v3_username_label)) },
+                                    isError = ErrorCode.SNMP_V3_USER_BLANK in credentialErrors,
+                                    supportingText =
+                                        if (ErrorCode.SNMP_V3_USER_BLANK in credentialErrors) {
+                                            { Text(stringResource(R.string.topology_v3_username_blank)) }
+                                        } else {
+                                            null
+                                        },
                                     modifier = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
                                     singleLine = true,
                                 )
@@ -432,6 +458,13 @@ private fun TopologyScreenContent(
                                         value = v3AuthPassword,
                                         onValueChange = { v3AuthPassword = it },
                                         label = { Text(stringResource(R.string.topology_v3_auth_password_label)) },
+                                        isError = ErrorCode.SNMP_V3_AUTH_PASSWORD_BLANK in credentialErrors,
+                                        supportingText =
+                                            if (ErrorCode.SNMP_V3_AUTH_PASSWORD_BLANK in credentialErrors) {
+                                                { Text(stringResource(R.string.topology_v3_auth_password_blank)) }
+                                            } else {
+                                                null
+                                            },
                                         modifier = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
                                         singleLine = true,
                                         visualTransformation =
@@ -477,6 +510,13 @@ private fun TopologyScreenContent(
                                         value = v3PrivPassword,
                                         onValueChange = { v3PrivPassword = it },
                                         label = { Text(stringResource(R.string.topology_v3_priv_password_label)) },
+                                        isError = ErrorCode.SNMP_V3_PRIV_PASSWORD_BLANK in credentialErrors,
+                                        supportingText =
+                                            if (ErrorCode.SNMP_V3_PRIV_PASSWORD_BLANK in credentialErrors) {
+                                                { Text(stringResource(R.string.topology_v3_priv_password_blank)) }
+                                            } else {
+                                                null
+                                            },
                                         modifier = Modifier.fillMaxWidth().scrollIntoViewOnFocus(),
                                         singleLine = true,
                                         visualTransformation =
@@ -540,16 +580,8 @@ private fun TopologyScreenContent(
                 Text(stringResource(R.string.topology_discover_button))
             }
 
-            if (!canStartDiscovery && !isInProgress) {
-                DisabledActionHint(
-                    stringResource(
-                        if (normalizedTargetIp == null) {
-                            R.string.topology_discover_disabled_target
-                        } else {
-                            R.string.topology_discover_disabled_v3
-                        },
-                    ),
-                )
+            if (disabledReasonRes != null && !isInProgress) {
+                DisabledActionHint(stringResource(disabledReasonRes))
             }
 
             AnimatedVisibility(visible = isInProgress) {
@@ -583,7 +615,7 @@ private fun TopologyScreenContent(
 
         Column(modifier = Modifier.weight(1f)) {
             val retainedGraph =
-                when (val state = uiState) {
+                when (val state = shownUiState) {
                     is TopologyUiState.Done -> state.graph
                     is TopologyUiState.Discovering -> retainedTopologyGraph(state.nodes, state.links)
                     is TopologyUiState.Canceling -> retainedTopologyGraph(state.nodes, state.links)
@@ -593,7 +625,7 @@ private fun TopologyScreenContent(
                 }
             retainedGraph?.let { graph ->
                 val reportStatus =
-                    when (uiState) {
+                    when (shownUiState) {
                         is TopologyUiState.Discovering -> stringResource(R.string.topology_report_status_running)
                         is TopologyUiState.Canceling -> stringResource(R.string.topology_report_status_stopping)
                         is TopologyUiState.Canceled -> stringResource(R.string.topology_report_status_canceled)
@@ -609,7 +641,7 @@ private fun TopologyScreenContent(
                 )
             }
             AnimatedContent(
-                targetState = uiState,
+                targetState = shownUiState,
                 contentKey = { it::class },
                 transitionSpec = {
                     fadeIn(AppMotion.enter(300)) togetherWith fadeOut(AppMotion.exit(300))
@@ -717,7 +749,9 @@ private fun TopologyScreenContent(
                                 },
                             retryEnabled = canStartDiscovery,
                             onRetry = {
-                                onRetryDiscovery(currentTopologyParams())
+                                val params = currentTopologyParams()
+                                failedRunParams = params
+                                onRetryDiscovery(params)
                                 configExpanded = false
                             },
                         )
@@ -729,45 +763,45 @@ private fun TopologyScreenContent(
 
     if (selectedNode != null) {
         val queriedNodes =
-            when (uiState) {
-                is TopologyUiState.Done -> uiState.graph.nodes
-                is TopologyUiState.Discovering -> uiState.nodes
-                is TopologyUiState.Canceling -> uiState.nodes
-                is TopologyUiState.Canceled -> uiState.nodes
-                is TopologyUiState.TimeLimit -> uiState.nodes
+            when (shownUiState) {
+                is TopologyUiState.Done -> shownUiState.graph.nodes
+                is TopologyUiState.Discovering -> shownUiState.nodes
+                is TopologyUiState.Canceling -> shownUiState.nodes
+                is TopologyUiState.Canceled -> shownUiState.nodes
+                is TopologyUiState.TimeLimit -> shownUiState.nodes
                 else -> emptyList()
             }
         NodeDetailSheet(
             node = selectedNode,
             queriedNodeIps = queriedNodes.mapTo(mutableSetOf()) { it.ip },
             links =
-                when (uiState) {
+                when (shownUiState) {
                     is TopologyUiState.Done -> {
-                        uiState.graph.links.filter {
+                        shownUiState.graph.links.filter {
                             it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
                         }
                     }
 
                     is TopologyUiState.Discovering -> {
-                        uiState.links.filter {
+                        shownUiState.links.filter {
                             it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
                         }
                     }
 
                     is TopologyUiState.Canceling -> {
-                        uiState.links.filter {
+                        shownUiState.links.filter {
                             it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
                         }
                     }
 
                     is TopologyUiState.Canceled -> {
-                        uiState.links.filter {
+                        shownUiState.links.filter {
                             it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
                         }
                     }
 
                     is TopologyUiState.TimeLimit -> {
-                        uiState.links.filter {
+                        shownUiState.links.filter {
                             it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
                         }
                     }
@@ -1025,6 +1059,7 @@ private fun TopologyProgressContent(
                 modifier =
                     Modifier
                         .align(Alignment.TopStart)
+                        .fillMaxWidth()
                         .padding(12.dp),
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.tertiaryContainer,
@@ -2014,4 +2049,28 @@ private fun deviceIcon(capabilities: Set<DeviceCapability>): androidx.compose.ui
         capabilities.contains(DeviceCapability.AP) -> Icons.Default.Wifi
         capabilities.contains(DeviceCapability.PHONE) -> Icons.Default.Phone
         else -> Icons.Default.Computer
+    }
+
+private val SCROLL_CUE_HEIGHT = 24.dp
+
+/** Fades the bottom edge of a scrolling area while more content sits below the visible part. */
+private fun Modifier.drawScrollCue(
+    scrollState: ScrollState,
+    color: Color,
+): Modifier =
+    drawWithContent {
+        drawContent()
+        if (scrollState.canScrollForward) {
+            val cueHeight = SCROLL_CUE_HEIGHT.toPx()
+            drawRect(
+                brush =
+                    Brush.verticalGradient(
+                        colors = listOf(color.copy(alpha = 0f), color),
+                        startY = size.height - cueHeight,
+                        endY = size.height,
+                    ),
+                topLeft = Offset(0f, size.height - cueHeight),
+                size = Size(size.width, cueHeight),
+            )
+        }
     }
