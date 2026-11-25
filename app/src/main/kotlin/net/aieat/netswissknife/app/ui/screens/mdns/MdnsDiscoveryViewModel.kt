@@ -8,6 +8,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
@@ -70,6 +73,8 @@ data class MdnsDiscoveryUiState(
     val networkErrorKind: NetworkErrorKind = NetworkErrorKind.GENERAL,
     /** The network changed after services were found; those services are kept and a note is shown. */
     val networkInterrupted: Boolean = false,
+    /** Services listed before the network changed were cleared; the screen says so until the next scan or Clear. */
+    val resultsClearedForNetworkChange: Boolean = false,
 )
 
 /**
@@ -84,6 +89,15 @@ internal fun MdnsDiscoveryUiState.startingScan(): MdnsDiscoveryUiState =
         services = services,
         servicesByType = servicesByType,
         truncationReasons = truncationReasons,
+    )
+
+/**
+ * A change of network drops every listed service, because they were found on the old network.
+ * The new state is built from scratch, so a running scan's state is dropped with them.
+ */
+internal fun MdnsDiscoveryUiState.afterNetworkChange(): MdnsDiscoveryUiState =
+    MdnsDiscoveryUiState(
+        resultsClearedForNetworkChange = services.isNotEmpty(),
     )
 
 @HiltViewModel
@@ -121,6 +135,14 @@ class MdnsDiscoveryViewModel
                     stopTimer()
                 },
             )
+            // The first value is the network already in use when the screen opens, so it is not a change.
+            viewModelScope.launch {
+                networkStatus
+                    .map { it.networkId }
+                    .distinctUntilChanged()
+                    .drop(1)
+                    .collect { onNetworkChanged() }
+            }
         }
 
         fun startScan(timeoutMs: Long = DEFAULT_SCAN_DURATION_MS) {
@@ -244,6 +266,14 @@ class MdnsDiscoveryViewModel
             }
             scanJob?.cancel(OperationCancellationException(reason))
             scanJob = null
+        }
+
+        /** Stops a scan that was running on the old network and clears everything it listed. */
+        private fun onNetworkChanged() {
+            activeScanGeneration = null
+            cancelScan(CancellationReason.NETWORK_LOST)
+            stopTimer()
+            _uiState.update { previous -> previous.afterNetworkChange() }
         }
 
         /** Clears a failed scan's message only; the services found so far stay listed. */

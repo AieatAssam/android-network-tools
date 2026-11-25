@@ -802,23 +802,15 @@ private fun WifiSpectrumSection(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                WifiShareActionsRow(state.result)
-
-                state.result.connectedNetwork?.let { connectionInfo ->
-                    WifiConnectedNetworkCard(connectionInfo)
-                }
-
-                // Band tabs: All first, then one tab per detected band
-                if (state.result.detectedBands.size > 1) {
+                // Band tabs and the spectrum toggle sit directly under the search box so they are reachable
+                // at phone width without scrolling past the connected card. All first, then one tab per band seen.
+                if (state.result.detectedBands.isNotEmpty()) {
                     WifiBandTabRow(
                         detectedBands = state.result.detectedBands,
                         selected = state.bandFilter,
                         onSelect = { onBandFilter(it) },
                     )
                 }
-
-                // Best-channel callout (2.4 GHz only)
-                WifiBestChannelSection(state)
 
                 if (spectrumBand != null && spectrumAvailable) {
                     WifiSpectrumSection(
@@ -828,6 +820,15 @@ private fun WifiSpectrumSection(
                         expanded = spectrumExpanded,
                         onToggle = { spectrumExpanded = !spectrumExpanded },
                     )
+                }
+
+                // Best-channel callout (2.4 GHz only)
+                WifiBestChannelSection(state)
+
+                WifiShareActionsRow(state.result)
+
+                state.result.connectedNetwork?.let { connectionInfo ->
+                    WifiConnectedNetworkCard(connectionInfo)
                 }
 
                 WifiSortRow(

@@ -1465,6 +1465,7 @@
     <string name="mdns_error_no_local_network">mDNS needs a Wi-Fi or Ethernet network. Your VPN or mobile data cannot discover local devices.</string>
     <string name="mdns_error_network_failed">Local network traffic stopped. A VPN or a network change can block local discovery. Reconnect to Wi-Fi or Ethernet, then scan again.</string>
     <string name="mdns_interrupted_notice">The network changed during the scan. Showing the services found before it changed.</string>
+    <string name="mdns_network_changed_notice">The network changed, so the services found on the old network were cleared. Scan again to list services on this network.</string>
     <string name="mdns_scan_button">Scan Network</string>
     <string name="mdns_stop_button">Stop</string>
     <string name="mdns_canceling_button">Canceling…</string>
@@ -1709,13 +1710,14 @@
         <item>Auto-refresh: choose Off, 15, 30, or 60 seconds.</item>
         <item>If Android throttles a request, the screen shows the cached result age.</item>
         <item>Location Services must be enabled for Android to return scan results.</item>
-        <item>Band filter: show only the networks on one detected band (2.4 GHz, 5 GHz or 6 GHz). A band gets a tab once it is seen.</item>
+        <item>Band filter: show only the networks on one detected band (2.4 GHz, 5 GHz or 6 GHz). A band gets a tab once it is seen. The band tabs and Show spectrum sit under the search box.</item>
         <item>Sort: order by signal strength, channel, or SSID.</item>
     </string-array>
     <string-array name="help_wifi_results_bullets">
-        <item>The spectrum chart shows AP signal curves by frequency.</item>
+        <item>Show spectrum opens a chart of AP signal curves by frequency for the selected band.</item>
         <item>Overlapping curves mean channel congestion: multiple networks competing for the same slice of spectrum.</item>
         <item>The Best Channel callout recommends the least-congested 2.4 GHz channel.</item>
+        <item>Each network row has a coloured bar. The same colour marks that network\'s curves on the spectrum chart.</item>
         <item>Tap a network to expand per-BSSID details; tap an AP row for full connection detail.</item>
     </string-array>
 
@@ -1851,13 +1853,14 @@
     <string-array name="help_mdns_params_bullets">
         <item>Scan: runs an 8-second discovery window. Run it again to catch devices that announce infrequently; each scan adds to the list.</item>
         <item>Stop: ends the current scan early.</item>
-        <item>Clear: removes every result from the list.</item>
+        <item>Clear: removes every result from the list. It is available when no scan is running. Results are also cleared when the network changes.</item>
     </string-array>
     <string-array name="help_mdns_results_bullets">
         <item>Group switches the list between By type, which groups services by service type such as _http._tcp or _airplay._tcp, and By device, which groups them by hostname, address, or instance name.</item>
         <item>Tap a group to expand it and see individual service instances.</item>
-        <item>Each instance shows its hostname, IP address, port, and any TXT record properties.</item>
-        <item>Copy and Share sit above the groups and export the list as it is currently filtered.</item>
+        <item>Each instance shows its hostname, IP address and port. Instances that advertise TXT record properties can be expanded to show them.</item>
+        <item>Copy and Share sit above the groups and export the list as it is currently filtered. They are hidden when the filter matches nothing.</item>
+        <item>Names are shown as the device advertised them. Some devices advertise only an identifier, which then appears as the name.</item>
     </string-array>
 
     <!-- Speed Test help -->
@@ -2090,6 +2093,8 @@
     <string name="netinfo_dns">DNS servers</string>
     <string name="netinfo_mtu">MTU</string>
     <string name="netinfo_mac">MAC address</string>
+    <string name="netinfo_show_all_addresses">Show all %1$d addresses</string>
+    <string name="netinfo_show_fewer_addresses">Show fewer addresses</string>
     <string name="netinfo_mac_randomized">Locally administered (randomized or private) address.</string>
     <string name="netinfo_mac_hidden">Hidden by Android 10 and newer. Apps cannot read the hardware address on this version.</string>
     <string name="netinfo_mac_not_reported">Not reported by this Android version.</string>

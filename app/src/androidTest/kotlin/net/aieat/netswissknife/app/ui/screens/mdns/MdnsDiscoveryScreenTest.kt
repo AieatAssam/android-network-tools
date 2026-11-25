@@ -532,6 +532,19 @@ class MdnsDiscoveryScreenTest {
         txtRecords = emptyMap(),
     )
 
+    @Test
+    fun networkChange_saysThatTheEarlierResultsWereCleared() {
+        val stateFlow = MutableStateFlow(MdnsDiscoveryUiState(resultsClearedForNetworkChange = true))
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                MdnsDiscoveryScreen(viewModel = fakeViewModel(flow = stateFlow))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.mdns_network_changed_notice)).assertIsDisplayed()
+    }
+
     private fun fakeViewModel(
         state: MdnsDiscoveryUiState? = null,
         flow: MutableStateFlow<MdnsDiscoveryUiState>? = null,
