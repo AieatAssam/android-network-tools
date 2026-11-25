@@ -107,34 +107,34 @@ class SettingsViewModelTest {
         }
 
         @Test
-        fun `setDefaultPingCount coerces into 1 to 100`() = runTest {
-            viewModel.setDefaultPingCount(500)
-            assertEquals(100, prefsFlow.value[AppPreferenceKeys.DEFAULT_PING_COUNT])
-
-            viewModel.setDefaultPingCount(-5)
-            assertEquals(1, prefsFlow.value[AppPreferenceKeys.DEFAULT_PING_COUNT])
-
-            viewModel.setDefaultPingCount(25)
-            assertEquals(25, prefsFlow.value[AppPreferenceKeys.DEFAULT_PING_COUNT])
-        }
+        fun `setDefaultPingCount writes the nearest step Ping accepts`() =
+            runTest {
+                viewModel.setDefaultPingCount(500)
+                assertEquals(100, prefsFlow.value[AppPreferenceKeys.DEFAULT_PING_COUNT])
+                viewModel.setDefaultPingCount(25)
+                assertEquals(20, prefsFlow.value[AppPreferenceKeys.DEFAULT_PING_COUNT])
+            }
 
         @Test
-        fun `setDefaultTimeoutMs coerces into 100 to 30000`() = runTest {
-            viewModel.setDefaultTimeoutMs(999_999)
-            assertEquals(30_000, prefsFlow.value[AppPreferenceKeys.DEFAULT_TIMEOUT_MS])
+        fun `setDefaultTimeoutMs writes the nearest Ping timeout chip`() =
+            runTest {
+                viewModel.setDefaultTimeoutMs(999_999)
+                assertEquals(10_000, prefsFlow.value[AppPreferenceKeys.DEFAULT_TIMEOUT_MS])
+                viewModel.setDefaultTimeoutMs(500)
+                assertEquals(1_000, prefsFlow.value[AppPreferenceKeys.DEFAULT_TIMEOUT_MS])
 
-            viewModel.setDefaultTimeoutMs(1)
-            assertEquals(100, prefsFlow.value[AppPreferenceKeys.DEFAULT_TIMEOUT_MS])
-        }
+                viewModel.setDefaultTimeoutMs(3_000)
+                assertEquals(3_000, prefsFlow.value[AppPreferenceKeys.DEFAULT_TIMEOUT_MS])
+            }
 
         @Test
-        fun `setDefaultConcurrency coerces into 1 to 500`() = runTest {
-            viewModel.setDefaultConcurrency(999)
-            assertEquals(500, prefsFlow.value[AppPreferenceKeys.DEFAULT_CONCURRENCY])
-
-            viewModel.setDefaultConcurrency(0)
-            assertEquals(1, prefsFlow.value[AppPreferenceKeys.DEFAULT_CONCURRENCY])
-        }
+        fun `setDefaultConcurrency writes the nearest Port Scanner step`() =
+            runTest {
+                viewModel.setDefaultConcurrency(999)
+                assertEquals(500, prefsFlow.value[AppPreferenceKeys.DEFAULT_CONCURRENCY])
+                viewModel.setDefaultConcurrency(35)
+                assertEquals(25, prefsFlow.value[AppPreferenceKeys.DEFAULT_CONCURRENCY])
+            }
 
         @Test
         fun `defaultConcurrency clamps stale stored values for display`() = runTest {

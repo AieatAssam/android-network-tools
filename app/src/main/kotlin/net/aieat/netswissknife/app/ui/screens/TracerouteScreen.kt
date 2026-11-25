@@ -408,9 +408,21 @@ private fun TracerouteSettingsSummary(
     maxHops: Int,
     probesPerHop: Int,
     timeoutMs: Int,
+    probeType: TracerouteProbeType,
+    packetSize: Int,
+    busy: TracerouteBusy?,
     onExpand: () -> Unit,
 ) {
     val probesText = pluralStringResource(R.plurals.traceroute_probes_per_hop, probesPerHop, probesPerHop)
+    val protocol =
+        if (probeType == TracerouteProbeType.ICMP) R.string.traceroute_probe_icmp else R.string.traceroute_probe_udp
+    val protocolText = stringResource(protocol)
+    val sizeText =
+        if (packetSize == 0) {
+            stringResource(R.string.traceroute_settings_summary_mtu)
+        } else {
+            stringResource(R.string.traceroute_packet_size_value, packetSize)
+        }
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
@@ -424,15 +436,53 @@ private fun TracerouteSettingsSummary(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = stringResource(R.string.traceroute_settings_summary, maxHops, probesText, timeoutMs),
+                    text =
+                        stringResource(
+                            R.string.traceroute_settings_summary,
+                            maxHops,
+                            probesText,
+                            timeoutMs,
+                            protocolText,
+                            sizeText,
+                        ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            TextButton(onClick = onExpand) {
-                Text(stringResource(R.string.traceroute_settings_show))
+            if (busy == null) {
+                TextButton(onClick = onExpand) {
+                    Text(stringResource(R.string.traceroute_settings_show))
+                }
+            } else {
+                TracerouteBusyAction(busy, Modifier)
             }
         }
+    }
+}
+
+/** A running trace offers Stop; once Stop is pressed it shows progress until the trace ends. */
+private class TracerouteBusy(
+    val isCanceling: Boolean,
+    val onStop: () -> Unit,
+)
+
+@Composable
+private fun TracerouteBusyAction(
+    busy: TracerouteBusy,
+    modifier: Modifier,
+) {
+    if (busy.isCanceling) {
+        Button(onClick = {}, enabled = false, modifier = modifier) {
+            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.traceroute_canceling_button))
+        }
+    } else {
+        ToolStopButton(
+            text = stringResource(R.string.traceroute_stop_button),
+            onClick = busy.onStop,
+            modifier = modifier,
+        )
     }
 }
 
@@ -469,6 +519,9 @@ private fun TracerouteInputCard(
             maxHops = maxHops,
             probesPerHop = probesPerHop,
             timeoutMs = timeoutMs,
+            probeType = probeType,
+            packetSize = packetSize,
+            busy = if (isRunning || isCanceling) TracerouteBusy(isCanceling, onStop) else null,
             onExpand = onExpandSettings,
         )
         return
@@ -603,26 +656,7 @@ private fun TracerouteInputCard(
 
             // Action button
             if (isBusy) {
-                if (isCanceling) {
-                    Button(
-                        onClick = {},
-                        enabled = false,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.traceroute_canceling_button))
-                    }
-                } else {
-                    ToolStopButton(
-                        text = stringResource(R.string.traceroute_stop_button),
-                        onClick = onStop,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+                TracerouteBusyAction(TracerouteBusy(isCanceling, onStop), Modifier.fillMaxWidth())
             } else {
                 TracerouteStartAction(
                     canStart = canStart,
@@ -674,7 +708,10 @@ private fun SliderRow(
     enabled: Boolean,
     onValueChangeFinished: (Int) -> Unit,
 ) {
-    var localValue by remember(value) { mutableIntStateOf(scale.snap(value.toFloat())) }
+    // A value off the presets, such as one restored from an older version, is shown as it is until moved.
+    var localValue by remember(value) {
+        mutableIntStateOf(if (scale.presets.isEmpty()) scale.snap(value.toFloat()) else value)
+    }
     Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -690,10 +727,10 @@ private fun SliderRow(
             )
         }
         Slider(
-            value = localValue.toFloat(),
-            onValueChange = { localValue = scale.snap(it) },
+            value = scale.positionOf(localValue),
+            onValueChange = { localValue = scale.valueAt(it) },
             onValueChangeFinished = { onValueChangeFinished(localValue) },
-            valueRange = scale.range.first.toFloat()..scale.range.last.toFloat(),
+            valueRange = scale.positions,
             steps = scale.steps.takeIf { it <= MAX_SLIDER_TICKS } ?: 0,
             enabled = enabled,
         )

@@ -38,6 +38,18 @@ class TlsCertificateRoleTest {
         assertEquals(TlsCertificateRole.INTERMEDIATE, certificateRoleOf(1, chain))
     }
 
+    @Test
+    fun `a self-signed certificate is the root wherever the server sends it`() {
+        val chain =
+            listOf(
+                cert("leaf", selfSigned = false),
+                cert("root", selfSigned = true),
+                cert("cross-signed", selfSigned = false),
+            )
+        assertEquals(TlsCertificateRole.ROOT, certificateRoleOf(1, chain))
+        assertEquals(TlsCertificateRole.INTERMEDIATE, certificateRoleOf(2, chain))
+    }
+
     private fun cert(
         name: String,
         selfSigned: Boolean,

@@ -200,5 +200,42 @@ class MapLabelLayoutTest {
             assertEquals(1, MapLabelLayout.clusterAt(clusters, points, 290f, 100f, 24f))
             assertNull(MapLabelLayout.clusterAt(clusters, points, 200f, 200f, 24f))
         }
+
+        @Test
+        fun `a tap on a label selects its cluster, not nothing`() {
+            val points = listOf(point(100f, 100f), point(300f, 300f))
+            val clusters = clustersOf(*points.toTypedArray())
+            val labels = listOf(PlacedLabel(1, "2", PixelBox(320f, 292f, 380f, 308f), LabelAnchor.RIGHT))
+
+            assertEquals(1, MapLabelLayout.hitCluster(clusters, points, labels, 370f, 300f, 24f))
+            assertNull(MapLabelLayout.clusterAt(clusters, points, 370f, 300f, 24f))
+        }
+
+        @Test
+        fun `a label's target is at least 48 px tall for a 24 px touch radius`() {
+            val points = listOf(point(100f, 100f), point(300f, 300f))
+            val clusters = clustersOf(*points.toTypedArray())
+            val labels = listOf(PlacedLabel(1, "2", PixelBox(330f, 292f, 380f, 308f), LabelAnchor.RIGHT))
+
+            assertEquals(1, MapLabelLayout.hitCluster(clusters, points, labels, 360f, 323f, 24f))
+            assertNull(MapLabelLayout.hitCluster(clusters, points, labels, 360f, 326f, 24f))
+        }
+
+        @Test
+        fun `a marker wins over a label that overlaps its touch radius`() {
+            val points = listOf(point(100f, 100f), point(130f, 100f))
+            val clusters = clustersOf(*points.toTypedArray())
+            val labels = listOf(PlacedLabel(1, "2", PixelBox(90f, 92f, 150f, 108f), LabelAnchor.RIGHT))
+
+            assertEquals(0, MapLabelLayout.hitCluster(clusters, points, labels, 102f, 100f, 24f))
+        }
+
+        @Test
+        fun `a tap away from every marker and label selects nothing`() {
+            val points = listOf(point(100f, 100f))
+            val labels = listOf(PlacedLabel(0, "1", PixelBox(110f, 92f, 130f, 108f), LabelAnchor.RIGHT))
+
+            assertNull(MapLabelLayout.hitCluster(clustersOf(*points.toTypedArray()), points, labels, 400f, 400f, 24f))
+        }
     }
 }

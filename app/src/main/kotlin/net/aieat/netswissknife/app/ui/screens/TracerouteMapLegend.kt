@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -28,6 +29,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -41,12 +45,15 @@ import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapLegendContent
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapSizing
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.MarkerNote
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.RouteClassification
+import net.aieat.netswissknife.app.ui.screens.traceroute.map.ScreenPoint
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.Stability
 import kotlin.math.roundToInt
 
 private const val PERCENT = 100
 private val LegendSampleWidth = 28.dp
 private val LegendSampleHeight = 14.dp
+private val MarkerSampleHeight = 24.dp
+private const val HEAD_SAMPLE_PULSE = 0.4f
 
 /**
  * Text legend for exactly the colours, widths, line patterns and markers the map draws, all read from
@@ -133,14 +140,44 @@ private fun MarkingLegend(
     if (content.linePatterns.isNotEmpty()) {
         LineLegend(content.linePatterns, content.singleProbeTrace, colorFor(null))
     }
+    val colors = mapColors()
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
     content.markers.forEach { marker ->
-        val text =
-            when (marker) {
-                MarkerNote.HEAD -> R.string.traceroute_map_marker_head
-                MarkerNote.DESTINATION -> R.string.traceroute_map_marker_destination
-                MarkerNote.DISPUTED -> R.string.traceroute_map_marker_disputed
+        when (marker) {
+            MarkerNote.HEAD -> {
+                MarkerRow(stringResource(R.string.traceroute_map_marker_head)) {
+                    drawMarker(it, muted, colors, disputed = false, destination = false)
+                    drawHeadRing(ScreenPoint(it.x, it.y), HEAD_SAMPLE_PULSE, colors.selected)
+                }
             }
-        LegendNote(stringResource(text))
+
+            MarkerNote.DESTINATION -> {
+                MarkerRow(stringResource(R.string.traceroute_map_marker_destination)) {
+                    drawMarker(it, muted, colors, disputed = false, destination = true)
+                }
+            }
+
+            MarkerNote.DISPUTED -> {
+                MarkerRow(stringResource(R.string.traceroute_map_marker_disputed)) {
+                    drawMarker(it, colors.disputed, colors, disputed = true, destination = false)
+                }
+            }
+        }
+    }
+    MarkerRow(stringResource(R.string.traceroute_map_marker_selected)) {
+        drawMarker(it, muted, colors, disputed = false, destination = false)
+        drawCircle(colors.selected, SelectedRingRadius.toPx(), it, style = Stroke(SelectedRingWidth.toPx()))
+    }
+}
+
+@Composable
+private fun MarkerRow(
+    text: String,
+    sample: DrawScope.(Offset) -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Canvas(modifier = Modifier.width(LegendSampleWidth).height(MarkerSampleHeight)) { sample(center) }
+        LegendNote(text)
     }
 }
 
@@ -233,8 +270,14 @@ private fun LegendRow(
         val sampleModifier =
             Modifier.width(LegendSampleWidth).heightIn(min = LegendSampleHeight, max = LegendSampleHeight)
         Canvas(modifier = sampleModifier) {
+            // A path, not drawLine: some devices ignore a path effect on a line and draw it solid.
             val y = size.height / 2f
-            drawLine(color, Offset(0f, y), Offset(size.width, y), stroke.width, stroke.cap, stroke.pathEffect)
+            val line =
+                Path().apply {
+                    moveTo(0f, y)
+                    lineTo(size.width, y)
+                }
+            drawPath(line, color, style = stroke)
         }
         LegendNote(text)
     }

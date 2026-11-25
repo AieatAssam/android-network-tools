@@ -50,10 +50,8 @@ private val DashOn = 10.dp
 private val DashOff = 6.dp
 private val DotGap = 6.dp
 internal val MarkerRadius = 6.dp
-private val MarkerRingWidth = 1.5.dp
-private val DestinationRingRadius = 10.dp
-private val SelectedRingRadius = 13.dp
-private val SelectedRingWidth = 2.dp
+internal val SelectedRingRadius = 13.dp
+internal val SelectedRingWidth = 2.dp
 private val HeadRingGrowth = 10.dp
 private val SelectedArcHalo = 6.dp
 internal val LabelOffset = 8.dp
@@ -109,15 +107,7 @@ internal fun rememberRouteDrawing(
     val textMeasurer = rememberTextMeasurer()
     val scheme = MaterialTheme.colorScheme
     val labelStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = scheme.onSurface)
-    val colors =
-        MapColors(
-            ocean = scheme.surfaceContainerHigh,
-            land = scheme.outlineVariant,
-            surface = scheme.surface,
-            outline = scheme.onSurface,
-            selected = scheme.primary,
-            disputed = scheme.error,
-        )
+    val colors = mapColors()
     return remember(map, density, colorFor, labelStyle, colors) {
         RouteDrawing(
             map = map,
@@ -245,7 +235,7 @@ internal fun DrawScope.drawRoute(
     }
 }
 
-private fun DrawScope.drawHeadRing(
+internal fun DrawScope.drawHeadRing(
     point: ScreenPoint,
     pulse: Float,
     color: Color,
@@ -294,19 +284,10 @@ private fun DrawScope.drawStop(
 ) {
     val colors = drawing.colors
     val center = Offset(point.x, point.y)
-    val radius = MarkerRadius.toPx()
-    val ringWidth = MarkerRingWidth.toPx()
     if (stop.hops.any { it.hopNumber in selectedHops }) {
         drawCircle(colors.selected, SelectedRingRadius.toPx(), center, style = Stroke(SelectedRingWidth.toPx()))
     }
-    if (stop.isDestination) drawCircle(colors.outline, DestinationRingRadius.toPx(), center, style = Stroke(ringWidth))
-    if (stop.disputed) {
-        drawCircle(colors.surface, radius, center)
-        drawCircle(fill, radius, center, style = Stroke(ringWidth * 2))
-    } else {
-        drawCircle(fill, radius, center)
-        drawCircle(colors.surface, radius, center, style = Stroke(ringWidth))
-    }
+    drawMarker(center, fill, colors, disputed = stop.disputed, destination = stop.isDestination)
 }
 
 private fun DrawScope.drawLabel(

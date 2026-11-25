@@ -74,7 +74,7 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun concurrencySliderSupportsPersistedRangeThrough500() {
+    fun concurrencySliderStepsThroughThePortScannerValues() {
         val viewModel = mockk<SettingsViewModel>(relaxed = true)
         every { viewModel.themeOverride } returns MutableStateFlow("SYSTEM")
         every { viewModel.dynamicColor } returns MutableStateFlow(true)
@@ -99,9 +99,10 @@ class SettingsScreenTest {
                 .onNodeWithTag(SettingsScreenTestTags.DEFAULT_CONCURRENCY_SLIDER)
                 .fetchSemanticsNode()
         val range = slider.config[SemanticsProperties.ProgressBarRangeInfo]
-        assertEquals(500f, range.current)
-        assertEquals(1f..500f, range.range)
-        assertEquals(0, range.steps)
+        val steps = SettingSteps.CONCURRENCY
+        assertEquals(steps.lastIndex.toFloat(), range.current)
+        assertEquals(0f..steps.lastIndex.toFloat(), range.range)
+        assertEquals(steps.sliderSteps, range.steps)
     }
 
     private val context

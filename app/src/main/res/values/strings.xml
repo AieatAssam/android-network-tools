@@ -709,7 +709,8 @@
         <item quantity="one">Trace stopped when you left the screen. %1$d hop kept as a partial result.</item>
         <item quantity="other">Trace stopped when you left the screen. %1$d hops kept as partial results.</item>
     </plurals>
-    <string name="traceroute_settings_summary">%1$d hops · %2$s · %3$d ms timeout</string>
+    <string name="traceroute_settings_summary">%1$d hops · %2$s · %3$d ms timeout · %4$s · %5$s</string>
+    <string name="traceroute_settings_summary_mtu">MTU discovery</string>
     <plurals name="traceroute_probes_per_hop">
         <item quantity="one">%1$d probe per hop</item>
         <item quantity="other">%1$d probes per hop</item>
@@ -837,6 +838,7 @@
     <string name="traceroute_map_live_head">newest located hop %1$s</string>
     <string name="traceroute_map_marker_destination">Double ring: the destination answered here</string>
     <string name="traceroute_map_marker_disputed">Hollow marker: GeoIP location contradicted by the measured RTT; not on the drawn route</string>
+    <string name="traceroute_map_marker_selected">Highlighted ring or outline: the hop or line you tapped. Tap it again to clear.</string>
     <string name="traceroute_map_attribution">Base map: Natural Earth (public domain)</string>
     <string name="traceroute_map_attribution_title">Traceroute map: Natural Earth</string>
     <string name="traceroute_map_attribution_body">The Traceroute route map draws land from Natural Earth 1:110m data, which is in the public domain. The map ships with the app and works offline; no map tiles are downloaded.</string>
@@ -1377,6 +1379,7 @@
     <string name="settings_ping_count_label">Default ping count: %1$d</string>
     <string name="settings_ping_count_usage">Used by Ping.</string>
     <string name="settings_timeout_label">Default timeout: %1$d ms</string>
+    <string name="settings_timeout_value">%1$d ms</string>
     <string name="settings_timeout_usage">Used by Ping, Port Scanner and LAN Scanner.</string>
     <string name="settings_concurrency_label">Default concurrency: %1$d</string>
     <string name="settings_concurrency_usage">Used by Port Scanner and LAN Scanner.</string>
@@ -1398,6 +1401,9 @@
     <string name="settings_source_code_label">Source Code</string>
     <string name="settings_source_code_url">github.com/AieatAssam/android-network-tools</string>
     <string name="settings_source_code_link" translatable="false">https://github.com/AieatAssam/android-network-tools</string>
+    <string name="settings_privacy_policy_label">Privacy policy</string>
+    <string name="settings_privacy_policy_link_text">Open on GitHub</string>
+    <string name="settings_privacy_policy_link" translatable="false">https://github.com/AieatAssam/android-network-tools/blob/main/PRIVACY_POLICY.md</string>
 
     <!-- Settings – Data Source Attributions -->
     <string name="settings_attributions_section">Data Source Attributions</string>
@@ -1562,10 +1568,10 @@
     <!-- Settings – Guide section -->
     <string name="settings_guide_section">Guide</string>
     <string name="settings_reset_onboarding_label">Welcome guide</string>
-    <string name="settings_reset_onboarding_subtitle">Show the welcome guide again on next app launch.</string>
+    <string name="settings_reset_onboarding_subtitle">Show the welcome guide again.</string>
     <string name="settings_reset_onboarding_button">Reset welcome guide</string>
     <string name="settings_reset_onboarding_confirm_title">Reset welcome guide?</string>
-    <string name="settings_reset_onboarding_confirm_message">The welcome guide will appear the next time you open the app.</string>
+    <string name="settings_reset_onboarding_confirm_message">The welcome guide opens straight away.</string>
     <string name="settings_reset_onboarding_confirm_button">Reset</string>
 
     <!-- Help button content description -->
@@ -1607,6 +1613,7 @@
         <item>Probe protocol: ICMP is more likely to get a reply; UDP mimics the traditional traceroute tool.</item>
         <item>Probes per hop: how many probes to send at each hop count, 3 by default. With 2 or more, each hop shows whether its replies were steady.</item>
         <item>Timeout per hop: how long to wait for each reply, in steps of 0.5 s.</item>
+        <item>Packet size: picked from common sizes between 28 and 1472 bytes, 56 by default. MTU discovery picks the size for you.</item>
     </string-array>
     <string-array name="help_traceroute_results_bullets">
         <item>Each row is one hop count, from 1 to the destination. Rows appear as replies arrive, and stay in hop order.</item>
@@ -1618,7 +1625,7 @@
         <item>Arc colour is the median RTT of the hop it arrives at, the same colours as the hop list. A thicker arc covered more distance per ms of added RTT.</item>
         <item>Line patterns: solid means every probe answered with low jitter; dotted means lost probes or high jitter; dash and dot means stability was not measured, because one probe was sent or the trace was stopped first; grey dashes mean the hops in between are unknown, with no latency or speed shown.</item>
         <item>A hollow marker is a hop whose GeoIP location the measured RTT rules out, often an anycast address; it is shown but not joined into the route.</item>
-        <item>Tap a marker or a line for its details. Markers too close to label separately share one label, which splits again as you zoom in.</item>
+        <item>Tap a marker, its label or a line for its details, shown under the map. Tap it again to clear them. Markers too close to label separately share one label, which splits again as you zoom in.</item>
     </string-array>
 
     <!-- Port Scanner help -->
@@ -1756,8 +1763,9 @@
         <item>Optional checks: probe older TLS versions or compare the leaf certificate with an expected SHA-256 pin.</item>
     </string-array>
     <string-array name="help_tls_results_bullets">
-        <item>The connection card shows trust, hostname match, TLS version, ALPN, cipher suite, connect time, and handshake time.</item>
+        <item>The connection card shows trust, hostname match, TLS version, cipher suite, connect time, and handshake time. ALPN is shown when the server agrees an application protocol and Android reports it, which needs Android 10 or newer.</item>
         <item>Each certificate presented by the server expands to show subject, issuer, validity dates, SANs, and the SHA-256 fingerprint.</item>
+        <item>Root marks a self-signed certificate. A root that another CA has cross-signed is labelled Intermediate, because that copy was issued by the other CA.</item>
         <item>Findings include expired or not-yet-valid certificates, hostname mismatch, incomplete chains, weak keys or signatures, and self-signed certificates.</item>
         <item>Share PEM exports the certificates in the presented chain.</item>
     </string-array>
@@ -1877,7 +1885,7 @@
     </string-array>
     <string-array name="help_speedtest_results_bullets">
         <item>Average speed: the sustained throughput across the full phase.</item>
-        <item>Connect: the time to open the connection to the test server (TCP handshake), before any latency probes are sent.</item>
+        <item>TCP connect: the time to open a TCP connection to the test server, measured once before the latency probes.</item>
         <item>Peak speed: the highest burst observed.</item>
         <item>The throughput chart shows speed over time - a flat line suggests a bandwidth cap, and a jagged line suggests network instability.</item>
     </string-array>
@@ -1893,7 +1901,7 @@
     <string name="speedtest_server_info">Edge %1$s · %2$s</string>
     <string name="speedtest_server_global_edge">Global edge</string>
     <string name="speedtest_server_unknown_asn">ASN unavailable</string>
-    <string name="speedtest_connect_latency">Connect</string>
+    <string name="speedtest_connect_latency">TCP connect</string>
     <string name="speedtest_idle_latency_header">Idle latency</string>
     <string name="speedtest_loaded_latency_download">Latency under download load</string>
     <string name="speedtest_loaded_latency_upload">Latency under upload load</string>

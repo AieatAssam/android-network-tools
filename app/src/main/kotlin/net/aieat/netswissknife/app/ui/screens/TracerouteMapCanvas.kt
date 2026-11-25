@@ -292,11 +292,12 @@ private class RouteMapViewState(
         userViewport = viewport.zoomedBy(factor, at.x, at.y, width, height, anchorLon)
     }
 
-    /** The marker cluster under [tap], else the arc under it, else null. */
+    /** The marker cluster or label under [tap], else the arc under it, else null. */
     fun hitAt(tap: Offset): MapSelection? {
         val geometry = geometry
         val radius = metrics.touchRadiusPx
-        val cluster = MapLabelLayout.clusterAt(geometry.clusters, geometry.stopPoints, tap.x, tap.y, radius)
+        val cluster =
+            MapLabelLayout.hitCluster(geometry.clusters, geometry.stopPoints, geometry.labels, tap.x, tap.y, radius)
         if (cluster != null) return MapSelection.Stops(geometry.clusters[cluster].hopNumbers)
         return nearestArcIndex(geometry.arcs, tap.x, tap.y, radius)?.let { MapSelection.Segment(map.segments[it].key) }
     }

@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TextSnippet
 import androidx.compose.material.icons.filled.FmdGood
@@ -19,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -105,8 +108,8 @@ internal fun TracerouteMapCard(
                 selection = selection,
                 onSelect = { selection = it },
             )
-            OffRouteNotes(map.offRoute, live)
             MapSelectionCallout(map, selection, colorFor)
+            OffRouteNotes(map.offRoute, live)
             Text(
                 text = stringResource(R.string.traceroute_map_gesture_hint),
                 style = MaterialTheme.typography.labelSmall,
@@ -128,17 +131,24 @@ private fun MapSelectionCallout(
     selection: MapSelection?,
     colorFor: (Long?) -> Color,
 ) {
-    when (selection) {
-        is MapSelection.Stops -> {
-            MapSelection.stopsOf(map, selection).takeIf { it.isNotEmpty() }?.let { StopCallout(it, colorFor) }
-        }
+    // The map can fill the screen, so scroll the callout up into view when a tap selects something.
+    val inView = remember { BringIntoViewRequester() }
+    LaunchedEffect(selection) {
+        if (selection != null) inView.bringIntoView()
+    }
+    Column(modifier = Modifier.bringIntoViewRequester(inView)) {
+        when (selection) {
+            is MapSelection.Stops -> {
+                MapSelection.stopsOf(map, selection).takeIf { it.isNotEmpty() }?.let { StopCallout(it, colorFor) }
+            }
 
-        is MapSelection.Segment -> {
-            MapSelection.segmentOf(map, selection)?.let { SegmentCallout(map, it, colorFor) }
-        }
+            is MapSelection.Segment -> {
+                MapSelection.segmentOf(map, selection)?.let { SegmentCallout(map, it, colorFor) }
+            }
 
-        null -> {
-            Unit
+            null -> {
+                Unit
+            }
         }
     }
 }
