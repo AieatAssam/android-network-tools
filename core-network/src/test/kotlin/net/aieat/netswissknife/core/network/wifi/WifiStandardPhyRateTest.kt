@@ -22,6 +22,17 @@ class WifiStandardPhyRateTest {
     }
 
     @Test
+    fun `wifi 4 ceilings state that they assume four spatial streams`() {
+        assertEquals(4, WifiStandard.WIFI_4.phyRateCeiling(channelWidthMhz = 20).streams)
+        assertEquals(4, WifiStandard.WIFI_4.phyRateCeiling(channelWidthMhz = 40).streams)
+    }
+
+    @Test
+    fun `newer standards do not claim a stream count`() {
+        assertNull(WifiStandard.WIFI_5.phyRateCeiling(channelWidthMhz = 20).streams)
+    }
+
+    @Test
     fun `newer standards report the standard ceiling without claiming a width`() {
         val ceiling = WifiStandard.WIFI_5.phyRateCeiling(channelWidthMhz = 20)
 

@@ -16,6 +16,10 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 
 private const val MILLIS_PER_SECOND = 1_000L
+private const val HEX_RADIX = 16
+private const val HEXTET_MAX_DIGITS = 4
+private const val IPV6_LINK_LOCAL_MASK = 0xffc0
+private const val IPV6_LINK_LOCAL_PREFIX = 0xfe80
 
 /** Number of TXT entries shown before the "Show all" control. */
 internal const val MDNS_TXT_VISIBLE_LIMIT = 5
@@ -86,4 +90,15 @@ internal fun visibleTxtEntries(
 ): List<Pair<String, String>> {
     val sorted = txt.entries.map { it.key to it.value }.sortedBy { it.first }
     return if (showAll) sorted else sorted.take(MDNS_TXT_VISIBLE_LIMIT)
+}
+
+/**
+ * True for an IPv6 link-local literal (fe80::/10) written without a `%zone` suffix. The
+ * announcement does not name the interface such an address lives on, so it cannot be reached.
+ */
+internal fun isUnscopedLinkLocalIpv6(address: String): Boolean {
+    val head = address.substringBefore(':')
+    val eligible = ':' in address && '%' !in address && head.length in 1..HEXTET_MAX_DIGITS
+    val firstHextet = if (eligible) head.toIntOrNull(HEX_RADIX) else null
+    return firstHextet != null && firstHextet and IPV6_LINK_LOCAL_MASK == IPV6_LINK_LOCAL_PREFIX
 }

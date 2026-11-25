@@ -843,12 +843,16 @@ private fun WifiSpectrumSection(
 
                 if (networks.isEmpty() && searchQuery.isNotBlank()) {
                     OutlinedCard(Modifier.fillMaxWidth()) {
-                        Text(
-                            stringResource(R.string.wifi_search_no_match, searchQuery.trim()),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp),
-                        )
+                        Column(Modifier.padding(16.dp)) {
+                            Text(
+                                stringResource(R.string.wifi_search_no_match, searchQuery.trim()),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            TextButton(onClick = { searchQuery = "" }) {
+                                Text(stringResource(R.string.wifi_search_clear))
+                            }
+                        }
                     }
                 }
             }
@@ -1673,10 +1677,11 @@ internal fun WifiSecurityIndicator(security: WifiSecurity) {
 @Composable private fun maxRateText(ap: WifiAccessPoint): String {
     val ceiling = ap.standard.phyRateCeiling(ap.channelWidthMhz)
     val width = ceiling.widthMhz
-    return if (width != null) {
-        stringResource(R.string.wifi_max_rate_at_width, ceiling.label, width)
-    } else {
-        stringResource(R.string.wifi_max_rate_ceiling, ceiling.label)
+    val streams = ceiling.streams
+    return when {
+        width == null -> stringResource(R.string.wifi_max_rate_ceiling, ceiling.label)
+        streams == null -> stringResource(R.string.wifi_max_rate_at_width, ceiling.label, width)
+        else -> stringResource(R.string.wifi_max_rate_at_width_streams, ceiling.label, width, streams)
     }
 }
 
