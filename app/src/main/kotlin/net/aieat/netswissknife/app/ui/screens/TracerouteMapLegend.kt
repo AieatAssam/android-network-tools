@@ -137,8 +137,16 @@ private fun MarkingLegend(
     content: MapLegendContent,
     colorFor: (Long?) -> Color,
 ) {
-    if (content.linePatterns.isNotEmpty()) {
+    if (content.linePatterns.isNotEmpty() || content.disputedJoins) {
         LineLegend(content.linePatterns, content.singleProbeTrace, colorFor(null))
+    }
+    if (content.disputedJoins) {
+        LegendRow(
+            stringResource(R.string.traceroute_map_line_disputed),
+            colorFor(null),
+            ArcWidthMedium,
+            Stability.UNKNOWN,
+        )
     }
     val colors = mapColors()
     val muted = MaterialTheme.colorScheme.onSurfaceVariant

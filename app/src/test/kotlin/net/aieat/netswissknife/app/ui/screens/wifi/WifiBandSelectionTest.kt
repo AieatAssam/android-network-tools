@@ -49,6 +49,51 @@ class WifiBandSelectionTest {
     }
 
     @Test
+    fun `the spectrum's band choice counts exactly the access points it would plot, in band order`() {
+        val aps =
+            listOf(
+                ap("A", WifiBand.BAND_5GHZ, -40),
+                ap("B", WifiBand.BAND_2_4GHZ, -50),
+                ap("C", WifiBand.BAND_2_4GHZ, -60),
+                ap("D", WifiBand.BAND_60GHZ, -60),
+            )
+
+        val counts = spectrumBandCounts(aps)
+
+        assertEquals(listOf(WifiBand.BAND_2_4GHZ to 2, WifiBand.BAND_5GHZ to 1), counts)
+        counts.forEach { (band, count) -> assertEquals(aps.count { it.band == band }, count) }
+    }
+
+    @Test
+    fun `on the All tab a band chosen on the chart is plotted while it has access points`() {
+        val counts = listOf(WifiBand.BAND_2_4GHZ to 3, WifiBand.BAND_5GHZ to 2)
+        val detected = listOf(WifiBand.BAND_2_4GHZ, WifiBand.BAND_5GHZ)
+
+        assertEquals(WifiBand.BAND_2_4GHZ, spectrumPlotBand(null, null, null, detected, counts))
+        assertEquals(WifiBand.BAND_5GHZ, spectrumPlotBand(null, WifiBand.BAND_5GHZ, null, detected, counts))
+        // A choice whose band has no access points left falls back, and a band tab wins over the choice.
+        assertEquals(WifiBand.BAND_2_4GHZ, spectrumPlotBand(null, WifiBand.BAND_6GHZ, null, detected, counts))
+        assertEquals(
+            WifiBand.BAND_2_4GHZ,
+            spectrumPlotBand(WifiBand.BAND_2_4GHZ, WifiBand.BAND_5GHZ, null, detected, counts),
+        )
+    }
+
+    @Test
+    fun `the chart offers bands only on the All tab with more than one band`() {
+        val counts = listOf(WifiBand.BAND_2_4GHZ to 3, WifiBand.BAND_5GHZ to 2)
+
+        assertEquals(counts, spectrumBandChoices(null, counts))
+        assertEquals(emptyList<Pair<WifiBand, Int>>(), spectrumBandChoices(WifiBand.BAND_5GHZ, counts))
+        assertEquals(emptyList<Pair<WifiBand, Int>>(), spectrumBandChoices(null, counts.take(1)))
+    }
+
+    @Test
+    fun `the spectrum offers no band without access points`() {
+        assertEquals(emptyList<Pair<WifiBand, Int>>(), spectrumBandCounts(emptyList()))
+    }
+
+    @Test
     fun `All mode keeps access points from every band`() {
         val aps = listOf(ap("A", WifiBand.BAND_2_4GHZ, -40), ap("B", WifiBand.BAND_5GHZ, -60))
 

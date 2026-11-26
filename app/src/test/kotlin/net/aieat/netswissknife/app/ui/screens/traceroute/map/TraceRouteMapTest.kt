@@ -134,7 +134,7 @@ class TraceRouteMapTest {
             // Median of 80 and 85, rounded half up.
             assertEquals(83L, segment.rttMs)
             assertEquals(ProbeStats(sent = 3, answered = 2, medianMs = 83L, jitterMs = 5L), segment.probes)
-            assertEquals(GeoPlausibility.distanceKm(london, newYork), segment.distanceKm, 1e-6)
+            assertEquals(GeoPlausibility.distanceKm(london, newYork), segment.distanceKm!!, 1e-6)
             assertEquals(0, segment.skippedHops)
             // Median 11 at London to median 83 at New York.
             assertEquals(72L, segment.addedRttMs)
@@ -188,7 +188,7 @@ class TraceRouteMapTest {
         private val hops = listOf(hop(3, london, listOf(10L)), hop(4, sydney, listOf(12L)), hop(5, paris, listOf(15L)))
 
         @Test
-        fun `a hop whose location contradicts its RTT is not part of the drawn route`() {
+        fun `a hop whose location contradicts its RTT is a hollow stop of its own`() {
             assertEquals(setOf(4), GeoPlausibility.implausibleHops(hops))
 
             val map = TraceRouteMap.from(hops)
@@ -200,34 +200,118 @@ class TraceRouteMapTest {
         }
 
         @Test
-        fun `the arc bridging a disputed hop is an unknown path`() {
-            val segment = TraceRouteMap.from(hops).segments.single()
+        fun `a disputed cluster in the middle is joined in hop order by order-only arcs`() {
+            val map = TraceRouteMap.from(hops)
 
-            assertEquals(1, segment.skippedHops)
-            assertEquals(Stability.UNKNOWN, segment.stability)
-            assertNull(segment.rttMs)
+            // allStops: London (0), Paris (1), Sydney (2); the route runs London, Sydney, Paris.
+            assertEquals(listOf(0 to 2, 2 to 1), map.segments.map { it.fromStop to it.toStop })
+            map.segments.forEach { segment ->
+                assertTrue(segment.joinsDisputed)
+                assertEquals(listOf(4), segment.disputedHopNumbers)
+                assertEquals(Stability.UNKNOWN, segment.stability)
+                assertNull(segment.distanceKm)
+                assertNull(segment.rttMs)
+                assertNull(segment.addedRttMs)
+                assertNull(segment.speedFraction)
+                assertEquals(SpeedBand.UNKNOWN, segment.speed)
+                assertTrue(segment.skippedHopNumbers.isEmpty())
+            }
+            assertTrue(map.hasDisputedJoins)
+            assertTrue(map.routeLinePatterns.isEmpty())
         }
 
         @Test
-        fun `returning to the same place around a disputed hop is one stop with no zero-length arc`() {
+        fun `a trailing disputed cluster is one stop joined to the last route stop`() {
+            val trailing =
+                listOf(
+                    hop(3, london, listOf(10L)),
+                    hop(4, sydney, listOf(12L)),
+                    timeout(5),
+                    hop(6, sydney, listOf(13L)),
+                )
+            assertEquals(setOf(4, 6), GeoPlausibility.implausibleHops(trailing))
+
+            val map = TraceRouteMap.from(trailing)
+
+            assertEquals(listOf(listOf(4, 6)), map.disputedStops.map { it.hopNumbers })
+            val join = map.segments.single()
+            assertEquals(0 to 1, join.fromStop to join.toStop)
+            assertEquals(listOf(4, 6), join.disputedHopNumbers)
+            assertNull(join.distanceKm)
+            assertEquals(1, map.headStop)
+            assertEquals(listOf(4, 6), map.head?.hopNumbers)
+            assertEquals(join, map.arrivingSegment(1))
+            assertNull(map.arrivingSegment(0))
+        }
+
+        @Test
+        fun `a trusted arc after a disputed cluster is still measured from the last route stop`() {
+            val route =
+                listOf(
+                    hop(3, london, listOf(10L)),
+                    hop(4, sydney, listOf(12L)),
+                    hop(5, paris, listOf(20L)),
+                    hop(6, frankfurt, listOf(30L)),
+                )
+            val map = TraceRouteMap.from(route)
+
+            val measured = map.segments.single { !it.joinsDisputed }
+            assertEquals(listOf(listOf(3), listOf(5), listOf(6)), map.stops.map { it.hopNumbers })
+            assertEquals(1 to 2, measured.fromStop to measured.toStop)
+            assertEquals(10L, measured.addedRttMs)
+            assertTrue(measured.distanceKm!! > 0.0)
+            assertEquals(3, map.segments.size)
+        }
+
+        @Test
+        fun `returning to the same place around a disputed hop keeps the visit order`() {
             val map =
                 TraceRouteMap.from(
                     listOf(hop(3, london, listOf(10L)), hop(4, sydney, listOf(12L)), hop(5, london, listOf(14L))),
                 )
 
-            assertEquals(listOf(listOf(3, 5)), map.stops.map { it.hopNumbers })
+            assertEquals(listOf(listOf(3), listOf(5)), map.stops.map { it.hopNumbers })
             assertEquals(1, map.disputedStops.size)
-            assertTrue(map.segments.isEmpty())
+            assertEquals(listOf(0 to 2, 2 to 1), map.segments.map { it.fromStop to it.toStop })
+            assertTrue(map.segments.none { it.fromStop == it.toStop })
         }
 
         @Test
-        fun `a route of only disputed hops still shows them, without arcs`() {
-            val onlyDisputed = listOf(hop(3, london, listOf(10L)), hop(4, sydney, listOf(12L)))
+        fun `when every hop after the first is disputed they are still joined in order`() {
+            val onlyDisputed =
+                listOf(hop(3, london, listOf(10L)), hop(4, sydney, listOf(12L)), hop(5, tokyo, listOf(13L)))
+            assertEquals(setOf(4, 5), GeoPlausibility.implausibleHops(onlyDisputed))
+
             val map = TraceRouteMap.from(onlyDisputed)
 
             assertFalse(map.isEmpty)
             assertEquals(1, map.stops.size)
-            assertEquals(1, map.disputedStops.size)
+            assertEquals(listOf(listOf(4), listOf(5)), map.disputedStops.map { it.hopNumbers })
+            assertEquals(listOf(0 to 1, 1 to 2), map.segments.map { it.fromStop to it.toStop })
+            assertTrue(map.segments.all { it.joinsDisputed && it.distanceKm == null })
+            assertEquals(listOf(4, 5), map.segments.last().disputedHopNumbers)
+        }
+
+        @Test
+        fun `a single route stop has no arcs and is the head`() {
+            val map = TraceRouteMap.from(listOf(timeout(1), hop(2, london, listOf(10L))))
+
+            assertEquals(1, map.allStops.size)
+            assertTrue(map.segments.isEmpty())
+            assertFalse(map.hasDisputedJoins)
+            assertEquals(0, map.headStop)
+            assertNull(map.arrivingSegment(0))
+        }
+
+        @Test
+        fun `a disputed stop across the antimeridian is placed the short way from the stop before`() {
+            val pacific =
+                listOf(hop(3, tokyo, listOf(10L)), hop(4, losAngeles, listOf(12L)))
+            assertEquals(setOf(4), GeoPlausibility.implausibleHops(pacific))
+
+            val disputed = TraceRouteMap.from(pacific).disputedStops.single()
+
+            assertEquals(-118.2437 + 360.0, disputed.lon, 1e-9)
         }
     }
 
@@ -419,12 +503,13 @@ class TraceRouteMapTest {
         }
 
         @Test
-        fun `a bridged disputed hop gives no speed claim for the bridge`() {
+        fun `arcs to and from a disputed hop give no speed claim`() {
             val hops = listOf(hop(3, london, listOf(10L)), hop(4, sydney, listOf(12L)), hop(5, newYork, listOf(90L)))
 
-            val segment = TraceRouteMap.from(hops).segments.single()
+            val segments = TraceRouteMap.from(hops).segments
 
-            assertEquals(SpeedBand.UNKNOWN, segment.speed)
+            assertEquals(2, segments.size)
+            assertTrue(segments.all { it.speed == SpeedBand.UNKNOWN && it.speedFraction == null })
         }
     }
 

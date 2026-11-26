@@ -6,6 +6,7 @@ import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapFixtures.hop
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapFixtures.london
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapFixtures.paris
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
@@ -94,7 +95,7 @@ class StoppedTraceStabilityTest {
     @DisplayName("anycast destination")
     inner class Anycast {
         @Test
-        fun `a destination placed in Brisbane 25 ms after London is disputed, hollow and joined by no arc`() {
+        fun `a destination placed in Brisbane 25 ms after London is disputed, hollow and joined only by order`() {
             val hops =
                 listOf(
                     hop(9, london, listOf(31L, 33L, 32L)),
@@ -105,7 +106,9 @@ class StoppedTraceStabilityTest {
             val map = TraceRouteMap.from(hops)
 
             assertEquals(listOf(listOf(9, 10)), map.stops.map { it.hopNumbers })
-            assertTrue(map.segments.isEmpty())
+            val join = map.segments.single()
+            assertTrue(join.joinsDisputed)
+            assertNull(join.distanceKm)
             val disputed = map.disputedStops.single()
             assertEquals(listOf(11), disputed.hopNumbers)
             assertTrue(disputed.disputed)

@@ -615,6 +615,11 @@
     <string name="wifi_rssi_dbm">%1$d dBm</string>
     <string name="wifi_network_info_header">Network Information</string>
     <string name="wifi_spectrum_title">Spectrum Analyser</string>
+    <plurals name="wifi_spectrum_band_label">
+        <item quantity="one">%1$s band: %2$d access point plotted</item>
+        <item quantity="other">%1$s band: %2$d access points plotted</item>
+    </plurals>
+    <string name="wifi_spectrum_band_choice">%1$s (%2$d)</string>
     <string name="wifi_spectrum_a11y">Wi-Fi spectrum on %2$s: access point count %1$d, strongest access point %3$s at %4$d dBm</string>
     <string name="wifi_signal_level_excellent">Excellent</string>
     <string name="wifi_signal_level_good">Good</string>
@@ -776,11 +781,11 @@
     <string name="traceroute_map_reset">Reset map view</string>
     <string name="traceroute_map_description">Route map, in hop order: %1$s</string>
     <string name="traceroute_map_stop_description">hop %1$s, %2$s, %3$s</string>
-    <string name="traceroute_map_disputed_description">Location disputed: %1$s</string>
+    <string name="traceroute_map_disputed_description">Location disputed, joined by hop order only, with no distance or speed: %1$s</string>
     <string name="traceroute_map_callout_hop">Hop %1$d</string>
     <string name="traceroute_map_callout_replies">Replies: %1$d of %2$d probes</string>
     <string name="traceroute_map_callout_jitter">Jitter: %1$d ms</string>
-    <string name="traceroute_map_callout_disputed">Location disputed (possibly anycast): the measured RTT rules this place out, so the hop is not on the drawn route.</string>
+    <string name="traceroute_map_callout_disputed">Location disputed (possibly anycast): the measured RTT rules this place out, so grey dashes join this hop in hop order only and it is left out of distances and speeds.</string>
     <string name="traceroute_map_legend_colour">Colour: median RTT of the hop each line arrives at</string>
     <string name="traceroute_map_band_under">Under %1$d ms</string>
     <string name="traceroute_map_band_range">%1$d to %2$d ms</string>
@@ -793,7 +798,8 @@
     <string name="traceroute_map_line_solid">Solid: every probe answered and jitter was low</string>
     <string name="traceroute_map_line_dotted">Dotted: a probe was lost, or jitter was %1$d ms or more and at least %2$d%% of the median RTT</string>
     <string name="traceroute_map_line_dash_dot">Dash and dot: stability not measured, because one probe was sent or the trace stopped before every reply was in</string>
-    <string name="traceroute_map_line_dashed">Grey dashes: hops in between sent no reply or have no reliable location. The path, latency and speed here are unknown.</string>
+    <string name="traceroute_map_line_dashed">Grey dashes: hops in between sent no reply or have no location. The path, latency and speed here are unknown.</string>
+    <string name="traceroute_map_line_disputed">Grey dashes to or from a hollow marker: that hop\'s location is disputed, so the line only shows the order of the hops. It has no distance, latency or speed.</string>
     <string name="traceroute_map_stability_needs_probes">Stability needs 2 or more probes per hop. This trace sent 1.</string>
     <string name="traceroute_map_marker_head">Pulsing ring: the newest located hop while the trace runs</string>
     <string name="traceroute_map_waiting">No hop located yet. Hops with a public address appear here as their locations arrive.</string>
@@ -810,8 +816,8 @@
         <item quantity="other">Hops %1$s are not located yet.</item>
     </plurals>
     <plurals name="traceroute_map_off_disputed">
-        <item quantity="one">Hop %1$s has a disputed location, so it is not joined into the route.</item>
-        <item quantity="other">Hops %1$s have disputed locations, so they are not joined into the route.</item>
+        <item quantity="one">Hop %1$s has a disputed location. Grey dashes join it in hop order only; it is left out of distances and speeds.</item>
+        <item quantity="other">Hops %1$s have disputed locations. Grey dashes join them in hop order only; they are left out of distances and speeds.</item>
     </plurals>
     <string name="traceroute_map_hop_range">%1$d to %2$d</string>
     <string name="traceroute_map_list_and">%1$s and %2$s</string>
@@ -834,13 +840,17 @@
     <string name="traceroute_map_segment_unsteady_jitter">Replies were unsteady: the times varied by %1$d ms.</string>
     <string name="traceroute_map_segment_not_measured">Steadiness not measured: too few probes reported for this hop.</string>
     <plurals name="traceroute_map_segment_unknown">
-        <item quantity="one">Path unknown: hop %1$s in between sent no reply or has no reliable location, so latency and speed are not shown.</item>
-        <item quantity="other">Path unknown: hops %1$s in between sent no reply or have no reliable location, so latency and speed are not shown.</item>
+        <item quantity="one">Path unknown: hop %1$s in between sent no reply or has no location, so latency and speed are not shown.</item>
+        <item quantity="other">Path unknown: hops %1$s in between sent no reply or have no location, so latency and speed are not shown.</item>
+    </plurals>
+    <plurals name="traceroute_map_segment_disputed">
+        <item quantity="one">Location disputed: hop %1$s has a GeoIP location its RTT rules out. This line only shows the order of the hops, so it has no distance, latency or speed.</item>
+        <item quantity="other">Locations disputed: hops %1$s have GeoIP locations their RTTs rule out. This line only shows the order of the hops, so it has no distance, latency or speed.</item>
     </plurals>
     <string name="traceroute_map_live_description">Trace running</string>
     <string name="traceroute_map_live_head">newest located hop %1$s</string>
     <string name="traceroute_map_marker_destination">Double ring: the destination answered here</string>
-    <string name="traceroute_map_marker_disputed">Hollow marker: GeoIP location contradicted by the measured RTT; not on the drawn route</string>
+    <string name="traceroute_map_marker_disputed">Hollow marker: GeoIP location contradicted by the measured RTT; joined by grey dashes and left out of distances and speeds</string>
     <string name="traceroute_map_marker_selected">Highlighted ring or outline: the hop or line you tapped. Tap it again to clear.</string>
     <string name="traceroute_map_attribution">Base map: Natural Earth (public domain)</string>
     <string name="traceroute_map_attribution_title">Traceroute map: Natural Earth</string>
@@ -1627,8 +1637,8 @@
         <item>Map: draws the route between located hops on an offline world map, and grows while the trace runs. It starts at the first located hop, because your own location is not known.</item>
         <item>Each hop\'s RTT is the median of its answered probes, in the hop list and on the map. The hop details also give the minimum, average and maximum.</item>
         <item>Arc colour is the median RTT of the hop it arrives at, the same colours as the hop list. A thicker arc covered more distance per ms of added RTT.</item>
-        <item>Line patterns: solid means every probe answered with low jitter; dotted means lost probes or high jitter; dash and dot means stability was not measured, because one probe was sent or the trace was stopped first; grey dashes mean the hops in between are unknown, with no latency or speed shown.</item>
-        <item>A hollow marker is a hop whose GeoIP location the measured RTT rules out, often an anycast address; it is shown but not joined into the route.</item>
+        <item>Line patterns: solid means every probe answered with low jitter; dotted means lost probes or high jitter; dash and dot means stability was not measured, because one probe was sent or the trace was stopped first; grey dashes mean the hops in between are unknown, or an end of the line is a disputed location, with no distance, latency or speed shown.</item>
+        <item>A hollow marker is a hop whose GeoIP location the measured RTT rules out, often an anycast address. Grey dashes join it to the hops before and after it, in hop order only, and it is left out of distances and speeds.</item>
         <item>Tap a marker, its label or a line for its details, shown under the map. Tap it again to clear them. Markers too close to label separately share one label, which splits again as you zoom in.</item>
     </string-array>
 
@@ -1724,7 +1734,7 @@
         <item>Sort: order by signal strength, channel, or SSID.</item>
     </string-array>
     <string-array name="help_wifi_results_bullets">
-        <item>Show spectrum opens a chart of AP signal curves by frequency for the selected band.</item>
+        <item>Show spectrum opens a chart of AP signal curves by frequency for one band. Its label names the band plotted and how many access points it plots. On the All tab, chips under the label choose which band to plot.</item>
         <item>Overlapping curves mean channel congestion: multiple networks competing for the same slice of spectrum.</item>
         <item>The Best Channel callout recommends the least-congested 2.4 GHz channel.</item>
         <item>Each network row has a coloured bar. The same colour marks that network\'s curves on the spectrum chart.</item>

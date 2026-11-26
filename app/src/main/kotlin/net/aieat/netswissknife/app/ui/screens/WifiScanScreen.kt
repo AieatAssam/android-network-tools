@@ -152,8 +152,10 @@ import net.aieat.netswissknife.app.ui.screens.wifi.WifiScanUiState
 import net.aieat.netswissknife.app.ui.screens.wifi.WifiScanViewModel
 import net.aieat.netswissknife.app.ui.screens.wifi.placeSpectrumLabels
 import net.aieat.netswissknife.app.ui.screens.wifi.signalLevelLabelRes
-import net.aieat.netswissknife.app.ui.screens.wifi.spectrumBandFor
+import net.aieat.netswissknife.app.ui.screens.wifi.spectrumBandChoices
+import net.aieat.netswissknife.app.ui.screens.wifi.spectrumBandCounts
 import net.aieat.netswissknife.app.ui.screens.wifi.spectrumLabelCandidates
+import net.aieat.netswissknife.app.ui.screens.wifi.spectrumPlotBand
 import net.aieat.netswissknife.app.ui.screens.wifi.wifiNetworksMatching
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
@@ -202,6 +204,7 @@ object WifiScreenTestTags {
     const val UNKNOWN_SECURITY_LABEL = "wifi_unknown_security_label"
     const val AP_DETAIL_CONTENT = "wifi_ap_detail_content"
     const val SPECTRUM_TOGGLE = "wifi_spectrum_toggle"
+    const val SPECTRUM_BAND_LABEL = "wifi_spectrum_band_label"
 
     /** The results header (hero, status, search, bands, spectrum, sort, count) is one item, so networks follow it. */
     const val NETWORKS_START_INDEX = 1
@@ -701,6 +704,8 @@ private fun WifiSpectrumSection(
     band: WifiBand,
     aps: List<WifiAccessPoint>,
     colorNetworks: List<WifiNetwork>,
+    bandChoices: List<Pair<WifiBand, Int>>,
+    onChooseBand: (WifiBand) -> Unit,
     expanded: Boolean,
     onToggle: () -> Unit,
 ) {
@@ -725,6 +730,8 @@ private fun WifiSpectrumSection(
             band = band,
             aps = aps,
             colorNetworks = colorNetworks,
+            bandChoices = bandChoices,
+            onChooseBand = onChooseBand,
         )
     }
 }
@@ -744,19 +751,26 @@ private fun WifiSpectrumSection(
 ) {
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var spectrumExpanded by rememberSaveable { mutableStateOf(false) }
+    // The band the spectrum plots while the band tab is All; a band tab decides it otherwise.
+    var spectrumChoice by rememberSaveable { mutableStateOf<WifiBand?>(null) }
     val networks = wifiNetworksMatching(state.filteredNetworks, searchQuery)
     // The spectrum shows the same access points as the list, so search narrows both.
     val visibleBssids = networks.flatMap { network -> network.accessPoints.map { it.bssid } }.toSet()
     val shownApCount = state.filteredAccessPoints.count { it.bssid in visibleBssids }
     val totalApCount = state.result.accessPoints.size
     val apCountText = wifiApCountText(shownApCount, totalApCount)
+    val spectrumBandCounts = spectrumBandCounts(state.filteredAccessPoints.filter { it.bssid in visibleBssids })
     val spectrumBand =
-        spectrumBandFor(
+        spectrumPlotBand(
             state.bandFilter,
+            spectrumChoice,
             state.result.connectedNetwork?.band,
             state.result.detectedBands,
+            spectrumBandCounts,
         )
     val spectrumAps = state.filteredAccessPoints.filter { it.bssid in visibleBssids && it.band == spectrumBand }
+    // With the All tab the chart plots one band at a time, so it offers the others; a band tab already chose one.
+    val spectrumBandChoices = spectrumBandChoices(state.bandFilter, spectrumBandCounts)
     val spectrumAvailable = spectrumBand != null && bandFreqRange(spectrumBand) != null && spectrumAps.isNotEmpty()
     var showHelp by remember { mutableStateOf(false) }
 
@@ -817,6 +831,8 @@ private fun WifiSpectrumSection(
                         band = spectrumBand,
                         aps = spectrumAps,
                         colorNetworks = state.filteredNetworks,
+                        bandChoices = spectrumBandChoices,
+                        onChooseBand = { spectrumChoice = it },
                         expanded = spectrumExpanded,
                         onToggle = { spectrumExpanded = !spectrumExpanded },
                     )
@@ -1102,6 +1118,8 @@ private fun spectrumCenterFrequency(ap: WifiAccessPoint): Float {
     band: WifiBand,
     aps: List<WifiAccessPoint>,
     colorNetworks: List<WifiNetwork>,
+    bandChoices: List<Pair<WifiBand, Int>>,
+    onChooseBand: (WifiBand) -> Unit,
 ) {
     val range = bandFreqRange(band) ?: return
     if (aps.isEmpty()) return
@@ -1139,6 +1157,13 @@ private fun spectrumCenterFrequency(ap: WifiAccessPoint): Float {
     ElevatedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text(stringResource(R.string.wifi_spectrum_title), style = MaterialTheme.typography.titleMedium)
+            Text(
+                pluralStringResource(R.plurals.wifi_spectrum_band_label, aps.size, band.displayName, aps.size),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag(WifiScreenTestTags.SPECTRUM_BAND_LABEL),
+            )
+            if (bandChoices.isNotEmpty()) SpectrumBandChoice(band, bandChoices, onChooseBand)
             Spacer(Modifier.height(8.dp))
 
             Canvas(
@@ -1289,6 +1314,27 @@ private fun spectrumCenterFrequency(ap: WifiAccessPoint): Float {
                     drawText(text, topLeft = Offset(placement.left, placement.top))
                 }
             }
+        }
+    }
+}
+
+/** Which band the spectrum plots while the band tab is All, each with the access points it would plot. */
+@Composable
+private fun SpectrumBandChoice(
+    selected: WifiBand,
+    choices: List<Pair<WifiBand, Int>>,
+    onChoose: (WifiBand) -> Unit,
+) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        choices.forEach { (band, count) ->
+            FilterChip(
+                selected = band == selected,
+                onClick = { onChoose(band) },
+                label = { Text(stringResource(R.string.wifi_spectrum_band_choice, band.displayName, count)) },
+            )
         }
     }
 }

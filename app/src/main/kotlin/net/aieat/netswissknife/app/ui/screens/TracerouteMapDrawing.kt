@@ -215,11 +215,11 @@ internal fun DrawScope.drawRoute(
     // The drawing and geometry of one map are replaced together; skip a frame that pairs them across maps.
     if (geometry.arcs.size != map.segments.size || geometry.stopPoints.size != map.allStops.size) return
     drawArcs(drawing, geometry.arcs, shown, (selection as? MapSelection.Segment)?.key)
-    // A route stop appears once the arc arriving at it has been drawn; disputed stops are off the route.
+    // A stop appears once the arc arriving at it has been drawn.
     val visible =
         map.allStops.indices.map { index ->
-            val arriving = map.segments.getOrNull(index - 1)
-            index >= map.stops.size || arriving == null || shown(arriving.key) >= 1f
+            val arriving = map.arrivingSegment(index)
+            arriving == null || shown(arriving.key) >= 1f
         }
     val selectedHops = (selection as? MapSelection.Stops)?.hopNumbers.orEmpty()
     map.allStops.forEachIndexed { index, stop ->
@@ -228,9 +228,8 @@ internal fun DrawScope.drawRoute(
     geometry.labels.forEach { label ->
         if (geometry.clusters[label.cluster].members.any { visible[it] }) drawLabel(label, drawing)
     }
-    val head = map.stops.lastIndex
-    val headDrawn = map.segments.getOrNull(head - 1)?.let { shown(it.key) >= 1f } ?: true
-    if (headPulse != null && head >= 0 && headDrawn) {
+    val head = map.headStop
+    if (headPulse != null && head != null && visible[head]) {
         drawHeadRing(geometry.stopPoints[head], headPulse, drawing.colors.selected)
     }
 }

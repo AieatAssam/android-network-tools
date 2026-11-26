@@ -31,6 +31,21 @@ data class GeoBounds(
 }
 
 /**
+ * Canvas margins, in pixels, that the automatic fit keeps the route out of: room for marker labels on every
+ * side, and for the zoom buttons on the end side.
+ */
+data class FitInsets(
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float,
+) {
+    companion object {
+        val NONE = FitInsets(0f, 0f, 0f, 0f)
+    }
+}
+
+/**
  * Equirectangular view of the map: one degree is [pxPerDegree] pixels both across and
  * down, so shapes keep their aspect ratio at any zoom. North is up.
  */
@@ -103,7 +118,11 @@ data class MapViewport(
     /** True when this view is closer than [fitted], the automatic fit of the route. */
     fun isZoomedInFrom(fitted: MapViewport): Boolean = pxPerDegree > fitted.pxPerDegree * ZOOMED_IN_TOLERANCE
 
-    /** Zoom by [factor] about the canvas point ([focusX], [focusY]), which stays under the fingers. */
+    /**
+     * Zoom by [factor] about the canvas point ([focusX], [focusY]), which stays under the fingers. A fit of a
+     * route wider than the world view is below the widest zoom; zooming out from it, or a pinch that does not
+     * zoom, keeps its scale rather than snapping in.
+     */
     fun zoomedBy(
         factor: Float,
         focusX: Float,
@@ -112,7 +131,8 @@ data class MapViewport(
         heightPx: Float,
         anchorLon: Double,
     ): MapViewport {
-        val scale = (pxPerDegree * factor).coerceIn(minPxPerDegree(widthPx, heightPx), maxPxPerDegree(widthPx))
+        val widest = min(minPxPerDegree(widthPx, heightPx), pxPerDegree)
+        val scale = (pxPerDegree * factor).coerceIn(widest, maxPxPerDegree(widthPx))
         val focusLon = lonAt(focusX, widthPx)
         val focusLat = latAt(focusY, heightPx)
         val zoomed =
@@ -162,6 +182,10 @@ data class MapViewport(
         private const val HALF_WORLD = 180.0
         private const val MAX_LAT = 90.0
         private const val ZOOMED_IN_TOLERANCE = 1.01
+        private const val MAX_INSET_FRACTION = 0.6f
+        private const val FIT_SHRINK = 0.9
+        private const val MAX_FIT_SHRINK_STEPS = 40
+        private const val EDGE_TOLERANCE_PX = 0.5
 
         /** Zoom factor of the zoom in and zoom out buttons and of a double tap. */
         const val ZOOM_STEP = 2f
@@ -174,18 +198,104 @@ data class MapViewport(
 
         fun maxPxPerDegree(widthPx: Float): Double = widthPx / MIN_VISIBLE_SPAN_DEGREES
 
-        /** View that shows [bounds] with padding, or the whole world when there is nothing to show. */
+        /**
+         * View that shows every point of [bounds] inside the canvas less [insets], with padding, or the whole
+         * world when there is nothing to show. The route's centre sits at the centre of the inset area, unless
+         * that would show beyond a pole; then the view zooms out until the route fits again.
+         */
         fun fit(
             bounds: GeoBounds?,
             widthPx: Float,
             heightPx: Float,
+            insets: FitInsets = FitInsets.NONE,
         ): MapViewport {
-            if (bounds == null) return MapViewport(0.0, 0.0, minPxPerDegree(widthPx, heightPx))
+            if (bounds == null || widthPx <= 0f || heightPx <= 0f) {
+                return MapViewport(0.0, 0.0, minPxPerDegree(widthPx, heightPx))
+            }
+            val inner = innerArea(widthPx, heightPx, insets)
             val padding = 1.0 + 2.0 * FIT_PADDING_FRACTION
             val spanLon = max((bounds.maxLon - bounds.minLon) * padding, MIN_FIT_SPAN_DEGREES)
             val spanLat = max((bounds.maxLat - bounds.minLat) * padding, MIN_FIT_SPAN_DEGREES)
-            val scale = min(widthPx / spanLon, heightPx / spanLat).coerceAtLeast(minPxPerDegree(widthPx, heightPx))
-            return MapViewport(bounds.centerLon, bounds.centerLat, scale).clamped(heightPx, bounds.centerLon)
+            val innerWidth = (inner.right - inner.left).toDouble()
+            val innerHeight = (inner.bottom - inner.top).toDouble()
+            var scale = min(min(innerWidth / spanLon, innerHeight / spanLat), maxPxPerDegree(widthPx))
+            var view = centredFit(bounds, scale, widthPx, heightPx, inner)
+            var shrinks = 0
+            // The pole limit can push the route off the inset area; zoom out until it fits again.
+            while (!view.contains(bounds, widthPx, heightPx, inner) && shrinks < MAX_FIT_SHRINK_STEPS) {
+                scale *= FIT_SHRINK
+                view = centredFit(bounds, scale, widthPx, heightPx, inner)
+                shrinks++
+            }
+            return view
+        }
+
+        /**
+         * True when ([lat], [lon]) shows inside the area [fit] keeps the route in, so a growing route is
+         * followed as soon as a new marker would sit under the zoom buttons or leave no room for its label.
+         */
+        fun keepsInView(
+            viewport: MapViewport,
+            lat: Double,
+            lon: Double,
+            widthPx: Float,
+            heightPx: Float,
+            insets: FitInsets,
+        ): Boolean {
+            val inner = innerArea(widthPx, heightPx, insets)
+            val x = viewport.xOf(lon, widthPx)
+            val y = viewport.yOf(lat, heightPx)
+            val tolerance = 1f
+            return x >= inner.left - tolerance &&
+                x <= inner.right + tolerance &&
+                y >= inner.top - tolerance &&
+                y <= inner.bottom + tolerance
+        }
+
+        private fun innerArea(
+            widthPx: Float,
+            heightPx: Float,
+            insets: FitInsets,
+        ): PixelBox {
+            // Insets never take more than most of a small canvas, so a route always has room.
+            val maxX = widthPx * MAX_INSET_FRACTION
+            val maxY = heightPx * MAX_INSET_FRACTION
+            val left = min(insets.left, maxX / 2)
+            val right = min(insets.right, maxX - left)
+            val top = min(insets.top, maxY / 2)
+            val bottom = min(insets.bottom, maxY - top)
+            return PixelBox(left, top, widthPx - right, heightPx - bottom)
+        }
+
+        private fun centredFit(
+            bounds: GeoBounds,
+            scale: Double,
+            widthPx: Float,
+            heightPx: Float,
+            inner: PixelBox,
+        ): MapViewport {
+            // Puts the route's centre at the centre of the inset area rather than of the canvas.
+            return MapViewport(
+                centerLon = bounds.centerLon - (inner.centerX - widthPx / 2.0) / scale,
+                centerLat = bounds.centerLat + (inner.centerY - heightPx / 2.0) / scale,
+                pxPerDegree = scale,
+            ).clamped(heightPx, bounds.centerLon)
+        }
+
+        private fun MapViewport.contains(
+            bounds: GeoBounds,
+            widthPx: Float,
+            heightPx: Float,
+            inner: PixelBox,
+        ): Boolean {
+            val left = xOf(bounds.minLon, widthPx)
+            val right = xOf(bounds.maxLon, widthPx)
+            val top = yOf(bounds.maxLat, heightPx)
+            val bottom = yOf(bounds.minLat, heightPx)
+            return left >= inner.left - EDGE_TOLERANCE_PX &&
+                right <= inner.right + EDGE_TOLERANCE_PX &&
+                top >= inner.top - EDGE_TOLERANCE_PX &&
+                bottom <= inner.bottom + EDGE_TOLERANCE_PX
         }
     }
 }

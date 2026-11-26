@@ -20,8 +20,8 @@ enum class Stability {
     NOT_MEASURED,
 
     /**
-     * The path runs through hops that did not answer, have no location, or have a disputed one. Nothing
-     * about it is measured: grey dashed line, with no latency, speed or stability claim.
+     * The path runs through hops that did not answer or have no location, or one of its ends has a disputed
+     * location. Nothing about it is measured: grey dashed line, with no latency, speed or stability claim.
      */
     UNKNOWN,
 }
@@ -109,7 +109,7 @@ data class SegmentKey(
     val toHop: Int,
 )
 
-/** An arc between two consecutive [TraceRouteMap.stops]. */
+/** An arc between two stops that follow each other in hop order, as indices into [TraceRouteMap.allStops]. */
 data class RouteSegment(
     val fromStop: Int,
     val toStop: Int,
@@ -117,17 +117,23 @@ data class RouteSegment(
     /** Median RTT of the arriving hop, the value its hop list row shows; sets the colour. Null for an unknown path. */
     val rttMs: Long?,
     val probes: ProbeStats,
-    val distanceKm: Double,
-    /** Hops between the two stops that did not answer, have no location or have a disputed one. */
+    /** Great-circle distance between the stops; null when an end's location is disputed. */
+    val distanceKm: Double?,
+    /** Hops between the two stops that did not answer or have no location. */
     val skippedHopNumbers: List<Int>,
     /** Median RTT added since the previous stop's last answering hop; null for an unknown path. */
     val addedRttMs: Long?,
     val speedFraction: Double?,
     val speed: SpeedBand,
     val stability: Stability,
+    /** Hops at either end whose location is disputed; the arc only shows the order of the hops. */
+    val disputedHopNumbers: List<Int> = emptyList(),
 ) {
     val isUnknown: Boolean get() = stability == Stability.UNKNOWN
     val skippedHops: Int get() = skippedHopNumbers.size
+
+    /** True when an end of this arc is a disputed location, so it implies no distance, latency or speed. */
+    val joinsDisputed: Boolean get() = disputedHopNumbers.isNotEmpty()
 }
 
 /**
@@ -234,9 +240,9 @@ object RouteClassification {
  *
  * The device's own location is unknown (its first hops are private), so the route starts
  * at the first located hop. Hops whose GeoIP position the RTTs contradict (see
- * [GeoPlausibility.implausibleHops]) are kept out of the arc chain and listed in
- * [disputedStops]; the arc across them is an unknown path, like one across hops with no reply or
- * no location.
+ * [GeoPlausibility.implausibleHops]) are listed in [disputedStops] and drawn hollow. Every stop is
+ * joined to the next in hop order; an arc with a disputed end is an unknown path that only shows the
+ * order, with no distance, latency or speed, like one across hops with no reply or no location.
  */
 data class TraceRouteMap(
     val stops: List<RouteStop>,
@@ -247,11 +253,15 @@ data class TraceRouteMap(
 ) {
     val isEmpty: Boolean get() = stops.isEmpty() && disputedStops.isEmpty()
 
-    /** The newest stop on the route; marked as the head of a running trace. */
-    val head: RouteStop? get() = stops.lastOrNull()
+    /** The stop holding the newest located hop, disputed or not; marked as the head of a running trace. */
+    val head: RouteStop? get() = headStop?.let { allStops[it] }
 
     /** The line patterns the map draws, so the legend lists only those. */
     val linePatterns: Set<Stability> get() = segments.mapTo(mutableSetOf()) { it.stability }
+
+    /** Line patterns of arcs between route stops; arcs to disputed stops have their own legend entry. */
+    val routeLinePatterns: Set<Stability>
+        get() = segments.filterNot { it.joinsDisputed }.mapTo(mutableSetOf()) { it.stability }
 
     /** First hop drawn on the map, or null when no hop is located. */
     val firstLocatedHop: Int? get() = (stops + disputedStops).flatMap { it.hopNumbers }.minOrNull()
@@ -261,6 +271,16 @@ data class TraceRouteMap(
 
     /** Every stop drawn, route stops first, in the index order the canvas uses. */
     val allStops: List<RouteStop> get() = stops + disputedStops
+
+    /** True when an arc joins a disputed location, so the legend explains that kind of grey dashes. */
+    val hasDisputedJoins: Boolean get() = segments.any { it.joinsDisputed }
+
+    /** [allStops] index of the stop holding the newest hop, or null when nothing is located. */
+    val headStop: Int?
+        get() = allStops.indices.maxByOrNull { allStops[it].hops.last().hopNumber }
+
+    /** The arc that arrives at [allStops] index [stopIndex], or null for the first stop of the route. */
+    fun arrivingSegment(stopIndex: Int): RouteSegment? = segments.firstOrNull { it.toStop == stopIndex }
 
     companion object {
         private const val FULL_WORLD = 360.0
@@ -276,33 +296,46 @@ data class TraceRouteMap(
         ): TraceRouteMap {
             val ordered = hops.sortedBy { it.hopNumber }
             val disputed = GeoPlausibility.implausibleHops(ordered)
-            val stops = mutableListOf<RouteStop>()
-            val disputedStops = mutableListOf<RouteStop>()
-            var previousLon: Double? = null
-            ordered.forEach { hop ->
-                val geo = hop.geoLocation ?: return@forEach
-                val lon = unwrap(geo.lon, previousLon)
-                val isDisputed = hop.hopNumber in disputed
-                val target = if (isDisputed) disputedStops else stops
-                val last = target.lastOrNull()
-                val samePlace = last?.let { it.lat == geo.lat && it.location.lon == geo.lon } == true
-                val merges = last != null && samePlace && (!isDisputed || adjacent(last, stops))
-                if (merges) {
-                    target[target.lastIndex] = last.copy(hops = last.hops + hop)
-                } else {
-                    target += RouteStop(hops = listOf(hop), lat = geo.lat, lon = lon, disputed = isDisputed)
-                }
-                if (!isDisputed) previousLon = lon
-            }
+            val chain = chainOf(ordered, disputed)
+            val stops = chain.filterNot { it.disputed }
+            val disputedStops = chain.filter { it.disputed }
             // Results with per-probe RTTs report each probe; the most any hop has reported is the trace's setting.
             val expectedProbes = ordered.maxOfOrNull { it.probeRttsMs.size }?.coerceAtLeast(1) ?: 1
             val context = SegmentContext(ordered, expectedProbes, stopped)
             return TraceRouteMap(
                 stops = stops,
-                segments = segmentsOf(stops, context),
+                segments = segmentsOf(chain, stops.size, context),
                 disputedStops = disputedStops,
-                offRoute = offRouteOf(stops + disputedStops, ordered, disputed),
+                offRoute = offRouteOf(chain, ordered, disputed),
             )
+        }
+
+        /**
+         * Every located hop in hop order, consecutive hops at the same place and of the same kind (route or
+         * disputed) merged into one stop, across hops that did not answer or have no location. Each longitude
+         * is unwrapped against the previous stop, so every arc takes the short way.
+         */
+        private fun chainOf(
+            ordered: List<HopResult>,
+            disputed: Set<Int>,
+        ): List<RouteStop> {
+            val chain = mutableListOf<RouteStop>()
+            var previousLon: Double? = null
+            ordered.forEach { hop ->
+                val geo = hop.geoLocation ?: return@forEach
+                val lon = unwrap(geo.lon, previousLon)
+                val isDisputed = hop.hopNumber in disputed
+                val last = chain.lastOrNull()
+                val merges =
+                    last != null && last.disputed == isDisputed && last.lat == geo.lat && last.location.lon == geo.lon
+                if (merges) {
+                    chain[chain.lastIndex] = last.copy(hops = last.hops + hop)
+                } else {
+                    chain += RouteStop(hops = listOf(hop), lat = geo.lat, lon = lon, disputed = isDisputed)
+                }
+                previousLon = lon
+            }
+            return chain
         }
 
         /** True when every missing reply of this hop came after its last answered one. */
@@ -331,18 +364,6 @@ data class TraceRouteMap(
             )
         }
 
-        /**
-         * Disputed hops merge only when no route stop came in between. Route stops merge across
-         * disputed and unanswered hops, which are off the drawn route, so no zero-length arc appears.
-         */
-        private fun adjacent(
-            lastDisputed: RouteStop,
-            stops: List<RouteStop>,
-        ): Boolean {
-            val after = lastDisputed.hops.last().hopNumber
-            return stops.none { stop -> stop.hops.any { it.hopNumber > after } }
-        }
-
         private fun unwrap(
             lon: Double,
             previousLon: Double?,
@@ -354,45 +375,95 @@ data class TraceRouteMap(
             return unwrapped
         }
 
+        /**
+         * One arc between each pair of consecutive stops in [chain], indexed into [TraceRouteMap.allStops]:
+         * route stops first ([routeStopCount] of them), then disputed stops.
+         */
         private fun segmentsOf(
-            stops: List<RouteStop>,
+            chain: List<RouteStop>,
+            routeStopCount: Int,
             context: SegmentContext,
-        ): List<RouteSegment> =
-            stops.zipWithNext().mapIndexed { index, (from, to) ->
-                val arriving = to.hops.first()
+        ): List<RouteSegment> {
+            var routeIndex = 0
+            var disputedIndex = routeStopCount
+            val indices = chain.map { if (it.disputed) disputedIndex++ else routeIndex++ }
+            return chain.indices.zipWithNext().map { (a, b) ->
+                val from = chain[a]
+                val to = chain[b]
                 val fromLast = from.hops.last().hopNumber
+                val arriving = to.hops.first()
                 val between =
                     context.ordered
                         .filter { it.hopNumber > fromLast && it.hopNumber < arriving.hopNumber }
                         .map { it.hopNumber }
-                val unknown = between.isNotEmpty()
-                val distanceKm = GeoPlausibility.distanceKm(from.location, to.location)
-                // The hop's median on both ends, the figure each hop's row shows.
-                val anchorRtt = from.hops.lastOrNull { it.rttMedianMs != null }?.rttMedianMs
-                val arrivingRtt = arriving.rttMedianMs
-                val addedRtt =
-                    if (anchorRtt == null || arrivingRtt == null || unknown) null else arrivingRtt - anchorRtt
-                val fraction = addedRtt?.let { RouteClassification.speedFraction(distanceKm, it.toDouble()) }
-                val probes = ProbeStats.of(arriving)
-                RouteSegment(
-                    fromStop = index,
-                    toStop = index + 1,
-                    key = SegmentKey(fromHop = from.hops.first().hopNumber, toHop = arriving.hopNumber),
-                    rttMs = arrivingRtt.takeUnless { unknown },
-                    probes = probes,
-                    distanceKm = distanceKm,
-                    skippedHopNumbers = between,
-                    addedRttMs = addedRtt,
-                    speedFraction = fraction,
-                    speed = RouteClassification.speedBand(fraction),
-                    stability =
-                        RouteClassification.stability(
-                            probes = probes,
-                            skippedHops = between.size,
-                            expectedProbes = context.expectedProbes,
-                            cutShort = context.stopped && arriving.missesOnlyTrailingReplies(),
-                        ),
-                )
+                val join = StopPair(from, to, indices[a], indices[b], between)
+                if (from.disputed || to.disputed) disputedJoin(join) else measuredSegment(join, context)
             }
+        }
+
+        /** Two consecutive stops of the chain, their [TraceRouteMap.allStops] indices and the hops between. */
+        private class StopPair(
+            val from: RouteStop,
+            val to: RouteStop,
+            val fromIndex: Int,
+            val toIndex: Int,
+            val between: List<Int>,
+        ) {
+            val arriving: HopResult get() = to.hops.first()
+            val key: SegmentKey get() = SegmentKey(fromHop = from.hops.first().hopNumber, toHop = arriving.hopNumber)
+        }
+
+        private fun disputedJoin(join: StopPair): RouteSegment {
+            val disputedHops = listOf(join.from, join.to).filter { it.disputed }.flatMap { it.hopNumbers }
+            return RouteSegment(
+                fromStop = join.fromIndex,
+                toStop = join.toIndex,
+                key = join.key,
+                rttMs = null,
+                probes = ProbeStats.of(join.arriving),
+                distanceKm = null,
+                skippedHopNumbers = join.between,
+                addedRttMs = null,
+                speedFraction = null,
+                speed = SpeedBand.UNKNOWN,
+                stability = Stability.UNKNOWN,
+                disputedHopNumbers = disputedHops,
+            )
+        }
+
+        private fun measuredSegment(
+            join: StopPair,
+            context: SegmentContext,
+        ): RouteSegment {
+            val arriving = join.arriving
+            val unknown = join.between.isNotEmpty()
+            val distanceKm = GeoPlausibility.distanceKm(join.from.location, join.to.location)
+            // The hop's median on both ends, the figure each hop's row shows.
+            val anchorHop = join.from.hops.lastOrNull { it.rttMedianMs != null }
+            val anchorRtt = anchorHop?.rttMedianMs
+            val arrivingRtt = arriving.rttMedianMs
+            val addedRtt = if (anchorRtt == null || arrivingRtt == null || unknown) null else arrivingRtt - anchorRtt
+            val fraction = addedRtt?.let { RouteClassification.speedFraction(distanceKm, it.toDouble()) }
+            val probes = ProbeStats.of(arriving)
+            return RouteSegment(
+                fromStop = join.fromIndex,
+                toStop = join.toIndex,
+                key = join.key,
+                rttMs = arrivingRtt.takeUnless { unknown },
+                probes = probes,
+                distanceKm = distanceKm,
+                skippedHopNumbers = join.between,
+                addedRttMs = addedRtt,
+                speedFraction = fraction,
+                speed = RouteClassification.speedBand(fraction),
+                stability =
+                    RouteClassification.stability(
+                        probes = probes,
+                        skippedHops = join.between.size,
+                        expectedProbes = context.expectedProbes,
+                        cutShort = context.stopped && arriving.missesOnlyTrailingReplies(),
+                    ),
+            )
+        }
     }
 }

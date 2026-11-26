@@ -110,8 +110,8 @@ internal fun SegmentCallout(
     segment: RouteSegment,
     colorFor: (Long?) -> Color,
 ) {
-    val from = map.stops[segment.fromStop]
-    val to = map.stops[segment.toStop]
+    val from = map.allStops[segment.fromStop]
+    val to = map.allStops[segment.toStop]
     OutlinedCard(modifier = Modifier.fillMaxWidth().testTag("traceroute_map_segment_callout")) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
@@ -127,7 +127,16 @@ internal fun SegmentCallout(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.tertiary,
             )
-            if (segment.isUnknown) {
+            if (segment.joinsDisputed) {
+                CalloutLine(
+                    pluralStringResource(
+                        R.plurals.traceroute_map_segment_disputed,
+                        segment.disputedHopNumbers.size,
+                        hopListText(segment.disputedHopNumbers),
+                    ),
+                )
+            }
+            if (segment.isUnknown && segment.skippedHops > 0) {
                 CalloutLine(
                     pluralStringResource(
                         R.plurals.traceroute_map_segment_unknown,
@@ -135,9 +144,8 @@ internal fun SegmentCallout(
                         hopListText(segment.skippedHopNumbers),
                     ),
                 )
-            } else {
-                MeasuredSegmentLines(to, segment, colorFor)
             }
+            if (!segment.isUnknown) MeasuredSegmentLines(to, segment, colorFor)
         }
     }
 }
@@ -164,7 +172,7 @@ private fun MeasuredSegmentLines(
             },
         )
     }
-    CalloutLine(stringResource(R.string.traceroute_map_segment_distance, segment.distanceKm.roundToInt()))
+    segment.distanceKm?.let { CalloutLine(stringResource(R.string.traceroute_map_segment_distance, it.roundToInt())) }
     val speed = segment.speedFraction
     CalloutLine(
         if (speed != null) {

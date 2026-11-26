@@ -26,14 +26,17 @@ data class MapLegendContent(
     val latencyBands: List<TraceLatencyBand>,
     /** Widths of measured arcs, thick to thin; empty when every arc is an unknown path. */
     val widths: List<ArcWidth>,
-    /** Line patterns of the arcs, in [Stability] order. */
+    /** Line patterns of the arcs between route stops, in [Stability] order. */
     val linePatterns: List<Stability>,
     /** True when no hop on the route was probed more than once, so no arc can show stability. */
     val singleProbeTrace: Boolean,
     val markers: List<MarkerNote>,
+    /** True when a grey dashed arc joins a disputed location, which only shows the order of the hops. */
+    val disputedJoins: Boolean = false,
 ) {
     val isEmpty: Boolean
-        get() = latencyBands.isEmpty() && widths.isEmpty() && linePatterns.isEmpty() && markers.isEmpty()
+        get() =
+            latencyBands.isEmpty() && widths.isEmpty() && linePatterns.isEmpty() && markers.isEmpty() && !disputedJoins
 
     companion object {
         /** The width [speed] is drawn at. */
@@ -56,7 +59,7 @@ data class MapLegendContent(
                     MarkerNote.DESTINATION.takeIf { map.allStops.any { it.isDestination } },
                     MarkerNote.DISPUTED.takeIf { map.disputedStops.isNotEmpty() },
                 )
-            val patterns = map.segments.map { it.stability }.toSet()
+            val patterns = map.routeLinePatterns
             return MapLegendContent(
                 latencyBands =
                     colouredRtts
@@ -68,6 +71,7 @@ data class MapLegendContent(
                 linePatterns = Stability.entries.filter { it in patterns },
                 singleProbeTrace = Stability.NOT_MEASURED in patterns && !map.stabilityMeasurable,
                 markers = markers,
+                disputedJoins = map.hasDisputedJoins,
             )
         }
     }

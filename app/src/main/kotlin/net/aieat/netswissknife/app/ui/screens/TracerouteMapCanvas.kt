@@ -72,6 +72,7 @@ import kotlinx.coroutines.withContext
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.ArcCurve
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.ArcGeometry
+import net.aieat.netswissknife.app.ui.screens.traceroute.map.FitInsets
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.GeoBounds
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.LabelArea
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.LabelSize
@@ -80,6 +81,7 @@ import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapLabelLayout
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapSelection
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapSizing
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapViewport
+import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapZoom
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.MarkerCluster
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.PixelBox
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.PlacedLabel
@@ -100,11 +102,12 @@ private const val ARC_DURATION_MS = 450
 private const val FOLLOW_DURATION_MS = 600
 private const val HEAD_PULSE_MS = 1_400
 
-// A stop this close to the canvas edge counts as outside the view.
-private const val FOLLOW_MARGIN_FRACTION = 0.06
 private val StopTouchRadius = 24.dp
 private val MapControlSize = 48.dp
 private val MapControlPadding = 4.dp
+
+// Room round the fitted route for a marker's label: one line of label text and its gap from the marker.
+private val FitLabelRoom = 28.dp
 private const val MAP_CONTROL_COUNT = 3
 
 // Zoom buttons switch off just short of the zoom limits.
@@ -158,6 +161,8 @@ internal class MapMetrics(
     /** The zoom and reset buttons in the top end corner; labels keep clear of them. */
     val controlsWidthPx: Float,
     val controlsHeightPx: Float,
+    /** Room the automatic fit leaves for labels round the route, and for the buttons on the end side. */
+    val fitInsets: FitInsets,
 )
 
 private fun geometryOf(
@@ -214,7 +219,7 @@ private class RouteMapViewState(
     private var canvasSize by mutableStateOf(IntSize.Zero)
     private val width: Float get() = canvasSize.width.toFloat()
     private val height: Float get() = canvasSize.height.toFloat()
-    val fitted by derivedStateOf { MapViewport.fit(bounds, width, height) }
+    val fitted by derivedStateOf { MapViewport.fit(bounds, width, height, metrics.fitInsets) }
 
     /** The view following the route, or null until the canvas has a size. */
     private var autoViewport by mutableStateOf<MapViewport?>(null)
@@ -222,6 +227,9 @@ private class RouteMapViewState(
 
     var userViewport by mutableStateOf<MapViewport?>(null)
         private set
+
+    /** True once a drag, pinch or double tap has moved the map; the zoom buttons then keep its centre. */
+    private var userMoved = false
     val viewport: MapViewport get() = userViewport ?: autoViewport ?: fitted
     val geometry by derivedStateOf { geometryOf(map, viewport, canvasSize, metrics, measure) }
 
@@ -237,11 +245,13 @@ private class RouteMapViewState(
         canvasSize = size
         userViewport = null
         autoViewport = null
+        userMoved = false
     }
 
     fun resetView() {
         userViewport = null
         autoViewport = fitted
+        userMoved = false
     }
 
     /** True when the map, not the page, should move with a one-finger drag of [travel]. */
@@ -274,7 +284,7 @@ private class RouteMapViewState(
 
     private fun MapViewport?.showsStop(stop: RouteStop): Boolean {
         val viewport = this ?: return false
-        return viewport.shows(stop.lat, stop.lon, width, height, FOLLOW_MARGIN_FRACTION)
+        return MapViewport.keepsInView(viewport, stop.lat, stop.lon, width, height, metrics.fitInsets)
     }
 
     fun transform(
@@ -282,19 +292,26 @@ private class RouteMapViewState(
         pan: Offset,
         centroid: Offset,
     ) {
+        userMoved = true
         userViewport =
             viewport
                 .zoomedBy(zoom, centroid.x, centroid.y, width, height, anchorLon)
                 .pannedBy(pan.x, pan.y, width, height, anchorLon)
     }
 
-    /** Zoom by [factor] about [focus], or about the centre of the map when it is null. */
-    fun zoom(
+    /** Zoom by [factor] about the tapped [focus]. */
+    fun zoomAt(
         factor: Float,
-        focus: Offset? = null,
+        focus: Offset,
     ) {
-        val at = focus ?: Offset(width / 2f, height / 2f)
-        userViewport = viewport.zoomedBy(factor, at.x, at.y, width, height, anchorLon)
+        userMoved = true
+        userViewport = viewport.zoomedBy(factor, focus.x, focus.y, width, height, anchorLon)
+    }
+
+    /** Zoom by [factor] about the route's centre, or about the map's centre once the user has moved it. */
+    fun zoomButton(factor: Float) {
+        val (x, y) = MapZoom.buttonFocus(viewport, bounds, userMoved, width, height)
+        userViewport = viewport.zoomedBy(factor, x, y, width, height, anchorLon)
     }
 
     /** The marker cluster or label under [tap], else the arc under it, else null. */
@@ -366,6 +383,13 @@ private fun rememberMapMetrics(): MapMetrics {
                 touchRadiusPx = StopTouchRadius.toPx(),
                 controlsWidthPx = (MapControlSize + MapControlPadding * 2).toPx(),
                 controlsHeightPx = (MapControlSize * MAP_CONTROL_COUNT + MapControlPadding * 2).toPx(),
+                fitInsets =
+                    FitInsets(
+                        left = FitLabelRoom.toPx(),
+                        top = FitLabelRoom.toPx(),
+                        right = (MapControlSize + MapControlPadding * 2).toPx(),
+                        bottom = FitLabelRoom.toPx(),
+                    ),
             )
         }
     }
@@ -411,7 +435,7 @@ internal fun RouteMapCanvas(
                             mapTakesDrag = state::takesDrag,
                             onTransform = state::transform,
                             onTap = { tap -> currentOnSelect(MapSelection.toggle(currentSelection, state.hitAt(tap))) },
-                            onDoubleTap = { tap -> state.zoom(MapViewport.ZOOM_STEP, tap) },
+                            onDoubleTap = { tap -> state.zoomAt(MapViewport.ZOOM_STEP, tap) },
                         )
                     },
         ) {
@@ -424,8 +448,8 @@ internal fun RouteMapCanvas(
             canZoomIn = state.canZoomIn,
             canZoomOut = state.canZoomOut,
             canReset = state.canReset,
-            onZoomIn = { state.zoom(MapViewport.ZOOM_STEP) },
-            onZoomOut = { state.zoom(1f / MapViewport.ZOOM_STEP) },
+            onZoomIn = { state.zoomButton(MapViewport.ZOOM_STEP) },
+            onZoomOut = { state.zoomButton(1f / MapViewport.ZOOM_STEP) },
             onReset = state::resetView,
             modifier = Modifier.align(Alignment.TopEnd).padding(MapControlPadding),
         )

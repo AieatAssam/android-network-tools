@@ -238,9 +238,12 @@ internal fun mapDescription(
     map: TraceRouteMap,
     live: Boolean,
 ): String {
+    // In hop order, as the arcs join them; a disputed stop says so, since its arcs carry no distance or speed.
     val parts =
-        map.stops.map { stopDescription(it) } +
-            map.disputedStops.map { stringResource(R.string.traceroute_map_disputed_description, stopDescription(it)) }
+        map.allStops.sortedBy { it.hops.first().hopNumber }.map { stop ->
+            val text = stopDescription(stop)
+            if (stop.disputed) stringResource(R.string.traceroute_map_disputed_description, text) else text
+        }
     val route = stringResource(R.string.traceroute_map_description, parts.joinToString("; "))
     if (!live) return route
     val head = map.head?.let { stringResource(R.string.traceroute_map_live_head, it.label) }

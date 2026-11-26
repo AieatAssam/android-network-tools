@@ -111,6 +111,40 @@ internal fun spectrumBandFor(
         ?: connectedBand?.takeIf { it in detectedBands }
         ?: detectedBands.firstOrNull()
 
+/** Bands the spectrum analyser can plot, in the order its band choice lists them. */
+internal val SPECTRUM_BANDS = listOf(WifiBand.BAND_2_4GHZ, WifiBand.BAND_5GHZ, WifiBand.BAND_6GHZ)
+
+/**
+ * Each band the spectrum can plot that [aps] use, with how many of them it holds, in [SPECTRUM_BANDS] order.
+ * The count is what the spectrum plots for that band, so the band choice and the chart's label agree.
+ */
+internal fun spectrumBandCounts(aps: List<WifiAccessPoint>): List<Pair<WifiBand, Int>> =
+    SPECTRUM_BANDS.mapNotNull { band ->
+        val count = aps.count { it.band == band }
+        if (count > 0) band to count else null
+    }
+
+/**
+ * Band the spectrum plots: the band tab's, else the band [choice] made on the chart while that band still has
+ * access points in [counts], else as [spectrumBandFor] picks.
+ */
+internal fun spectrumPlotBand(
+    bandFilter: WifiBand?,
+    choice: WifiBand?,
+    connectedBand: WifiBand?,
+    detectedBands: List<WifiBand>,
+    counts: List<Pair<WifiBand, Int>>,
+): WifiBand? {
+    val liveChoice = choice?.takeIf { chosen -> counts.any { it.first == chosen } }
+    return spectrumBandFor(bandFilter ?: liveChoice, connectedBand, detectedBands)
+}
+
+/** Bands the chart offers to plot: only on the All tab, and only when more than one band has access points. */
+internal fun spectrumBandChoices(
+    bandFilter: WifiBand?,
+    counts: List<Pair<WifiBand, Int>>,
+): List<Pair<WifiBand, Int>> = if (bandFilter == null && counts.size > 1) counts else emptyList()
+
 internal fun sortedAccessPoints(
     all: List<WifiAccessPoint>,
     bandFilter: WifiBand?,

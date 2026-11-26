@@ -82,6 +82,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -931,11 +932,12 @@ private fun DnsResultPanel(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // Summary card
-        DnsResultSummaryCard(result = result, onClear = onClear)
-        if (dnsSuggestsReverseLookup(result)) {
-            DnsReverseLookupHintCard(recordType = result.recordType, onReverseLookup = onReverseLookup)
-        }
+        // Summary card; the PTR suggestion sits right under its RCODE line, where the empty answer is explained.
+        DnsResultSummaryCard(
+            result = result,
+            onClear = onClear,
+            onReverseLookup = onReverseLookup.takeIf { dnsSuggestsReverseLookup(result) },
+        )
 
         // Answers first. Authority and Additional follow them, as the DNS message orders its sections.
         if (result.records.isEmpty()) {
@@ -980,6 +982,7 @@ private fun DnsResultPanel(
 private fun DnsResultSummaryCard(
     result: DnsResult,
     onClear: () -> Unit,
+    onReverseLookup: (() -> Unit)?,
 ) {
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_dns, result.recordType.name, result.domain)
@@ -1027,16 +1030,7 @@ private fun DnsResultSummaryCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Text(
-                        text = stringResource(R.string.dns_rcode, result.rcode),
-                        style = MaterialTheme.typography.labelMedium,
-                        color =
-                            when (tone) {
-                                DnsResponseTone.SUCCESS -> onContainer
-                                DnsResponseTone.NOT_FOUND -> MaterialTheme.colorScheme.onSurfaceVariant
-                                DnsResponseTone.FAILURE -> onContainer
-                            },
-                    )
+                    DnsRcodeLines(result, tone, onContainer, onReverseLookup)
                     Text(
                         text = stringResource(R.string.dns_flags, result.flags.joinToString(" ").ifEmpty { "N/A" }),
                         style = MaterialTheme.typography.labelSmall,
@@ -1445,24 +1439,45 @@ private fun PlainValueDisplay(value: String) {
     }
 }
 
+/** The summary's RCODE line and, when an address was queried for a type it cannot have, the PTR suggestion. */
 @Composable
-private fun DnsReverseLookupHintCard(
+private fun DnsRcodeLines(
+    result: DnsResult,
+    tone: DnsResponseTone,
+    onContainer: Color,
+    onReverseLookup: (() -> Unit)?,
+) {
+    Text(
+        text = stringResource(R.string.dns_rcode, result.rcode),
+        style = MaterialTheme.typography.labelMedium,
+        color =
+            when (tone) {
+                DnsResponseTone.SUCCESS -> onContainer
+                DnsResponseTone.NOT_FOUND -> MaterialTheme.colorScheme.onSurfaceVariant
+                DnsResponseTone.FAILURE -> onContainer
+            },
+    )
+    onReverseLookup?.let { DnsReverseLookupHint(result.recordType, onContainer, it) }
+}
+
+/** Why an address query found nothing, and the PTR lookup that answers it, under the summary's RCODE line. */
+@Composable
+private fun DnsReverseLookupHint(
     recordType: DnsRecordType,
+    textColor: Color,
     onReverseLookup: () -> Unit,
 ) {
-    OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = AppShapes.large) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.dns_reverse_lookup_hint, recordType.displayName),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            FilledTonalButton(onClick = hapticAction(onReverseLookup)) {
-                Text(stringResource(R.string.dns_reverse_lookup_action))
-            }
+    Column(
+        modifier = Modifier.padding(vertical = 8.dp).testTag("dns_reverse_lookup_hint"),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.dns_reverse_lookup_hint, recordType.displayName),
+            style = MaterialTheme.typography.bodyMedium,
+            color = textColor,
+        )
+        FilledTonalButton(onClick = hapticAction(onReverseLookup)) {
+            Text(stringResource(R.string.dns_reverse_lookup_action))
         }
     }
 }

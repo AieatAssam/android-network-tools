@@ -39,7 +39,14 @@ class MapLegendContentTest {
                 val map = TraceRouteMap.from(hops, stopped)
                 val legend = MapLegendContent.of(map, live = false)
 
-                assertEquals(map.segments.map { it.stability }.toSet(), legend.linePatterns.toSet())
+                assertEquals(
+                    map.segments
+                        .filterNot { it.joinsDisputed }
+                        .map { it.stability }
+                        .toSet(),
+                    legend.linePatterns.toSet(),
+                )
+                assertEquals(map.segments.any { it.joinsDisputed }, legend.disputedJoins)
                 assertEquals(
                     map.segments
                         .filterNot { it.isUnknown }
@@ -99,6 +106,23 @@ class MapLegendContentTest {
             listOf(MarkerNote.DESTINATION, MarkerNote.DISPUTED),
             MapLegendContent.of(map, live = false).markers,
         )
+    }
+
+    @Test
+    fun `dashes to a disputed location get their own entry, only when the map draws one`() {
+        val disputed =
+            TraceRouteMap.from(
+                listOf(hop(9, london, listOf(31L, 33L)), hop(11, brisbane, listOf(25L, 21L), destination = true)),
+            )
+        val plain =
+            TraceRouteMap.from(listOf(hop(3, london, listOf(10L, null)), timeout(4), hop(5, newYork, listOf(80L, 81L))))
+
+        val disputedLegend = MapLegendContent.of(disputed, live = false)
+        assertTrue(disputedLegend.disputedJoins)
+        // The join to the disputed stop is not listed as the generic unknown-path pattern.
+        assertTrue(disputedLegend.linePatterns.isEmpty())
+        assertFalse(MapLegendContent.of(plain, live = false).disputedJoins)
+        assertEquals(listOf(Stability.UNKNOWN), MapLegendContent.of(plain, live = false).linePatterns)
     }
 
     @Test
