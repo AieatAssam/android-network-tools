@@ -121,6 +121,7 @@ import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.components.scrollEdgeFade
+import net.aieat.netswissknife.app.ui.components.sliderColorsFor
 import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.app.ui.screens.ping.PING_ROLLING_WINDOW
 import net.aieat.netswissknife.app.ui.screens.ping.PingCsvSerializer
@@ -694,6 +695,7 @@ private fun PingSliderRow(
             onValueChange = onValueChange,
             valueRange = valueRange,
             steps = steps,
+            colors = sliderColorsFor(steps),
             enabled = enabled,
             modifier =
                 Modifier

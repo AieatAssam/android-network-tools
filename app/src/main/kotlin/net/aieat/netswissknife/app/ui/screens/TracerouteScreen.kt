@@ -125,6 +125,7 @@ import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.components.messageRes
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
+import net.aieat.netswissknife.app.ui.components.sliderColorsFor
 import net.aieat.netswissknife.app.ui.format.humanDurationText
 import net.aieat.netswissknife.app.ui.format.resolvedIpToShow
 import net.aieat.netswissknife.app.ui.i18n.asString
@@ -726,12 +727,14 @@ private fun SliderRow(
                 fontWeight = FontWeight.Bold,
             )
         }
+        val tickSteps = scale.steps.takeIf { it <= MAX_SLIDER_TICKS } ?: 0
         Slider(
             value = scale.positionOf(localValue),
             onValueChange = { localValue = scale.valueAt(it) },
             onValueChangeFinished = { onValueChangeFinished(localValue) },
             valueRange = scale.positions,
-            steps = scale.steps.takeIf { it <= MAX_SLIDER_TICKS } ?: 0,
+            steps = tickSteps,
+            colors = sliderColorsFor(tickSteps),
             enabled = enabled,
         )
     }
