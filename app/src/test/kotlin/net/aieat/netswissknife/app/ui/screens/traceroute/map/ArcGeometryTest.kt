@@ -7,6 +7,8 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import kotlin.math.abs
 import kotlin.math.hypot
+import kotlin.math.min
+import kotlin.random.Random
 
 @DisplayName("ArcGeometry")
 class ArcGeometryTest {
@@ -31,17 +33,38 @@ class ArcGeometryTest {
     }
 
     @Test
-    fun `a return trip bows to the other side, so the two arcs do not overlap`() {
+    fun `a hop and the hop straight back share one upward shape`() {
         val out = ArcGeometry.arc(0f, 0f, 100f, 40f)
         val back = ArcGeometry.arc(100f, 40f, 0f, 0f)
 
-        val midX = 50f
-        val midY = 20f
-        assertEquals(midX - (out.controlX - midX), back.controlX, eps)
-        assertEquals(midY - (out.controlY - midY), back.controlY, eps)
-        val outMid = out.pointAt(0.5f)
-        val backMid = back.pointAt(0.5f)
-        assertTrue(hypot(outMid.x - backMid.x, outMid.y - backMid.y) > 10f)
+        assertEquals(out.controlX, back.controlX, eps)
+        assertEquals(out.controlY, back.controlY, eps)
+        assertTrue(out.controlY < 0f)
+    }
+
+    @Test
+    fun `every arc bows upward, above both its ends, whichever way it runs`() {
+        val random = Random(42)
+        repeat(1_000) {
+            val sx = random.nextFloat() * 2_000f - 500f
+            val sy = random.nextFloat() * 1_000f
+            val ex = random.nextFloat() * 2_000f - 500f
+            val ey = random.nextFloat() * 1_000f
+            if (hypot(ex - sx, ey - sy) < 1f) return@repeat
+            val arc = ArcGeometry.arc(sx, sy, ex, ey, maxBowPx = 80f)
+            val apexY = arc.topY
+            assertTrue((0..64).all { arc.pointAt(it / 64f).y >= apexY - eps })
+
+            assertTrue(apexY < min(sy, ey), "apex $apexY for ($sx, $sy) to ($ex, $ey)")
+            assertTrue(apexY >= min(sy, ey) - 80f - eps, "bow capped for ($sx, $sy) to ($ex, $ey)")
+        }
+    }
+
+    @Test
+    fun `a long arc's bow is capped`() {
+        val arc = ArcGeometry.arc(0f, 500f, 2_000f, 500f, maxBowPx = 60f)
+
+        assertEquals(440f, arc.controlY, eps)
     }
 
     @Test

@@ -95,6 +95,7 @@ import net.aieat.netswissknife.app.ui.screens.traceroute.map.looksLike
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.nearestArcIndex
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import java.io.IOException
+import kotlin.math.roundToInt
 
 private const val ARC_STEP_MS = 220
 private const val ARC_MAX_STAGGER_MS = 1_500
@@ -108,6 +109,9 @@ private val MapControlPadding = 4.dp
 
 // Room round the fitted route for a marker's label: one line of label text and its gap from the marker.
 private val FitLabelRoom = 28.dp
+
+// Highest an arc bows above its higher end, so a long arc stays on the map.
+private val ArcMaxBow = 40.dp
 private const val MAP_CONTROL_COUNT = 3
 
 // Zoom buttons switch off just short of the zoom limits.
@@ -161,8 +165,10 @@ internal class MapMetrics(
     /** The zoom and reset buttons in the top end corner; labels keep clear of them. */
     val controlsWidthPx: Float,
     val controlsHeightPx: Float,
-    /** Room the automatic fit leaves for labels round the route, and for the buttons on the end side. */
+    /** Room the automatic fit leaves for labels round the route, arcs above it, and the buttons on the end side. */
     val fitInsets: FitInsets,
+    /** Highest an arc rises above its higher end; the fit's top inset includes it, so no arc is clipped. */
+    val arcMaxBowPx: Float,
 )
 
 private fun geometryOf(
@@ -180,7 +186,7 @@ private fun geometryOf(
         map.segments.map { segment ->
             val from = stopPoints[segment.fromStop]
             val to = stopPoints[segment.toStop]
-            ArcGeometry.arc(from.x, from.y, to.x, to.y)
+            ArcGeometry.arc(from.x, from.y, to.x, to.y, metrics.arcMaxBowPx)
         }
     val clusters = MapLabelLayout.clusters(stopPoints, map.allStops.map { it.hopNumbers }, metrics.markerRadiusPx)
     val controls = PixelBox(w - metrics.controlsWidthPx, 0f, w, metrics.controlsHeightPx)
@@ -242,11 +248,23 @@ private class RouteMapViewState(
 
     fun resize(size: IntSize) {
         if (size == canvasSize) return
+        val sameWidth = size.width == canvasSize.width && canvasSize != IntSize.Zero
         canvasSize = size
+        if (sameWidth) {
+            // Only the height followed the route's fit: keep the view the user chose, on the globe.
+            userViewport = userViewport?.clamped(height, anchorLon)
+            return
+        }
         userViewport = null
         autoViewport = null
         userMoved = false
     }
+
+    /** Canvas height for [widthPx] when the layout offers [heightPx]: no band beyond the poles at the fit. */
+    fun fittedHeightPx(
+        widthPx: Float,
+        heightPx: Float,
+    ): Float = MapSizing.fittedHeightPx(bounds, widthPx, heightPx, metrics.fitInsets)
 
     fun resetView() {
         userViewport = null
@@ -386,10 +404,11 @@ private fun rememberMapMetrics(): MapMetrics {
                 fitInsets =
                     FitInsets(
                         left = FitLabelRoom.toPx(),
-                        top = FitLabelRoom.toPx(),
+                        top = (FitLabelRoom + ArcMaxBow).toPx(),
                         right = (MapControlSize + MapControlPadding * 2).toPx(),
                         bottom = FitLabelRoom.toPx(),
                     ),
+                arcMaxBowPx = ArcMaxBow.toPx(),
             )
         }
     }
@@ -421,7 +440,7 @@ internal fun RouteMapCanvas(
     val windowHeight = LocalConfiguration.current.screenHeightDp.toFloat()
     // A layout modifier, not BoxWithConstraints: this card sits inside AnimatedContent, where nested
     // subcomposition has thrown before (see the result panel).
-    Box(modifier = Modifier.fillMaxWidth().mapHeight(windowHeight)) {
+    Box(modifier = Modifier.fillMaxWidth().mapHeight(windowHeight, state::fittedHeightPx)) {
         Canvas(
             modifier =
                 Modifier
@@ -456,11 +475,18 @@ internal fun RouteMapCanvas(
     }
 }
 
-/** Full width, and as tall as [MapSizing.heightDp] allows for that width in a [windowHeightDp] tall window. */
-private fun Modifier.mapHeight(windowHeightDp: Float): Modifier =
+/**
+ * Full width, and as tall as [MapSizing.heightDp] allows for that width in a [windowHeightDp] tall window,
+ * or as [fitted] shortens that so a route wider than the world view leaves no band beyond the poles.
+ */
+private fun Modifier.mapHeight(
+    windowHeightDp: Float,
+    fitted: (widthPx: Float, heightPx: Float) -> Float,
+): Modifier =
     layout { measurable, constraints ->
         val width = constraints.maxWidth
-        val height = MapSizing.heightDp(width.toDp().value, windowHeightDp).dp.roundToPx()
+        val offered = MapSizing.heightDp(width.toDp().value, windowHeightDp).dp.toPx()
+        val height = fitted(width.toFloat(), offered).roundToInt()
         val placeable = measurable.measure(Constraints.fixed(width, height))
         layout(width, height) { placeable.place(0, 0) }
     }

@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import kotlin.math.min
 import kotlin.random.Random
 
 @DisplayName("MapViewport fit, zoom focus and pan reach")
@@ -109,6 +110,53 @@ class MapFitTest {
             val zoomedOut = fitted.zoomedBy(0.5f, 500f, 280f, 1000f, 560f, bounds.centerLon)
             assertFalse(panned.looksLike(fitted))
             assertFalse(zoomedOut.looksLike(fitted))
+        }
+    }
+
+    @Test
+    fun `every arc of a random fitted route stays inside the canvas, apex included`() {
+        val bow = 60f
+        val roomy = FitInsets(left = 40f, top = 40f + bow, right = 100f, bottom = 40f)
+        val random = Random(99)
+        repeat(300) { run ->
+            val route = randomRoute(random)
+            val (width, height) = listOf(1000f to 560f, 400f to 300f, 1200f to 1100f)[run % 3]
+            val viewport = MapViewport.fit(GeoBounds.of(route)!!, width, height, roomy)
+            val points = route.map { (lat, lon) -> viewport.xOf(lon, width) to viewport.yOf(lat, height) }
+            points.zipWithNext().forEach { (a, b) ->
+                val arc = ArcGeometry.arc(a.first, a.second, b.first, b.second, maxBowPx = bow)
+                assertTrue(arc.topY >= 0f && arc.topY < min(a.second, b.second), "run $run: apex ${arc.topY}")
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("map height")
+    inner class MapHeight {
+        @Test
+        fun `a route wider than the world view gets a canvas the world fills top to bottom`() {
+            // London, Los Angeles, Tokyo unwrapped west: about 220 degrees.
+            val route = listOf(51.5 to -0.13, 34.1 to -118.2, 35.7 to -220.3)
+            val bounds = GeoBounds.of(route)!!
+            val width = 1100f
+            val offered = 900f
+
+            val height = MapSizing.fittedHeightPx(bounds, width, offered, insets)
+            val fitted = MapViewport.fit(bounds, width, height, insets)
+
+            assertTrue(height < offered)
+            assertEquals(height, (180.0 * fitted.pxPerDegree).toFloat(), 1f)
+            // The world is centred, so neither pole leaves a band.
+            assertEquals(0.0, fitted.centerLat, 1e-3)
+            assertInside(fitted, route, width, height, insets, "wide route height")
+        }
+
+        @Test
+        fun `a route inside the world view keeps the offered height`() {
+            val bounds = GeoBounds.of(listOf(51.5 to -0.13, 47.6 to -122.3))!!
+
+            assertEquals(560f, MapSizing.fittedHeightPx(bounds, 1000f, 560f, insets))
+            assertEquals(560f, MapSizing.fittedHeightPx(null, 1000f, 560f, insets))
         }
     }
 

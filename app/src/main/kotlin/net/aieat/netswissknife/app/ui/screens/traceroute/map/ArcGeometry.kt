@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.traceroute.map
 
 import kotlin.math.hypot
+import kotlin.math.min
 
 /** A point in canvas pixels. */
 data class ScreenPoint(
@@ -26,6 +27,14 @@ data class ArcCurve(
         )
     }
 
+    /** The smallest y the curve reaches: its highest point on screen. */
+    val topY: Float
+        get() {
+            val denominator = startY - 2f * controlY + endY
+            val t = if (denominator == 0f) 0f else ((startY - controlY) / denominator).coerceIn(0f, 1f)
+            return minOf(startY, endY, pointAt(t).y)
+        }
+
     /** The part of this curve from its start to parameter [t] (de Casteljau split). */
     fun truncated(t: Float): ArcCurve {
         if (t >= 1f) return this
@@ -44,33 +53,36 @@ data class ArcCurve(
 /**
  * Arc shapes for the route map, kept free of Compose so they are unit-testable.
  *
- * Every arc bows to the left of its direction of travel by a height proportional to its
- * length, so a hop to a place and the hop straight back are drawn on opposite sides.
+ * Every arc bows upward on screen, like a flight route, whichever way it runs: its control point sits
+ * above the higher of its two ends by a bow proportional to the chord, capped so a long arc stays on the
+ * map. A hop and the hop straight back share one shape.
  */
 object ArcGeometry {
-    /** Control point offset as a fraction of the chord; the visible bow is half of this. */
+    /** Control point height above the higher end, as a fraction of the chord. */
     const val BOW_FRACTION = 0.3f
 
+    /**
+     * The arc from ([startX], [startY]) to ([endX], [endY]). Its highest point rises at most [maxBowPx]
+     * above the higher end, so a fit that leaves that much room above the route never clips an arc.
+     */
     fun arc(
         startX: Float,
         startY: Float,
         endX: Float,
         endY: Float,
+        maxBowPx: Float = Float.MAX_VALUE,
     ): ArcCurve {
-        val dx = endX - startX
-        val dy = endY - startY
-        val length = hypot(dx, dy)
-        val midX = (startX + endX) / 2f
-        val midY = (startY + endY) / 2f
-        // (dy, -dx) is the left-hand normal in a y-down canvas, scaled by the chord length.
+        val length = hypot(endX - startX, endY - startY)
+        val bow = min(length * BOW_FRACTION, maxBowPx)
+        // y grows downward, so "above" is the smaller y.
         return ArcCurve(
             startX = startX,
             startY = startY,
-            controlX = midX + dy * BOW_FRACTION,
-            controlY = midY - dx * BOW_FRACTION,
+            controlX = (startX + endX) / 2f,
+            controlY = min(startY, endY) - bow,
             endX = endX,
             endY = endY,
-        ).takeIf { length > 0f } ?: ArcCurve(startX, startY, midX, midY, endX, endY)
+        )
     }
 }
 
