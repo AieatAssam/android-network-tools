@@ -168,7 +168,7 @@
     <string name="dns_domain_label">Domain or IP address</string>
     <string name="dns_domain_placeholder">e.g. example.com or 8.8.8.8</string>
     <string name="dns_record_type_label">Record type</string>
-    <string name="dns_record_types_scroll_hint">More record types; swipe horizontally</string>
+    <string name="dns_record_types_scroll_hint">Show more record types</string>
     <string name="dns_server_label">DNS server</string>
     <string name="dns_server_custom">Custom server…</string>
     <string name="dns_server_system_name">System DNS</string>
@@ -212,6 +212,8 @@
     <string name="dns_no_records_subtitle">No %1$s records were returned.</string>
     <string name="dns_nxdomain_title">Domain not found</string>
     <string name="dns_nxdomain_subtitle">The DNS server reports that the name does not exist.</string>
+    <string name="dns_reverse_lookup_hint">This is an IP address, so it has no %1$s records of its own. A reverse lookup (PTR) finds the hostname for an address.</string>
+    <string name="dns_reverse_lookup_action">Look up PTR</string>
     <string name="dns_rcode_error_title">DNS lookup was not completed</string>
     <string name="dns_rcode_error_subtitle">The DNS server returned %1$s.</string>
     <string name="dns_rcode">RCODE: %1$s</string>
@@ -292,7 +294,7 @@
     <string name="ping_error_label_result">Error</string>
     <string name="ping_raw_output">Raw Output</string>
     <string name="ping_copy_raw">Copy raw output</string>
-    <string name="ping_export_csv_label">Export as CSV</string>
+    <string name="ping_export_csv_label">Copy and Share send the results as CSV.</string>
     <string name="ping_chart_title">RTT Chart</string>
     <string name="ping_chart_window">Last %1$d packets</string>
     <string name="ping_chart_a11y">RTT chart: successful sample count %1$d; axis from %2$d to %3$d ms; %4$s %5$d ms, %6$s %7$.1f ms, %8$s %9$d ms; %10$s</string>
@@ -476,6 +478,7 @@
 
     <!-- LAN Topology -->
     <string name="lan_topology_title">Subnet overview</string>
+    <string name="lan_topology_hint">Tap a device to open its details in the list.</string>
     <string name="lan_view_list">List</string>
     <string name="lan_view_map">Map</string>
     <string name="lan_more_devices">more…</string>
@@ -1082,7 +1085,7 @@
     <string name="whois_screen_subtitle">Domain and IP registration lookup</string>
     <string name="whois_query_label">Domain, IP, or ASN</string>
     <string name="whois_query_placeholder">e.g. example.com, 8.8.8.8, AS15169</string>
-    <string name="whois_query_invalid">Enter a domain or IP address (or an ASN such as AS15169), with no spaces or symbols.</string>
+    <string name="whois_query_invalid">Enter a domain, an IP address or an ASN such as AS15169.</string>
     <string name="whois_protocol_label">Lookup protocol</string>
     <string name="whois_protocol_auto">Auto</string>
     <string name="whois_protocol_rdap">RDAP</string>
@@ -1375,7 +1378,7 @@
     <string name="settings_theme_dark">Dark</string>
 
     <!-- Settings – Defaults -->
-    <string name="settings_defaults_section">Tool Defaults</string>
+    <string name="settings_defaults_section">Tool defaults</string>
     <string name="settings_ping_count_label">Default ping count: %1$d</string>
     <string name="settings_ping_count_usage">Used by Ping.</string>
     <string name="settings_timeout_label">Default timeout: %1$d ms</string>
@@ -1406,7 +1409,7 @@
     <string name="settings_privacy_policy_link" translatable="false">https://github.com/AieatAssam/android-network-tools/blob/main/PRIVACY_POLICY.md</string>
 
     <!-- Settings – Data Source Attributions -->
-    <string name="settings_attributions_section">Data Source Attributions</string>
+    <string name="settings_attributions_section">Data source attributions</string>
     <string name="settings_attribution_speedtest_title">Speed Test: Cloudflare</string>
     <string name="settings_attribution_speedtest_body">Speed Test contacts Cloudflare\'s public speed test service at speed.cloudflare.com to measure latency, download, and upload performance. It sends and receives synthetic measurement traffic only; it does not upload your hostnames, IP addresses, DNS results, Wi-Fi details, scan results, files, or other personal content. Net Swiss Knife is an independent app and is not affiliated with, sponsored by, or endorsed by Cloudflare, Inc. Cloudflare and the Cloudflare logo are trademarks of Cloudflare, Inc.</string>
     <string name="settings_attribution_speedtest_url" translatable="false">https://speed.cloudflare.com</string>
@@ -1426,7 +1429,7 @@
     <string name="settings_attribution_whois_arin_url" translatable="false">https://whois.arin.net</string>
 
     <!-- Settings – Open Source Licenses -->
-    <string name="settings_licenses_section">Open Source Licenses</string>
+    <string name="settings_licenses_section">Open source licenses</string>
     <string name="settings_licenses_subtitle">Third-party libraries used in this app</string>
 
     <!-- Generic dialogs -->
@@ -1564,7 +1567,7 @@
     <string name="onboarding_page4_title">A couple of permissions, explained upfront</string>
     <string name="onboarding_page4_permission1">Wi-Fi Scanner asks for Location because Android requires it to scan for Wi-Fi networks. Location is never recorded or sent anywhere.</string>
     <string name="onboarding_page4_permission2">On Android 13 and newer it also asks for Nearby Wi-Fi Devices. Android requires both permissions for a live Wi-Fi scan, and Location Services must be switched on.</string>
-    <string name="onboarding_page4_privacy">There are no analytics and no accounts. Diagnostic results stay on this device. Tools contact only the target you enter and the lookup services listed under Data Source Attributions in Settings.</string>
+    <string name="onboarding_page4_privacy">There are no analytics and no accounts. Diagnostic results stay on this device. Tools contact only the target you enter and the lookup services listed under Data source attributions in Settings.</string>
 
     <!-- Settings – Guide section -->
     <string name="settings_guide_section">Guide</string>
@@ -1589,7 +1592,7 @@
     <string name="help_ping_params_heading">Key parameters</string>
     <string name="help_ping_results_heading">Reading the results</string>
     <string-array name="help_ping_params_bullets">
-        <item>Count: number of ping packets to send.</item>
+        <item>Count: number of ping packets to send, from 1 to 100.</item>
         <item>Timeout: how long to wait for each reply before marking it lost.</item>
         <item>Advanced: choose payload size (0 to 1,472 bytes), TTL (1 to 255), and interval (100 to 10,000 ms).</item>
         <item>Continuous: pings indefinitely until you stop it manually.</item>
@@ -1638,7 +1641,7 @@
     <string name="help_portscan_params_heading">Key parameters</string>
     <string name="help_portscan_results_heading">Reading the results</string>
     <string-array name="help_portscan_params_bullets">
-        <item>Port range: use a preset (Common services, Well-known 1 to 1024, Web, Databases, Mail, Remote access) or enter a custom range of up to 10,000 ports.</item>
+        <item>Port range: use a preset (Common services, Well-known (1 to 1024), Web services, Databases, Mail services, Remote access) or Custom range, up to 10,000 ports.</item>
         <item>Timeout: how long to wait for each port before giving up.</item>
         <item>Concurrency: how many ports to check at the same time. Scan stays disabled when its worst case would exceed 15 minutes.</item>
     </string-array>
@@ -1664,7 +1667,7 @@
     </string-array>
     <string-array name="help_lan_results_bullets">
         <item>Expand a device to see what found it: a ping reply, an open TCP port, or a NetBIOS or mDNS reply.</item>
-        <item>Latency is the single ping reply measured during the scan, while many devices are being probed at once, so it can be higher than a later run of Ping.</item>
+        <item>Latency is one ping reply measured during the scan. A single reply can be faster or slower than a later run of Ping: a Wi-Fi device that sleeps to save power answers at very different speeds, and many devices are probed at once.</item>
         <item>Tap the uncertain probes count in the summary to see addresses that gave no proof of a device. They are not in the device list, the map, or the shared text.</item>
         <item>MAC addresses may be unavailable on Android 10 and later because apps cannot read the ARP cache.</item>
         <item>The gateway comes from the active network\'s default route, and this device is labelled on its own row. Tap a device for details or Scan ports.</item>

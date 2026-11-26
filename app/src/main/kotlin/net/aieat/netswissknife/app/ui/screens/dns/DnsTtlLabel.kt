@@ -14,3 +14,8 @@ internal fun dnsTtlLabel(ttlSeconds: Long): String {
         else -> if (minutes == 0L) "${hours}h" else "${hours}h ${minutes}m"
     }
 }
+
+/** The EDNS OPT pseudo-record carries flags in its TTL field, not a cache lifetime, so it shows no TTL. */
+internal fun dnsRecordShowsTtl(rrTypeName: String): Boolean = !rrTypeName.equals(OPT_TYPE_NAME, ignoreCase = true)
+
+private const val OPT_TYPE_NAME = "OPT"

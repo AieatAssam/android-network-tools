@@ -82,6 +82,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.drawText
@@ -119,6 +120,7 @@ import net.aieat.netswissknife.app.ui.components.messageRes
 import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
+import net.aieat.netswissknife.app.ui.components.scrollEdgeFade
 import net.aieat.netswissknife.app.ui.i18n.asString
 import net.aieat.netswissknife.app.ui.screens.ping.PING_ROLLING_WINDOW
 import net.aieat.netswissknife.app.ui.screens.ping.PingCsvSerializer
@@ -680,10 +682,12 @@ private fun PingSliderRow(
     sliderTestTag: String? = null,
 ) {
     Column {
+        // The slider announces the label itself, so the visible text is not read a second time.
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.clearAndSetSemantics { },
         )
         Slider(
             value = value,
@@ -1497,20 +1501,30 @@ private fun RawOutputCard(
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        SelectionContainer {
-                            Text(
-                                text = rawOutput,
-                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier =
-                                    Modifier
-                                        .padding(12.dp)
-                                        .horizontalScroll(rememberScrollState()),
-                            )
-                        }
+                        RawOutputText(rawOutput)
                     }
                 }
             }
         }
+    }
+}
+
+/** Long lines scroll sideways; the faded edge shows that more of the line follows. */
+@Composable
+private fun RawOutputText(rawOutput: String) {
+    val rawScroll = rememberScrollState()
+    SelectionContainer {
+        Text(
+            text = rawOutput,
+            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier =
+                Modifier
+                    .scrollEdgeFade(
+                        canScrollBackward = rawScroll.canScrollBackward,
+                        canScrollForward = rawScroll.canScrollForward,
+                    ).padding(12.dp)
+                    .horizontalScroll(rawScroll),
+        )
     }
 }

@@ -78,6 +78,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -196,12 +197,13 @@ fun WhoisScreen(viewModel: WhoisViewModel = hiltViewModel()) {
                 // ── Input card ─────────────────────────────────────────────────────
                 ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        val queryInvalidText = stringResource(R.string.whois_query_invalid)
+                        val queryInvalidText = stringResource(whoisQueryProblemRes(uiState.query))
                         val queryInvalidSupport: @Composable () -> Unit = { Text(queryInvalidText) }
                         val queryKeyboard =
                             KeyboardOptions(
                                 capitalization = KeyboardCapitalization.None,
                                 autoCorrectEnabled = false,
+                                keyboardType = KeyboardType.Uri,
                                 imeAction = ImeAction.Go,
                             )
                         val queryActions =

@@ -1,5 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.whois
 
+import net.aieat.netswissknife.app.R
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -21,5 +23,11 @@ class WhoisQueryValidityTest {
     @Test
     fun `a query with spaces or symbols is invalid as the user types`() {
         assertTrue(isWhoisQueryInvalid("bad domain!!"))
+    }
+
+    @Test
+    fun `an invalid query names its specific reason`() {
+        assertEquals(R.string.error_host_ipv4_invalid, whoisQueryProblemRes("999.1.1.1"))
+        assertEquals(R.string.error_invalid_host, whoisQueryProblemRes("example. com"))
     }
 }

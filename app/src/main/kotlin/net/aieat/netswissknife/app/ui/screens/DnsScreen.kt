@@ -54,6 +54,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -72,6 +73,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -96,6 +98,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
@@ -125,9 +128,11 @@ import net.aieat.netswissknife.app.ui.screens.dns.DnsUiState
 import net.aieat.netswissknife.app.ui.screens.dns.DnsViewModel
 import net.aieat.netswissknife.app.ui.screens.dns.customServerShowsError
 import net.aieat.netswissknife.app.ui.screens.dns.dnsPullRefreshActive
+import net.aieat.netswissknife.app.ui.screens.dns.dnsRecordShowsTtl
 import net.aieat.netswissknife.app.ui.screens.dns.dnsRecordIconLabel
 import net.aieat.netswissknife.app.ui.screens.dns.dnsResponseTone
 import net.aieat.netswissknife.app.ui.screens.dns.dnsShowsOwner
+import net.aieat.netswissknife.app.ui.screens.dns.dnsSuggestsReverseLookup
 import net.aieat.netswissknife.app.ui.screens.dns.dnsServerAcceptsLookup
 import net.aieat.netswissknife.app.ui.screens.dns.dnsTtlLabel
 import net.aieat.netswissknife.app.ui.theme.AppMotion
@@ -312,6 +317,10 @@ fun DnsScreen(viewModel: DnsViewModel = hiltViewModel()) {
                                 showRaw = state.showRaw,
                                 onToggleRaw = viewModel::onToggleRawView,
                                 onClear = viewModel::onClearResults,
+                                onReverseLookup = {
+                                    viewModel.onRecordTypeChange(DnsRecordType.PTR)
+                                    viewModel.performLookup()
+                                },
                             )
                         }
                     }
@@ -616,15 +625,17 @@ private fun RecordTypeChips(
         }
 
         if (scrollState.canScrollForward) {
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = stringResource(R.string.dns_record_types_scroll_hint),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier =
-                    Modifier
-                        .padding(start = 4.dp)
-                        .size(20.dp),
-            )
+            val scope = rememberCoroutineScope()
+            IconButton(
+                onClick = { scope.launch { scrollState.animateScrollTo(scrollState.maxValue) } },
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = stringResource(R.string.dns_record_types_scroll_hint),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
     }
 }
@@ -913,6 +924,7 @@ private fun DnsResultPanel(
     showRaw: Boolean,
     onToggleRaw: () -> Unit,
     onClear: () -> Unit,
+    onReverseLookup: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -921,6 +933,9 @@ private fun DnsResultPanel(
     ) {
         // Summary card
         DnsResultSummaryCard(result = result, onClear = onClear)
+        if (dnsSuggestsReverseLookup(result)) {
+            DnsReverseLookupHintCard(recordType = result.recordType, onReverseLookup = onReverseLookup)
+        }
 
         // Answers first. Authority and Additional follow them, as the DNS message orders its sections.
         if (result.records.isEmpty()) {
@@ -1200,7 +1215,7 @@ private fun DnsRecordCard(
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    TtlBadge(ttl = record.ttl)
+                    if (dnsRecordShowsTtl(record.rrTypeName)) TtlBadge(ttl = record.ttl)
                     IconButton(
                         onClick = {
                             copyValue(record.value)
@@ -1427,6 +1442,28 @@ private fun PlainValueDisplay(value: String) {
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                     .padding(10.dp),
         )
+    }
+}
+
+@Composable
+private fun DnsReverseLookupHintCard(
+    recordType: DnsRecordType,
+    onReverseLookup: () -> Unit,
+) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = AppShapes.large) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.dns_reverse_lookup_hint, recordType.displayName),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            FilledTonalButton(onClick = hapticAction(onReverseLookup)) {
+                Text(stringResource(R.string.dns_reverse_lookup_action))
+            }
+        }
     }
 }
 

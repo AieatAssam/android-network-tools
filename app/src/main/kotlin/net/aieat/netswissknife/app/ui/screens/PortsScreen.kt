@@ -387,6 +387,26 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                 }
             }
 
+            // No open ports: shown where they would be, above the closed and filtered list
+            if (finishedOpen.isEmpty()) {
+                item {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.ports_no_open_ports),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+            }
+
             // ── All Results Section ─────────────────────────────────────────
             if (finishedClosedAndFiltered.isNotEmpty()) {
                 item {
@@ -414,26 +434,6 @@ fun PortsScreen(viewModel: PortScanViewModel = hiltViewModel()) {
                 if (showAll) {
                     items(finishedClosedAndFiltered, key = { it.port }) { portResult ->
                         PortResultRow(portResult)
-                    }
-                }
-            }
-
-            // Empty state
-            if (finishedOpen.isEmpty()) {
-                item {
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.ports_no_open_ports),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                        )
                     }
                 }
             }
@@ -555,7 +555,12 @@ private fun PortScanInputCard(
                 placeholder = { Text(stringResource(R.string.ports_host_placeholder)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardOptions =
+                    KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        autoCorrectEnabled = false,
+                        imeAction = ImeAction.Done,
+                    ),
                 keyboardActions =
                     KeyboardActions(onDone = {
                         if (!isScanning && canStart) onStartScan()

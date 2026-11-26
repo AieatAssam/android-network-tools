@@ -185,14 +185,14 @@ class OuiLookupViewModelTest {
     }
 
     @Test
-    fun `clear empties the input and drops the result`() {
+    fun `clear results drops the result and keeps the input`() {
         coEvery { useCase.invoke(any()) } returns OuiLookupReport(listOf(address("B8:27:EB")), false)
         val vm = viewModel()
         vm.onRecentSelected("B8:27:EB")
 
         vm.onClear()
 
-        assertEquals("", vm.uiState.value.input)
+        assertEquals("B8:27:EB", vm.uiState.value.input)
         assertEquals(OuiLookupPhase.Idle, vm.uiState.value.phase)
     }
 

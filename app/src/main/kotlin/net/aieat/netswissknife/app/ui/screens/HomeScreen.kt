@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -58,6 +59,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.bottomScrollEdgeFade
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.components.homeGridColumns
 import net.aieat.netswissknife.app.ui.components.isCompactHero
@@ -221,10 +223,13 @@ private fun ToolGrid(onNavigate: (String) -> Unit) {
         val columns = homeGridColumns(availableWidthDp = maxWidth.value.toInt() - 32)
         // Rows are laid out by hand so every tile in a row shares that row's height (PHA-22). A lazy
         // grid measures each tile on its own, so tiles with longer descriptions left ragged row ends.
+        val listState = rememberLazyListState()
         LazyColumn(
+            state = listState,
             modifier =
                 Modifier
                     .fillMaxSize()
+                    .bottomScrollEdgeFade(canScrollForward = listState.canScrollForward)
                     .testTag(HomeScreenTestTags.TOOL_GRID),
             contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),

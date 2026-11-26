@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.onboarding
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
@@ -100,11 +101,13 @@ fun OnboardingSheet(onDismiss: () -> Unit) {
                     }
                 }
 
+                // Pages differ in height; the sheet eases to each page's height instead of jumping.
                 HorizontalPager(
                     state = pagerState,
                     modifier =
                         Modifier
                             .fillMaxWidth()
+                            .animateContentSize(AppMotion.enter())
                             .heightIn(min = 360.dp),
                 ) { page ->
                     Column(

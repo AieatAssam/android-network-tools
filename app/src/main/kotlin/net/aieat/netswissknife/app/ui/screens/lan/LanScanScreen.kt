@@ -967,7 +967,7 @@ internal fun sortLanHosts(
     }
 
 /** Sort key for ascending numeric IPv4 order (dotted-decimal string sort puts .2 after .10). */
-private fun ipSortKey(ip: String): Long =
+internal fun ipSortKey(ip: String): Long =
     ip
         .split('.')
         .fold(0L) { acc, part -> acc * 256L + (part.toLongOrNull() ?: 0L) }
@@ -987,7 +987,7 @@ private fun HostFilterChips(
         labels.forEach { (filter, labelRes) ->
             FilterChip(
                 selected = activeFilter == filter,
-                onClick = { onFilterChange(filter) },
+                onClick = { onFilterChange(lanFilterAfterTap(activeFilter, filter)) },
                 label = { Text(stringResource(labelRes)) },
             )
         }
@@ -1332,7 +1332,7 @@ private fun LanUncertainProbesSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            items(summary.uncertainHosts) { diagnostic ->
+            items(lanDiagnosticsInIpOrder(summary.uncertainHosts)) { diagnostic ->
                 Text(
                     text =
                         stringResource(
@@ -1529,6 +1529,11 @@ private fun NetworkTopologyCard(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
+            Text(
+                text = stringResource(R.string.lan_topology_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             val cells =
                 preview.visible.map { LanMapCell.Device(it) } +
                     if (preview.hiddenCount > 0) listOf(LanMapCell.More(preview.hiddenCount)) else emptyList()
@@ -1630,7 +1635,7 @@ private fun TopologyNode(
             text = caption,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
         )

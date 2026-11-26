@@ -1,6 +1,8 @@
 package net.aieat.netswissknife.app.ui.screens.dns
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
@@ -23,5 +25,12 @@ class DnsTtlLabelTest {
         assertEquals("1h", dnsTtlLabel(3_600))
         assertEquals("1h 1m", dnsTtlLabel(3_660))
         assertEquals("24h", dnsTtlLabel(86_400))
+    }
+
+    @Test
+    fun `the OPT pseudo-record shows no TTL and real records do`() {
+        assertFalse(dnsRecordShowsTtl("OPT"))
+        assertTrue(dnsRecordShowsTtl("A"))
+        assertTrue(dnsRecordShowsTtl("SOA"))
     }
 }

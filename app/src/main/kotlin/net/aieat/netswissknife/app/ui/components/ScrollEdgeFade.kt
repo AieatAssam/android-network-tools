@@ -37,3 +37,24 @@ fun Modifier.scrollEdgeFade(
                 drawRect(brush = trailing, blendMode = BlendMode.DstIn)
             }
         }
+
+/** Height of the fade that marks rows cut off at the bottom of a vertically scrolling list. */
+val BottomScrollEdgeFadeHeight: Dp = 56.dp
+
+/**
+ * Fades the bottom edge of a vertically scrolling list while more rows lie below it, so a list that
+ * happens to end on a row boundary still reads as "scroll for more" rather than as the end.
+ */
+fun Modifier.bottomScrollEdgeFade(
+    canScrollForward: Boolean,
+    fadeHeight: Dp = BottomScrollEdgeFadeHeight,
+): Modifier =
+    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        .drawWithContent {
+            drawContent()
+            if (canScrollForward) {
+                val start = size.height - fadeHeight.toPx()
+                val trailing = Brush.verticalGradient(listOf(Color.Black, Color.Transparent), start, size.height)
+                drawRect(brush = trailing, blendMode = BlendMode.DstIn)
+            }
+        }

@@ -115,9 +115,10 @@ class OuiLookupViewModel
             viewModelScope.launch { recents.clearAll(AppPreferenceKeys.RECENT_OUI_LOOKUPS) }
         }
 
+        /** Clear results drops the result and keeps the input; the field has its own Clear icon. */
         fun onClear() {
             lookupJob?.cancel()
-            _uiState.value = OuiLookupUiState()
+            _uiState.update { it.copy(phase = OuiLookupPhase.Idle) }
         }
 
         private fun runLookup(text: String) {

@@ -9,6 +9,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -117,7 +118,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             SettingsHeader(onBack = onBack)
-            AnimatedVisibility(visible = visibleSections >= 1, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
+            SettingsSectionReveal(visible = visibleSections >= 1) {
                 ThemeSection(
                     themeOverride = themeOverride,
                     onThemeChange = viewModel::setThemeOverride,
@@ -125,7 +126,7 @@ fun SettingsScreen(
                     onDynamicColorChange = viewModel::setDynamicColor,
                 )
             }
-            AnimatedVisibility(visible = visibleSections >= 2, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
+            SettingsSectionReveal(visible = visibleSections >= 2) {
                 DefaultsSection(
                     pingCount = defaultPingCount,
                     timeoutMs = defaultTimeoutMs,
@@ -137,23 +138,40 @@ fun SettingsScreen(
                     onWifiRefreshIntervalChange = viewModel::setWifiRefreshInterval,
                 )
             }
-            AnimatedVisibility(visible = visibleSections >= 3, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
+            SettingsSectionReveal(visible = visibleSections >= 3) {
                 DataSection(onClearRecents = viewModel::clearAllRecentHosts)
             }
-            AnimatedVisibility(visible = visibleSections >= 4, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
+            SettingsSectionReveal(visible = visibleSections >= 4) {
                 OnboardingResetSection(onReset = viewModel::resetOnboarding)
             }
-            AnimatedVisibility(visible = visibleSections >= 5, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
+            SettingsSectionReveal(visible = visibleSections >= 5) {
                 AboutSection()
             }
-            AnimatedVisibility(visible = visibleSections >= 6, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
+            SettingsSectionReveal(visible = visibleSections >= 6) {
                 AttributionsSection()
             }
-            AnimatedVisibility(visible = visibleSections >= 7, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
+            SettingsSectionReveal(visible = visibleSections >= 7) {
                 LicensesSection()
             }
             Spacer(Modifier.height(8.dp))
         }
+    }
+}
+
+/**
+ * Reveals one Settings section. The section's header and card are stacked in a column: placed straight
+ * into AnimatedVisibility they would overlap, and the card would hide the header.
+ */
+@Composable
+private fun SettingsSectionReveal(
+    visible: Boolean,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 },
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
     }
 }
 
