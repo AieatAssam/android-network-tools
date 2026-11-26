@@ -12,7 +12,12 @@ internal const val MANY_SLIDER_STEPS = 10
 @Composable
 internal fun sliderColorsFor(steps: Int): SliderColors =
     if (steps > MANY_SLIDER_STEPS) {
-        SliderDefaults.colors(activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent)
+        SliderDefaults.colors(
+            activeTickColor = Color.Transparent,
+            inactiveTickColor = Color.Transparent,
+            disabledActiveTickColor = Color.Transparent,
+            disabledInactiveTickColor = Color.Transparent,
+        )
     } else {
         SliderDefaults.colors()
     }
