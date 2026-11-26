@@ -169,6 +169,8 @@ internal class MapMetrics(
     val fitInsets: FitInsets,
     /** Highest an arc rises above its higher end; the fit's top inset includes it, so no arc is clipped. */
     val arcMaxBowPx: Float,
+    /** Shortest the map gets: the smallest map height, and never shorter than the zoom buttons' column. */
+    val minMapHeightPx: Float,
 )
 
 private fun geometryOf(
@@ -264,7 +266,7 @@ private class RouteMapViewState(
     fun fittedHeightPx(
         widthPx: Float,
         heightPx: Float,
-    ): Float = MapSizing.fittedHeightPx(bounds, widthPx, heightPx, metrics.fitInsets)
+    ): Float = MapSizing.fittedHeightPx(bounds, widthPx, heightPx, metrics.fitInsets, metrics.minMapHeightPx)
 
     fun resetView() {
         userViewport = null
@@ -409,6 +411,11 @@ private fun rememberMapMetrics(): MapMetrics {
                         bottom = FitLabelRoom.toPx(),
                     ),
                 arcMaxBowPx = ArcMaxBow.toPx(),
+                minMapHeightPx =
+                    maxOf(
+                        MapSizing.MIN_HEIGHT_DP.dp.toPx(),
+                        (MapControlSize * MAP_CONTROL_COUNT + MapControlPadding * 2).toPx(),
+                    ),
             )
         }
     }

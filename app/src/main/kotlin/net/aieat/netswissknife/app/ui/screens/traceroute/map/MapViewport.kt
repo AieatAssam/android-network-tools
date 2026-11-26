@@ -260,11 +260,15 @@ data class MapViewport(
             // Insets never take more than most of a small canvas, so a route always has room.
             val maxX = widthPx * MAX_INSET_FRACTION
             val maxY = heightPx * MAX_INSET_FRACTION
-            val left = min(insets.left, maxX / 2)
-            val right = min(insets.right, maxX - left)
-            val top = min(insets.top, maxY / 2)
-            val bottom = min(insets.bottom, maxY - top)
-            return PixelBox(left, top, widthPx - right, heightPx - bottom)
+            // Opposite insets that together take more than that shrink in proportion, so each keeps its share.
+            val scaleX = min(1f, maxX / (insets.left + insets.right).coerceAtLeast(Float.MIN_VALUE))
+            val scaleY = min(1f, maxY / (insets.top + insets.bottom).coerceAtLeast(Float.MIN_VALUE))
+            return PixelBox(
+                left = insets.left * scaleX,
+                top = insets.top * scaleY,
+                right = widthPx - insets.right * scaleX,
+                bottom = heightPx - insets.bottom * scaleY,
+            )
         }
 
         private fun centredFit(

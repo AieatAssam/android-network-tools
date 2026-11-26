@@ -36,18 +36,24 @@ object MapSizing {
      * Canvas height for a map [widthPx] wide that [heightDp] would make [heightPx] tall: that height, or less
      * when the fit of [bounds] is wider than the world view, so the world fills the canvas top to bottom
      * with no band beyond the poles. Each pass fits again at the smaller height, which can only zoom out.
+     *
+     * Never below [minHeightPx] (the smallest map, and room for the zoom buttons), nor above [heightPx].
+     * At that floor the fit still keeps every marker in view, so the world is centred and the map's ocean
+     * colour fills the canvas above and below it.
      */
     fun fittedHeightPx(
         bounds: GeoBounds?,
         widthPx: Float,
         heightPx: Float,
         insets: FitInsets,
+        minHeightPx: Float,
     ): Float {
         if (bounds == null || widthPx <= 0f || heightPx <= 0f) return heightPx
+        val floor = min(minHeightPx, heightPx)
         var height = heightPx
         repeat(FIT_HEIGHT_PASSES) {
             val world = (WORLD_LAT_SPAN * MapViewport.fit(bounds, widthPx, height, insets).pxPerDegree).toFloat()
-            height = min(height, world)
+            height = min(height, world).coerceAtLeast(floor)
         }
         return height
     }

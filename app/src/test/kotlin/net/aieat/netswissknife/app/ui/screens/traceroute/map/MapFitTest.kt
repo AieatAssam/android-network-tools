@@ -141,7 +141,7 @@ class MapFitTest {
             val width = 1100f
             val offered = 900f
 
-            val height = MapSizing.fittedHeightPx(bounds, width, offered, insets)
+            val height = MapSizing.fittedHeightPx(bounds, width, offered, insets, minHeightPx = 0f)
             val fitted = MapViewport.fit(bounds, width, height, insets)
 
             assertTrue(height < offered)
@@ -155,8 +155,45 @@ class MapFitTest {
         fun `a route inside the world view keeps the offered height`() {
             val bounds = GeoBounds.of(listOf(51.5 to -0.13, 47.6 to -122.3))!!
 
-            assertEquals(560f, MapSizing.fittedHeightPx(bounds, 1000f, 560f, insets))
-            assertEquals(560f, MapSizing.fittedHeightPx(null, 1000f, 560f, insets))
+            assertEquals(560f, MapSizing.fittedHeightPx(bounds, 1000f, 560f, insets, minHeightPx = 440f))
+            assertEquals(560f, MapSizing.fittedHeightPx(null, 1000f, 560f, insets, minHeightPx = 440f))
+        }
+
+        @Test
+        fun `at every width the map holds the zoom buttons, every marker and every arc, clear of the buttons`() {
+            // Density 2: 48 dp buttons x 3 with 4 dp padding, 220 dp smallest map, insets as the canvas sets them.
+            val controlsWidth = 112f
+            val controlsHeight = 304f
+            val minHeight = 440f
+            val bow = 80f
+            val canvasInsets = FitInsets(left = 56f, top = 56f + bow, right = controlsWidth, bottom = 56f)
+            val routes =
+                listOf(
+                    listOf(51.5 to -0.13, 34.1 to -118.2, 35.7 to -220.3),
+                    listOf(51.5 to -0.13, 40.7 to -74.0, -33.9 to -208.8),
+                    listOf(51.5 to -0.13, 51.75 to -0.47, 47.6 to -122.3),
+                    listOf(51.5 to -0.13),
+                    listOf(78.2 to 15.6, -77.8 to 166.7),
+                )
+            (300..1400 step 50).forEach { width ->
+                val offered = MapSizing.heightDp(width / 2f, 960f) * 2f
+                routes.forEach { route ->
+                    val bounds = GeoBounds.of(route)!!
+                    val height = MapSizing.fittedHeightPx(bounds, width.toFloat(), offered, canvasInsets, minHeight)
+                    val context = "width $width, route $route, height $height"
+                    assertTrue(height >= controlsHeight && height >= minHeight - 1f, context)
+                    val view = MapViewport.fit(bounds, width.toFloat(), height, canvasInsets)
+                    assertInside(view, route, width.toFloat(), height, canvasInsets, context)
+                    val points = route.map { (lat, lon) -> view.xOf(lon, width.toFloat()) to view.yOf(lat, height) }
+                    points.forEach { (x, y) ->
+                        assertFalse(x > width - controlsWidth + 1f && y < controlsHeight, "under the buttons: $context")
+                    }
+                    points.zipWithNext().forEach { (a, b) ->
+                        val arc = ArcGeometry.arc(a.first, a.second, b.first, b.second, maxBowPx = bow)
+                        assertTrue(arc.topY >= 0f, "arc clipped: $context")
+                    }
+                }
+            }
         }
     }
 
