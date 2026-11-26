@@ -141,6 +141,8 @@ import net.aieat.netswissknife.app.ui.navigation.ToolIntent
 import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 import net.aieat.netswissknife.app.ui.navigation.ToolPort
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
+import net.aieat.netswissknife.app.ui.screens.PORT_CONCURRENCY_STEPS
+import net.aieat.netswissknife.app.ui.screens.concurrencyIndexOf
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.lan.DEFAULT_PRESENCE_PORTS
@@ -683,10 +685,10 @@ private fun LanInputCard(
             // Concurrency slider
             LabeledSlider(
                 label = stringResource(R.string.lan_concurrency_label, concurrency),
-                value = concurrency.toFloat(),
-                onValueChange = { onConcurrencyChange(snapConcurrency(it)) },
-                valueRange = 1f..500f,
-                steps = 0,
+                value = concurrencyIndexOf(concurrency).toFloat(),
+                onValueChange = { onConcurrencyChange(PORT_CONCURRENCY_STEPS[it.roundToInt()]) },
+                valueRange = 0f..PORT_CONCURRENCY_STEPS.lastIndex.toFloat(),
+                steps = PORT_CONCURRENCY_STEPS.size - 2,
                 enabled = !isScanning && !isCanceling,
             )
             concurrencyRaisedFrom?.let { saved ->
@@ -2048,21 +2050,6 @@ private const val MAX_SCAN_TIMEOUT_MS = 10_000
 internal fun snapTimeoutMs(value: Float): Int =
     ((value / TIMEOUT_STEP_MS).roundToInt() * TIMEOUT_STEP_MS)
         .coerceIn(MIN_SCAN_TIMEOUT_MS, MAX_SCAN_TIMEOUT_MS)
-
-private const val CONCURRENCY_LINEAR_LIMIT = 16
-private const val CONCURRENCY_STEP = 8
-private const val CONCURRENCY_MAX = 496
-
-/** Concurrency slider positions: every value up to 16, then multiples of 8 up to 496. */
-internal fun snapConcurrency(value: Float): Int {
-    val rounded = value.roundToInt()
-    return if (rounded <= CONCURRENCY_LINEAR_LIMIT) {
-        rounded.coerceAtLeast(1)
-    } else {
-        (((rounded + CONCURRENCY_STEP / 2) / CONCURRENCY_STEP) * CONCURRENCY_STEP)
-            .coerceIn(CONCURRENCY_LINEAR_LIMIT, CONCURRENCY_MAX)
-    }
-}
 
 @Suppress("MagicNumber")
 private val likelyTlsPorts =

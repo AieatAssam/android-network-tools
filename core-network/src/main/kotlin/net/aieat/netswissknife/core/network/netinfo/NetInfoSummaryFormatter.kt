@@ -34,6 +34,7 @@ data class NetInfoSummaryLabels(
     val publicIpv6: String,
     val hostname: String,
     val noReverseDns: String,
+    val reverseDnsFailed: String,
     val location: String,
     val asn: String,
     val notChecked: String,
@@ -131,7 +132,7 @@ object NetInfoSummaryFormatter {
             is NetworkResult.Success -> {
                 val info = result.data
                 line(label, info.address)
-                line(labels.hostname, info.hostname ?: labels.noReverseDns)
+                line(labels.hostname, info.hostnameOr(labels.noReverseDns, labels.reverseDnsFailed))
                 if (withDetails) appendDetails(PublicNetworkDetails.of(info), labels)
             }
 

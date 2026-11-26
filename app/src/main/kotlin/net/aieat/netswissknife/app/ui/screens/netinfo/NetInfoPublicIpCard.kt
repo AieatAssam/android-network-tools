@@ -144,7 +144,11 @@ private fun PublicFamilyRows(
             NetInfoValueRow(label = label, value = info.address, onCopy = onCopy)
             NetInfoFactRow(
                 label = stringResource(R.string.netinfo_hostname),
-                value = info.hostname ?: stringResource(R.string.netinfo_no_reverse_dns),
+                value =
+                    info.hostnameOr(
+                        noName = stringResource(R.string.netinfo_no_reverse_dns),
+                        lookupFailed = stringResource(R.string.netinfo_reverse_dns_failed),
+                    ),
             )
             if (showDetails) PublicDetailRows(PublicNetworkDetails.of(info))
         }

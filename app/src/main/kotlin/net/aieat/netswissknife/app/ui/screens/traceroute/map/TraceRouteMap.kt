@@ -158,8 +158,15 @@ object RouteClassification {
     /** Shorter segments get no speed: router reply time outweighs the propagation delay. */
     const val MIN_SPEED_DISTANCE_KM = 300.0
 
-    /** The RTT must grow by at least this much from the previous stop for a speed to be computed. */
-    const val MIN_SPEED_DELTA_RTT_MS = 1.0
+    /**
+     * The RTT must grow by at least this much from the previous stop for a speed to be computed. Each median is
+     * whole milliseconds, so their difference is off by up to about 1 ms; from 5 ms on that error is at most 20%,
+     * under the gap between the width bands.
+     */
+    const val MIN_SPEED_DELTA_RTT_MS = 5.0
+
+    /** Nothing travels faster than light in fibre, so a higher figure is noise or a wrong location, not a speed. */
+    private const val MAX_SPEED_FRACTION = 1.0
 
     /** Dashes: jitter is high when it is at least this many ms ... */
     const val HIGH_JITTER_MIN_MS = 20L
@@ -169,14 +176,17 @@ object RouteClassification {
 
     /**
      * Fraction of light in fibre for [distanceKm] covered while the round trip grew by
-     * [deltaRttMs] (one way is half of it), or null when the measurement cannot support a claim.
+     * [deltaRttMs] (one way is half of it), or null when the measurement cannot support a claim: a short arc,
+     * an RTT increase within rounding noise, or a figure above light in fibre. Locations the RTTs rule out even
+     * with [GeoPlausibility.SLACK_MS] are already off the route as disputed stops.
      */
     fun speedFraction(
         distanceKm: Double,
         deltaRttMs: Double,
     ): Double? {
         if (distanceKm < MIN_SPEED_DISTANCE_KM || deltaRttMs < MIN_SPEED_DELTA_RTT_MS) return null
-        return distanceKm / (deltaRttMs / 2.0) / GeoPlausibility.FIBRE_KM_PER_MS
+        val fraction = distanceKm / (deltaRttMs / 2.0) / GeoPlausibility.FIBRE_KM_PER_MS
+        return fraction.takeIf { it <= MAX_SPEED_FRACTION }
     }
 
     fun speedBand(fraction: Double?): SpeedBand =

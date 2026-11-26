@@ -825,7 +825,7 @@
     <string name="traceroute_map_segment_rtt_drop">RTT fell by %1$d ms, so the speed is not measurable</string>
     <string name="traceroute_map_segment_distance">Distance: %1$d km</string>
     <string name="traceroute_map_segment_speed">Speed: %1$d%% of light in fibre</string>
-    <string name="traceroute_map_segment_speed_unknown">Speed: not measurable over this distance</string>
+    <string name="traceroute_map_segment_speed_unknown">Speed: cannot be measured on this arc</string>
     <string name="traceroute_map_segment_steady">Replies were steady: every probe answered and the times varied little.</string>
     <string name="traceroute_map_segment_unsteady_loss">Replies were unsteady: %1$d of %2$d probes answered.</string>
     <string name="traceroute_map_segment_unsteady_jitter">Replies were unsteady: the times varied by %1$d ms.</string>
@@ -2131,6 +2131,7 @@
     <string name="netinfo_retry">Retry</string>
     <string name="netinfo_hostname">Reverse DNS</string>
     <string name="netinfo_no_reverse_dns">None found</string>
+    <string name="netinfo_reverse_dns_failed">Lookup failed</string>
     <string name="netinfo_location">Approximate location</string>
     <string name="netinfo_asn">ASN</string>
     <string name="netinfo_not_checked">Not checked</string>
@@ -2143,7 +2144,7 @@
     <string name="help_netinfo_concept_heading">What this shows</string>
     <string name="help_netinfo_concept_body">Network Info reads the settings Android has applied to your active network: the addresses on each interface, the gateway and DNS servers, and the Wi-Fi link when you are on Wi-Fi.</string>
     <string name="help_netinfo_public_heading">Public IP</string>
-    <string name="help_netinfo_public_body">The public address is the one internet services see. It is checked only when you tap Check public IP. The check sends an HTTPS request to api4.ipify.org and api6.ipify.org, then looks up reverse DNS and approximate location for each address. Reverse DNS reads None found when the address has no name. Location and ASN are shown once when both addresses share them.</string>
+    <string name="help_netinfo_public_body">The public address is the one internet services see. It is checked only when you tap Check public IP. The check sends an HTTPS request to api4.ipify.org and api6.ipify.org, then looks up reverse DNS and approximate location for each address. Reverse DNS reads None found when the address has no name, and Lookup failed when the lookup failed or timed out. Location and ASN are shown once when both addresses share them.</string>
     <string name="help_netinfo_privacy_heading">Hardware address and network name</string>
     <string name="help_netinfo_privacy_body">Android 10 and newer hide hardware addresses from apps, so the MAC address is shown only when the system provides it. The Wi-Fi network name needs location permission, which this tool does not request. Grant it from the Wi-Fi Scanner.</string>
     <string name="help_netinfo_scope_heading">IPv6 scopes</string>

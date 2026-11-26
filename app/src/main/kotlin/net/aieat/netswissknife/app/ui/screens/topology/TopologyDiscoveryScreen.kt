@@ -292,8 +292,8 @@ private fun TopologyScreenContent(
             Column(
                 modifier =
                     Modifier
-                        .verticalScroll(configScrollState)
                         .drawScrollCue(configScrollState, configCardColor)
+                        .verticalScroll(configScrollState)
                         .padding(16.dp),
             ) {
                 Row(

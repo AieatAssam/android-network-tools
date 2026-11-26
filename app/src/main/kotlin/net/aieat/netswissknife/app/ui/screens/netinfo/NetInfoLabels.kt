@@ -67,6 +67,7 @@ internal fun rememberNetInfoSummaryLabels(): NetInfoSummaryLabels {
         publicIpv6 = stringResource(R.string.netinfo_public_ipv6),
         hostname = stringResource(R.string.netinfo_hostname),
         noReverseDns = stringResource(R.string.netinfo_no_reverse_dns),
+        reverseDnsFailed = stringResource(R.string.netinfo_reverse_dns_failed),
         location = stringResource(R.string.netinfo_location),
         asn = stringResource(R.string.netinfo_asn),
         notChecked = stringResource(R.string.netinfo_not_checked),

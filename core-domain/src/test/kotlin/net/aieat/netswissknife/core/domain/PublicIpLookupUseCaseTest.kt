@@ -3,6 +3,7 @@ package net.aieat.netswissknife.core.domain
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
@@ -12,8 +13,10 @@ import net.aieat.netswissknife.core.network.traceroute.GeoIpRepository
 import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
 import net.aieat.netswissknife.core.network.traceroute.TracerouteReverseDnsRepository
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
@@ -76,7 +79,36 @@ class PublicIpLookupUseCaseTest {
 
             assertEquals("203.0.113.7", ipv4.address)
             assertNull(ipv4.hostname)
+            assertTrue(ipv4.reverseDnsFailed)
             assertEquals(location, ipv4.geo)
+        }
+
+    @Test
+    fun `an address with no reverse DNS name is not reported as a failed lookup`() =
+        runTest {
+            coEvery { publicIp.fetch(IpFamily.IPV4) } returns NetworkResult.Success("203.0.113.7")
+            coEvery { publicIp.fetch(IpFamily.IPV6) } returns noRoute()
+            coEvery { reverseDns.lookup(any(), any()) } returns null
+            coEvery { geoIp.lookup(any()) } returns null
+
+            val ipv4 = (useCase(Unit).ipv4 as NetworkResult.Success).data
+
+            assertNull(ipv4.hostname)
+            assertFalse(ipv4.reverseDnsFailed)
+        }
+
+    @Test
+    fun `a reverse DNS lookup cancelled on its own counts as failed and keeps the address`() =
+        runTest {
+            coEvery { publicIp.fetch(IpFamily.IPV4) } returns NetworkResult.Success("203.0.113.7")
+            coEvery { publicIp.fetch(IpFamily.IPV6) } returns noRoute()
+            coEvery { reverseDns.lookup(any(), any()) } throws CancellationException("deadline")
+            coEvery { geoIp.lookup(any()) } returns null
+
+            val ipv4 = (useCase(Unit).ipv4 as NetworkResult.Success).data
+
+            assertEquals("203.0.113.7", ipv4.address)
+            assertTrue(ipv4.reverseDnsFailed)
         }
 
     @Test

@@ -75,6 +75,7 @@ import net.aieat.netswissknife.app.ui.screens.traceroute.map.ArcGeometry
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.GeoBounds
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.LabelArea
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.LabelSize
+import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapDrag
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapLabelLayout
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapSelection
 import net.aieat.netswissknife.app.ui.screens.traceroute.map.MapSizing
@@ -243,7 +244,11 @@ private class RouteMapViewState(
         autoViewport = fitted
     }
 
-    fun isZoomedIn(): Boolean = viewport.isZoomedInFrom(fitted)
+    /** True when the map, not the page, should move with a one-finger drag of [travel]. */
+    fun takesDrag(travel: Offset): Boolean {
+        val (dx, dy) = travel
+        return MapDrag.mapTakesDrag(viewport, fitted, dx, dy, width, height, anchorLon)
+    }
 
     /** Move the automatic view to [target] when the route has outgrown it, unless the user has moved the map. */
     suspend fun follow(target: MapViewport) {
@@ -403,7 +408,7 @@ internal fun RouteMapCanvas(
                     .semantics { contentDescription = description }
                     .pointerInput(state) {
                         mapGestures(
-                            isZoomedIn = state::isZoomedIn,
+                            mapTakesDrag = state::takesDrag,
                             onTransform = state::transform,
                             onTap = { tap -> currentOnSelect(MapSelection.toggle(currentSelection, state.hitAt(tap))) },
                             onDoubleTap = { tap -> state.zoom(MapViewport.ZOOM_STEP, tap) },
@@ -473,19 +478,19 @@ private fun MapControl(
 
 /**
  * Pan and zoom without fighting the screen's vertical scroll: two fingers always transform the
- * map; one finger moves it only once zoomed in past the automatic fit, otherwise the drag is
- * left to the page. A press that never passes touch slop is a tap; a second tap soon after and
- * close by is a double tap, which zooms in instead.
+ * map; one finger moves it only when [mapTakesDrag] accepts the drag as it passes touch slop,
+ * otherwise the drag is left to the page. A press that never passes touch slop is a tap; a second
+ * tap soon after and close by is a double tap, which zooms in instead.
  */
 private suspend fun PointerInputScope.mapGestures(
-    isZoomedIn: () -> Boolean,
+    mapTakesDrag: (travel: Offset) -> Boolean,
     onTransform: (zoom: Float, pan: Offset, centroid: Offset) -> Unit,
     onTap: (Offset) -> Unit,
     onDoubleTap: (Offset) -> Unit,
 ) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
-        if (!followPointers(isZoomedIn, onTransform)) return@awaitEachGesture
+        if (!followPointers(mapTakesDrag, onTransform)) return@awaitEachGesture
         val second =
             withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) { awaitFirstDown(requireUnconsumed = false) }
         when {
@@ -493,7 +498,7 @@ private suspend fun PointerInputScope.mapGestures(
                 onTap(down.position)
             }
 
-            followPointers(isZoomedIn, onTransform) &&
+            followPointers(mapTakesDrag, onTransform) &&
                 (second.position - down.position).getDistance() < viewConfiguration.touchSlop * 2 -> {
                 onDoubleTap(second.position)
             }
@@ -505,13 +510,18 @@ private suspend fun PointerInputScope.mapGestures(
     }
 }
 
-/** Follows the pointers until all are up, transforming the map as [mapGestures] allows; true for a tap. */
+/**
+ * Follows the pointers until all are up, transforming the map as [mapGestures] allows; true for a tap.
+ * Who owns a one-finger drag is decided once, when it passes touch slop: a page scroll that has seen a
+ * consumed change gives up for the rest of the gesture, so switching owners mid-drag would strand it.
+ */
 private suspend fun AwaitPointerEventScope.followPointers(
-    isZoomedIn: () -> Boolean,
+    mapTakesDrag: (travel: Offset) -> Boolean,
     onTransform: (zoom: Float, pan: Offset, centroid: Offset) -> Unit,
 ): Boolean {
     var isTap = true
     var travel = Offset.Zero
+    var mapOwnsDrag: Boolean? = null
     do {
         val event = awaitPointerEvent()
         val pressed = event.changes.count { it.pressed }
@@ -519,7 +529,12 @@ private suspend fun AwaitPointerEventScope.followPointers(
         travel += pan
         val pastSlop = travel.getDistance() > viewConfiguration.touchSlop
         if (pressed >= 2 || pastSlop) isTap = false
-        val transform = pressed >= 2 || (pressed == 1 && !isTap && isZoomedIn())
+        if (pressed >= 2) {
+            mapOwnsDrag = true
+        } else if (pressed == 1 && !isTap && mapOwnsDrag == null) {
+            mapOwnsDrag = mapTakesDrag(travel)
+        }
+        val transform = pressed >= 2 || (pressed == 1 && mapOwnsDrag == true)
         if (transform) {
             onTransform(event.calculateZoom(), pan, event.calculateCentroid(useCurrent = true))
             event.changes.forEach { if (it.positionChanged()) it.consume() }

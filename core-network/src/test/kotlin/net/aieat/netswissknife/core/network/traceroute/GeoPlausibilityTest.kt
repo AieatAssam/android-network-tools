@@ -1,9 +1,11 @@
 package net.aieat.netswissknife.core.network.traceroute
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import kotlin.math.PI
 
 @DisplayName("GeoPlausibility")
 class GeoPlausibilityTest {
@@ -109,5 +111,20 @@ class GeoPlausibilityTest {
             )
 
         assertEquals(setOf(11), GeoPlausibility.implausibleHops(hops))
+    }
+
+    @Test
+    fun `distance stays finite for nearly antipodal points`() {
+        val halfCircumferenceKm = PI * 6371.0
+        for (tenths in -900..900) {
+            val lat = tenths / 10.0
+            listOf(179.9, 10.5, -120.25).forEach { lon ->
+                val a = HopGeoLocation("", "", "", "", lat, lon)
+                val b = HopGeoLocation("", "", "", "", -lat, if (lon > 0) lon - 180.0 else lon + 180.0)
+                val km = GeoPlausibility.distanceKm(a, b)
+                assertFalse(km.isNaN(), "($lat, $lon) gave NaN")
+                assertTrue(km <= halfCircumferenceKm + 1e-6, "($lat, $lon) gave $km km")
+            }
+        }
     }
 }
