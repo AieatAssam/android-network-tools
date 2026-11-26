@@ -1,10 +1,13 @@
 package net.aieat.netswissknife.app.ui.screens.httprobe
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -15,6 +18,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
@@ -732,6 +736,33 @@ class HttpProbeScreenTest {
             .onNodeWithTag(HttpProbeScreenTestTags.CURL_REDIRECT_NOTICE)
             .performScrollTo()
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun typingPlainHttpUrl_keepsFocusAndFullTextInUrlField() {
+        val uiState = MutableStateFlow(HttpProbeUiState())
+        val viewModel = fakeViewModel(HttpProbeUiState())
+        every { viewModel.uiState } returns uiState
+        every { viewModel.onUrlChange(any()) } answers {
+            uiState.value = uiState.value.copy(url = firstArg())
+        }
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        val urlField = composeRule.onNode(hasSetTextAction())
+        urlField.performClick()
+        urlField.performTextInput("http://")
+        // The cleartext warning appears once the scheme is typed; it must not take focus from the field.
+        urlField.assert(SemanticsMatcher.expectValue(SemanticsProperties.Focused, true))
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CLEARTEXT_WARNING).assertIsDisplayed()
+        urlField.performTextInput("example.com")
+        urlField.assert(SemanticsMatcher.expectValue(SemanticsProperties.Focused, true))
+        urlField.assert(hasText("http://example.com"))
+        assertTrue(uiState.value.url == "http://example.com")
     }
 
     private fun fakeViewModel(

@@ -246,13 +246,9 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                 }
             }
 
-            if (uiState.url.trim().startsWith("http://", ignoreCase = true)) {
-                item {
-                    CleartextWarning(modifier = Modifier.testTag(HttpProbeScreenTestTags.CLEARTEXT_WARNING))
-                }
-            }
-
-            item {
+            // The input card keeps a stable key and the cleartext warning sits below it, so typing
+            // http:// never inserts an item above the field (which would recreate it and drop focus).
+            item(key = "http-probe-input") {
                 HttpProbeInputCard(
                     uiState = uiState,
                     recentHosts = recentHosts,
@@ -270,6 +266,12 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                     onRemoveRecentHost = viewModel::removeRecentHost,
                     onClearRecentHosts = viewModel::clearRecentHosts,
                 )
+            }
+
+            if (uiState.url.trim().startsWith("http://", ignoreCase = true)) {
+                item(key = "http-probe-cleartext-warning") {
+                    CleartextWarning(modifier = Modifier.testTag(HttpProbeScreenTestTags.CLEARTEXT_WARNING))
+                }
             }
 
             uiState.pendingEntityReplayApproval?.let { approval ->

@@ -1981,14 +1981,13 @@
     <string name="wol_port_invalid">Enter a UDP port from 1 to 65535</string>
     <string name="wol_send_button">Send magic packet</string>
     <string name="wol_sending">Sending magic packet…</string>
-    <string name="wol_success_title">Magic packet sent</string>
     <string name="wol_success_detail">Sent to %1$s via %2$s port %3$d (%4$d packets)</string>
     <string name="wol_success_title_device">Magic packet sent to %1$s</string>
     <plurals name="wol_send_count">
         <item quantity="one">Sent %1$d time in this session</item>
         <item quantity="other">Sent %1$d times in this session</item>
     </plurals>
-    <string name="wol_success_note">Sent. Wake-on-LAN is fire-and-forget: no delivery confirmation is returned. The target needs Wake-on-LAN enabled in firmware and OS and must be on this network.</string>
+    <string name="wol_success_note">Wake-on-LAN is fire-and-forget: no delivery confirmation is returned. The target needs Wake-on-LAN enabled in firmware and OS and must be on this network.</string>
     <string name="wol_send_again">Send again</string>
     <string name="wol_saved_title">Saved devices</string>
     <string name="wol_saved_empty">No saved devices yet. Enter a MAC address, then save it here.</string>
@@ -2100,6 +2099,7 @@
     <string name="netinfo_address_deprecated">Deprecated</string>
     <string name="netinfo_family_ipv4">IPv4</string>
     <string name="netinfo_family_ipv6">IPv6</string>
+    <string name="netinfo_family_label">%1$s · %2$s</string>
     <string name="netinfo_gateway">Gateway</string>
     <string name="netinfo_dns">DNS servers</string>
     <string name="netinfo_mtu">MTU</string>
