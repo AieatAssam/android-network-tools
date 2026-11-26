@@ -205,7 +205,7 @@ private fun TopologyScreenContent(
     val disabledReasonRes = topologyDisabledReasonRes(normalizedTargetIp != null, credentialErrors)
     // A failure from an earlier run is hidden once any form input differs from the inputs it ran with.
     var failedRunParams by remember { mutableStateOf<TopologyParams?>(null) }
-    val shownUiState = uiState.withoutStaleFailure(failedRunParams, currentTopologyParams())
+    val uiStateShown = uiState.withoutStaleFailure(failedRunParams, currentTopologyParams())
 
     // Shared by the Discover button and the keyboard Done action, so both start the same scan.
     fun startDiscoveryIfReady() {
@@ -217,16 +217,16 @@ private fun TopologyScreenContent(
     }
 
     val selectedNode =
-        when (shownUiState) {
-            is TopologyUiState.Discovering -> shownUiState.nodes.find { it.ip == shownUiState.selectedNodeIp }
-            is TopologyUiState.Canceling -> shownUiState.nodes.find { it.ip == shownUiState.selectedNodeIp }
-            is TopologyUiState.Canceled -> shownUiState.nodes.find { it.ip == shownUiState.selectedNodeIp }
-            is TopologyUiState.TimeLimit -> shownUiState.nodes.find { it.ip == shownUiState.selectedNodeIp }
-            is TopologyUiState.Done -> shownUiState.graph.nodes.find { it.ip == shownUiState.selectedNodeIp }
+        when (uiStateShown) {
+            is TopologyUiState.Discovering -> uiStateShown.nodes.find { it.ip == uiStateShown.selectedNodeIp }
+            is TopologyUiState.Canceling -> uiStateShown.nodes.find { it.ip == uiStateShown.selectedNodeIp }
+            is TopologyUiState.Canceled -> uiStateShown.nodes.find { it.ip == uiStateShown.selectedNodeIp }
+            is TopologyUiState.TimeLimit -> uiStateShown.nodes.find { it.ip == uiStateShown.selectedNodeIp }
+            is TopologyUiState.Done -> uiStateShown.graph.nodes.find { it.ip == uiStateShown.selectedNodeIp }
             else -> null
         }
     val announcementPhase =
-        when (val state = shownUiState) {
+        when (val state = uiStateShown) {
             is TopologyUiState.Idle -> {
                 null
             }
@@ -274,7 +274,7 @@ private fun TopologyScreenContent(
             status = networkStatus,
             scope = NetworkStatusScope.LOCAL_NETWORK,
             permissionDenied =
-                (shownUiState as? TopologyUiState.Failure)?.networkErrorKind ==
+                (uiStateShown as? TopologyUiState.Failure)?.networkErrorKind ==
                     NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED,
             onGrantPermission = onGrantPermission,
             modifier = Modifier.padding(horizontal = 16.dp),
@@ -615,7 +615,7 @@ private fun TopologyScreenContent(
 
         Column(modifier = Modifier.weight(1f)) {
             val retainedGraph =
-                when (val state = shownUiState) {
+                when (val state = uiStateShown) {
                     is TopologyUiState.Done -> state.graph
                     is TopologyUiState.Discovering -> retainedTopologyGraph(state.nodes, state.links)
                     is TopologyUiState.Canceling -> retainedTopologyGraph(state.nodes, state.links)
@@ -625,7 +625,7 @@ private fun TopologyScreenContent(
                 }
             retainedGraph?.let { graph ->
                 val reportStatus =
-                    when (shownUiState) {
+                    when (uiStateShown) {
                         is TopologyUiState.Discovering -> stringResource(R.string.topology_report_status_running)
                         is TopologyUiState.Canceling -> stringResource(R.string.topology_report_status_stopping)
                         is TopologyUiState.Canceled -> stringResource(R.string.topology_report_status_canceled)
@@ -641,7 +641,7 @@ private fun TopologyScreenContent(
                 )
             }
             AnimatedContent(
-                targetState = shownUiState,
+                targetState = uiStateShown,
                 contentKey = { it::class },
                 transitionSpec = {
                     fadeIn(AppMotion.enter(300)) togetherWith fadeOut(AppMotion.exit(300))
@@ -763,45 +763,45 @@ private fun TopologyScreenContent(
 
     if (selectedNode != null) {
         val queriedNodes =
-            when (shownUiState) {
-                is TopologyUiState.Done -> shownUiState.graph.nodes
-                is TopologyUiState.Discovering -> shownUiState.nodes
-                is TopologyUiState.Canceling -> shownUiState.nodes
-                is TopologyUiState.Canceled -> shownUiState.nodes
-                is TopologyUiState.TimeLimit -> shownUiState.nodes
+            when (uiStateShown) {
+                is TopologyUiState.Done -> uiStateShown.graph.nodes
+                is TopologyUiState.Discovering -> uiStateShown.nodes
+                is TopologyUiState.Canceling -> uiStateShown.nodes
+                is TopologyUiState.Canceled -> uiStateShown.nodes
+                is TopologyUiState.TimeLimit -> uiStateShown.nodes
                 else -> emptyList()
             }
         NodeDetailSheet(
             node = selectedNode,
             queriedNodeIps = queriedNodes.mapTo(mutableSetOf()) { it.ip },
             links =
-                when (shownUiState) {
+                when (uiStateShown) {
                     is TopologyUiState.Done -> {
-                        shownUiState.graph.links.filter {
+                        uiStateShown.graph.links.filter {
                             it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
                         }
                     }
 
                     is TopologyUiState.Discovering -> {
-                        shownUiState.links.filter {
+                        uiStateShown.links.filter {
                             it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
                         }
                     }
 
                     is TopologyUiState.Canceling -> {
-                        shownUiState.links.filter {
+                        uiStateShown.links.filter {
                             it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
                         }
                     }
 
                     is TopologyUiState.Canceled -> {
-                        shownUiState.links.filter {
+                        uiStateShown.links.filter {
                             it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
                         }
                     }
 
                     is TopologyUiState.TimeLimit -> {
-                        shownUiState.links.filter {
+                        uiStateShown.links.filter {
                             it.fromIp == selectedNode.ip || it.toIp == selectedNode.ip
                         }
                     }
