@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.lan
 
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.screens.PORT_CONCURRENCY_STEPS
 import net.aieat.netswissknife.core.network.lan.DiscoveryMethod
 import net.aieat.netswissknife.core.network.lan.LanHost
 import net.aieat.netswissknife.core.network.lan.LanScanOperationBudget
@@ -64,8 +65,6 @@ internal fun lanPresenceLabels(methods: Set<DiscoveryMethod>): List<Int> =
             }
         }
 
-private const val MAX_SCAN_CONCURRENCY = 500
-
 /**
  * [current] when [targetCount] addresses already finish within the scan time limit, otherwise the
  * smallest higher concurrency slider position that does, or null when no position can.
@@ -79,10 +78,5 @@ internal fun lanConcurrencyToFit(
         !LanScanOperationBudget.estimate(targetCount, timeoutMs, concurrency).exceedsHardCeiling
     }
     if (fits(current)) return current
-    return (current..MAX_SCAN_CONCURRENCY)
-        .asSequence()
-        .map { snapConcurrency(it.toFloat()) }
-        .filter { it > current }
-        .distinct()
-        .firstOrNull(fits)
+    return PORT_CONCURRENCY_STEPS.filter { it > current }.firstOrNull(fits)
 }

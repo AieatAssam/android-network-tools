@@ -38,6 +38,7 @@ class NetInfoSummaryFormatterTest {
             publicIpv6 = "Public IPv6",
             hostname = "Reverse DNS",
             noReverseDns = "None found",
+            reverseDnsFailed = "Lookup failed",
             location = "Location",
             asn = "ASN",
             notChecked = "Not checked",
@@ -151,6 +152,17 @@ class NetInfoSummaryFormatterTest {
         val text = NetInfoSummaryFormatter.format(snapshot, report, labels)
 
         assertTrue(text.contains("Reverse DNS: None found"))
+    }
+
+    @Test
+    fun `a failed reverse DNS lookup is not reported as no name`() {
+        val info = PublicAddressInfo("203.0.113.7", IpFamily.IPV4, hostname = null, geo = null, reverseDnsFailed = true)
+        val report = PublicIpReport(ipv4 = NetworkResult.Success(info), ipv6 = noRoute)
+
+        val text = NetInfoSummaryFormatter.format(snapshot, report, labels)
+
+        assertTrue(text.contains("Reverse DNS: Lookup failed"))
+        assertFalse(text.contains("None found"))
     }
 
     @Test

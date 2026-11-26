@@ -60,7 +60,10 @@ object GeoPlausibility {
         val phi2 = Math.toRadians(b.lat)
         val dPhi = Math.toRadians(b.lat - a.lat)
         val dLambda = Math.toRadians(b.lon - a.lon)
-        val h = sin(dPhi / 2) * sin(dPhi / 2) + cos(phi1) * cos(phi2) * sin(dLambda / 2) * sin(dLambda / 2)
+        // Rounding can push h just past 1 for nearly antipodal points, which would make sqrt(1 - h) NaN.
+        val h =
+            (sin(dPhi / 2) * sin(dPhi / 2) + cos(phi1) * cos(phi2) * sin(dLambda / 2) * sin(dLambda / 2))
+                .coerceIn(0.0, 1.0)
         return 2.0 * EARTH_RADIUS_KM * atan2(sqrt(h), sqrt(1.0 - h))
     }
 

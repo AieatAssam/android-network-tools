@@ -120,10 +120,10 @@ class LanScanFormViewModelTest {
             val vm = viewModel(prefs)
 
             assertEquals("10.1.77.0/24", vm.awaitSubnet())
-            assertEquals(24, vm.concurrency.value)
+            assertEquals(25, vm.concurrency.value)
             assertEquals(2, vm.concurrencyRaisedFrom.value)
 
-            vm.onConcurrencyChange(32)
+            vm.onConcurrencyChange(50)
             assertNull(vm.concurrencyRaisedFrom.value)
         }
 

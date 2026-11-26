@@ -318,6 +318,48 @@ class TraceRouteMapTest {
         }
 
         @Test
+        fun `an RTT increase within millisecond rounding has no speed`() {
+            // Two whole-millisecond medians one apart may really be almost equal.
+            assertNull(RouteClassification.speedFraction(distanceKm = 400.0, deltaRttMs = 1.0))
+            assertNull(RouteClassification.speedFraction(distanceKm = 400.0, deltaRttMs = 4.0))
+            assertEquals(0.8, RouteClassification.speedFraction(distanceKm = 400.0, deltaRttMs = 5.0)!!, 1e-9)
+        }
+
+        @Test
+        fun `a figure faster than light in fibre is not a speed`() {
+            assertNull(RouteClassification.speedFraction(distanceKm = 640.0, deltaRttMs = 1.0))
+            assertNull(RouteClassification.speedFraction(distanceKm = 1_001.0, deltaRttMs = 10.0))
+            assertEquals(1.0, RouteClassification.speedFraction(distanceKm = 1_000.0, deltaRttMs = 10.0)!!, 1e-9)
+        }
+
+        @Test
+        fun `no distance and RTT increase gives more than light in fibre`() {
+            val deltas = (-20..2_000).map { it / 4.0 }
+            val distances = (0..400).map { it * 50.0 }
+            deltas.forEach { delta ->
+                distances.forEach { km ->
+                    val fraction = RouteClassification.speedFraction(distanceKm = km, deltaRttMs = delta)
+                    if (fraction != null) assertTrue(fraction in 0.0..1.0, "$km km over $delta ms gave $fraction")
+                    if (delta < RouteClassification.MIN_SPEED_DELTA_RTT_MS) assertNull(fraction, "$km km, $delta ms")
+                }
+            }
+        }
+
+        @Test
+        fun `an arc whose medians differ by a millisecond claims no speed and is not drawn thick`() {
+            // About 640 km: 1 ms of added RTT would be over six times light in fibre.
+            val hops = listOf(hop(3, london, listOf(40L)), hop(4, frankfurt, listOf(41L)))
+
+            val map = TraceRouteMap.from(hops)
+
+            assertTrue(map.disputedStops.isEmpty())
+            val segment = map.segments.single()
+            assertEquals(1L, segment.addedRttMs)
+            assertNull(segment.speedFraction)
+            assertEquals(SpeedBand.UNKNOWN, segment.speed)
+        }
+
+        @Test
         fun `bands split at half and a fifth of light in fibre`() {
             assertEquals(SpeedBand.FAST, RouteClassification.speedBand(1.4))
             assertEquals(SpeedBand.FAST, RouteClassification.speedBand(0.5))

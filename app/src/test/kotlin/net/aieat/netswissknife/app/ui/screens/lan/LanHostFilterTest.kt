@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.lan
 
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.screens.PORT_CONCURRENCY_STEPS
 import net.aieat.netswissknife.core.network.lan.DiscoveryMethod
 import net.aieat.netswissknife.core.network.lan.LanHost
 import net.aieat.netswissknife.core.network.lan.LanScanOperationBudget
@@ -60,9 +61,20 @@ class LanHostFilterTest {
     fun `concurrency is raised to the smallest slider position that fits`() {
         val raised = lanConcurrencyToFit(targetCount = 254, timeoutMs = 10_000, current = 2)
 
-        assertEquals(24, raised)
+        assertEquals(25, raised)
         assertFalse(LanScanOperationBudget.estimate(254, 10_000, raised!!).exceedsHardCeiling)
-        assertTrue(LanScanOperationBudget.estimate(254, 10_000, 16).exceedsHardCeiling)
+        assertTrue(LanScanOperationBudget.estimate(254, 10_000, 10).exceedsHardCeiling)
+    }
+
+    @Test
+    fun `a raised concurrency is always a slider position shared with Port Scanner and Settings`() {
+        listOf(1, 3, 7, 30, 120).forEach { current ->
+            listOf(254, 1_022, 4_094).forEach { count ->
+                lanConcurrencyToFit(count, timeoutMs = 10_000, current = current)?.let { raised ->
+                    assertTrue(raised == current || raised in PORT_CONCURRENCY_STEPS, "$current for $count: $raised")
+                }
+            }
+        }
     }
 
     @Test

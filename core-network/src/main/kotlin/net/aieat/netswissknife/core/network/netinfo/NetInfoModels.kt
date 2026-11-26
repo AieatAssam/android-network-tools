@@ -123,13 +123,23 @@ data class NetInfoSnapshot(
     }
 }
 
-/** A public address and whatever optional detail could be found for it. */
+/**
+ * A public address and whatever optional detail could be found for it. A null [hostname] means the address
+ * has no reverse DNS name, unless [reverseDnsFailed] says the lookup itself failed or timed out.
+ */
 data class PublicAddressInfo(
     val address: String,
     val family: IpFamily,
     val hostname: String?,
     val geo: HopGeoLocation?,
-)
+    val reverseDnsFailed: Boolean = false,
+) {
+    /** The reverse DNS value to show: the name, else [noName] or [lookupFailed]. */
+    fun hostnameOr(
+        noName: String,
+        lookupFailed: String,
+    ): String = hostname ?: if (reverseDnsFailed) lookupFailed else noName
+}
 
 /** Public IPv4 and IPv6 results, each independent: a missing IPv6 route is a normal outcome. */
 data class PublicIpReport(
