@@ -227,7 +227,7 @@ class WakeOnLanScreenTest {
 
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule
-            .onNodeWithText(context.getString(R.string.wol_success_title))
+            .onNodeWithText(context.getString(R.string.wol_success_title_device, "AA:BB:CC:DD:EE:FF"))
             .assertIsDisplayed()
     }
 

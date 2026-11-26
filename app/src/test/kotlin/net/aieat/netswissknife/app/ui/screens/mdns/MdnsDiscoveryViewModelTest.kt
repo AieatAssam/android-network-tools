@@ -26,6 +26,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.app.data.ToolSessionMemory
 import net.aieat.netswissknife.app.mdns.MdnsIoOperation
 import net.aieat.netswissknife.app.mdns.MdnsNoLocalNetworkException
 import net.aieat.netswissknife.app.mdns.MdnsPacketIoException
@@ -591,6 +592,96 @@ class MdnsDiscoveryViewModelTest {
                 val state = viewModel.uiState.value
                 assertEquals(listOf(second), state.services)
                 assertFalse(state.resultsClearedForNetworkChange)
+                viewModel.viewModelScope.coroutineContext.job
+                    .cancelAndJoin()
+            }
+    }
+
+    @Nested
+    @DisplayName("leaving and returning")
+    inner class LeavingAndReturning {
+        private val memory = ToolSessionMemory()
+        private val firstService = stubService(name = "first")
+        private val secondService = stubService(name = "second")
+        private val networkState = MutableStateFlow(NetworkStatus(networkId = "wifi-a", transport = Transport.WIFI))
+
+        private fun openTool(): MdnsDiscoveryViewModel {
+            val provider =
+                object : NetworkStatusProvider {
+                    override val status: StateFlow<NetworkStatus> = networkState
+                }
+            return MdnsDiscoveryViewModel(useCase, provider, memory).also { viewModel = it }
+        }
+
+        /** Leaving the tool destroys its view model; cancelling its scope stops it from reacting to later changes. */
+        private suspend fun leave(tool: MdnsDiscoveryViewModel) {
+            tool.viewModelScope.coroutineContext.job
+                .cancelAndJoin()
+        }
+
+        @Test
+        fun `services, filter and grouping return with the tool on the same network`() =
+            runTest {
+                every { useCase(any(), any()) } returns
+                    flowOf(
+                        MdnsUpdate.ServiceFound(firstService),
+                        MdnsUpdate.ServiceFound(secondService),
+                        MdnsUpdate.DiscoveryComplete(totalFound = 2),
+                    )
+                val first = openTool()
+                first.startScan()
+                first.onSearchChange("first")
+                first.onGroupByDeviceChange(true)
+                leave(first)
+
+                val state = openTool().uiState.value
+
+                assertEquals(listOf(firstService, secondService), state.services)
+                assertEquals(2, state.totalFound)
+                assertTrue(state.scanComplete)
+                assertEquals("first", state.searchQuery)
+                assertTrue(state.groupByDevice)
+                assertFalse(state.resultsClearedForNetworkChange)
+                viewModel.viewModelScope.coroutineContext.job
+                    .cancelAndJoin()
+            }
+
+        @Test
+        fun `a rescan after returning adds to the restored list`() =
+            runTest {
+                every { useCase(any(), any()) } returns
+                    flowOf(MdnsUpdate.ServiceFound(firstService), MdnsUpdate.DiscoveryComplete(totalFound = 1))
+                val first = openTool()
+                first.startScan()
+                leave(first)
+                every { useCase(any(), any()) } returns
+                    flowOf(MdnsUpdate.ServiceFound(secondService), MdnsUpdate.DiscoveryComplete(totalFound = 1))
+
+                val returned = openTool()
+                returned.startScan()
+
+                assertEquals(listOf(firstService, secondService), returned.uiState.value.services)
+                viewModel.viewModelScope.coroutineContext.job
+                    .cancelAndJoin()
+            }
+
+        @Test
+        fun `services found on another network are not shown when the tool returns`() =
+            runTest {
+                every { useCase(any(), any()) } returns
+                    flowOf(MdnsUpdate.ServiceFound(firstService), MdnsUpdate.DiscoveryComplete(totalFound = 1))
+                val first = openTool()
+                first.startScan()
+                first.onSearchChange("first")
+                leave(first)
+                networkState.value = NetworkStatus(networkId = "wifi-b", transport = Transport.WIFI)
+
+                val state = openTool().uiState.value
+
+                assertTrue(state.services.isEmpty())
+                assertTrue(state.servicesByType.isEmpty())
+                assertTrue(state.resultsClearedForNetworkChange)
+                assertEquals("first", state.searchQuery)
                 viewModel.viewModelScope.coroutineContext.job
                     .cancelAndJoin()
             }

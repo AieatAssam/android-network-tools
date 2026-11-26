@@ -155,14 +155,14 @@ internal fun NetInfoIpCard(
         }
         local.gateways.forEach { gateway ->
             NetInfoValueRow(
-                label = stringResource(R.string.netinfo_gateway),
+                label = familyLabel(gateway, R.string.netinfo_gateway),
                 value = gateway,
                 onCopy = onCopy,
             )
         }
         local.dnsServers.forEach { dns ->
             NetInfoValueRow(
-                label = stringResource(R.string.netinfo_dns),
+                label = familyLabel(dns, R.string.netinfo_dns),
                 value = dns,
                 onCopy = onCopy,
             )

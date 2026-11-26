@@ -180,7 +180,7 @@ private fun TopologyScreenContent(
             null
         }
     val dismissKeyboard = rememberDismissKeyboard()
-    val maxConfigHeight = LocalConfiguration.current.screenHeightDp.dp * 0.4f
+    val maxConfigHeight = LocalConfiguration.current.screenHeightDp.dp * 0.6f
     val configScrollState = rememberScrollState()
     val configCardColor = CardDefaults.elevatedCardColors().containerColor
 
@@ -285,13 +285,16 @@ private fun TopologyScreenContent(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .heightIn(max = maxConfigHeight),
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
             shape = AppShapes.large,
         ) {
+            // The card wraps its content up to maxConfigHeight. The cap sits on the scrolling
+            // column itself so its viewport is always bounded: content that fits shows in full,
+            // and only taller content (landscape, small phones, the v3 fields) scrolls with the cue.
             Column(
                 modifier =
                     Modifier
+                        .heightIn(max = maxConfigHeight)
                         .drawScrollCue(configScrollState, configCardColor)
                         .verticalScroll(configScrollState)
                         .padding(16.dp),

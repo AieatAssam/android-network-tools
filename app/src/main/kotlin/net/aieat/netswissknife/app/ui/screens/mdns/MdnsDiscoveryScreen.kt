@@ -69,7 +69,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -138,8 +137,9 @@ fun MdnsDiscoveryScreen(
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
     var showHelp by remember { mutableStateOf(false) }
-    var searchQuery by rememberSaveable { mutableStateOf("") }
-    var groupByDevice by rememberSaveable { mutableStateOf(false) }
+    // The search text and grouping live in the view model so they survive leaving the tool.
+    val searchQuery = uiState.searchQuery
+    val groupByDevice = uiState.groupByDevice
     val expandedGroups = remember { mutableStateMapOf<String, Boolean>() }
 
     // Filtering and grouping run once per change to the inputs, not on every recomposition.
@@ -253,8 +253,8 @@ fun MdnsDiscoveryScreen(
                     groupByDevice = groupByDevice,
                     noMatch = noMatch,
                     searchQuery = searchQuery,
-                    onSearchChange = { searchQuery = it },
-                    onGroupByDevice = { groupByDevice = it },
+                    onSearchChange = viewModel::onSearchChange,
+                    onGroupByDevice = viewModel::onGroupByDeviceChange,
                     expandedGroups = expandedGroups,
                     report = report,
                     onShare = { context.shareText(report, shareSubject) },
@@ -816,7 +816,7 @@ internal fun filterMdnsServices(
                 searchQuery.isBlank() ||
                     listOf(service.serviceType, service.instanceName, service.displayName, service.hostname)
                         .any { it.contains(searchQuery, ignoreCase = true) } ||
-                    service.ipAddresses.any { it.contains(searchQuery, ignoreCase = true) } ||
+                    shownAddresses(service).any { it.value.contains(searchQuery, ignoreCase = true) } ||
                     service.txtRecords.any { (key, value) ->
                         key.contains(searchQuery, true) || value.contains(searchQuery, true)
                     }
@@ -929,9 +929,10 @@ private fun LazyListScope.serviceStatusItems(
             ServiceScanningStatus(uiState.isCanceling)
         }
     }
-    if (uiState.services.isNotEmpty()) {
+    // The header already shows the total, so this line appears only while a filter hides some services.
+    val shown = filteredByType.values.sumOf { it.size }
+    if (uiState.services.isNotEmpty() && shown != uiState.services.size) {
         item(key = "count") {
-            val shown = filteredByType.values.sumOf { it.size }
             ServiceCountText(shown = shown, total = uiState.services.size)
         }
     }
@@ -1347,6 +1348,19 @@ private fun ServiceHostActions(
     }
 }
 
+/**
+ * The addresses a row can show: valid IPv4 or IPv6, distinct, without unscoped link-local IPv6.
+ * The search matches only these, so a row never matches on an address that is not on screen.
+ */
+internal fun shownAddresses(service: DiscoveredService): List<ToolHost> =
+    service.ipAddresses
+        .mapNotNull { address ->
+            ToolHost.parse(address)?.takeIf {
+                (HostValidator.isValidIpv4(it.value) || HostValidator.isValidIpv6(it.value)) &&
+                    !isUnscopedLinkLocalIpv6(it.value)
+            }
+        }.distinctBy { it.canonical }
+
 /** One ping chip per distinct, reachable address the service announced; unscoped link-local IPv6 is skipped. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -1354,14 +1368,7 @@ private fun ServiceAddressChips(
     service: DiscoveredService,
     onPingHost: (String) -> Unit,
 ) {
-    val validAddresses =
-        service.ipAddresses
-            .mapNotNull { address ->
-                ToolHost.parse(address)?.takeIf {
-                    (HostValidator.isValidIpv4(it.value) || HostValidator.isValidIpv6(it.value)) &&
-                        !isUnscopedLinkLocalIpv6(it.value)
-                }
-            }.distinctBy { it.canonical }
+    val validAddresses = shownAddresses(service)
     if (validAddresses.isNotEmpty()) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             validAddresses.forEach { ip ->

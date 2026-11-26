@@ -603,8 +603,10 @@ private fun WolSuccessCard(
 
             Text(
                 text =
-                    state.deviceName?.let { stringResource(R.string.wol_success_title_device, it) }
-                        ?: stringResource(R.string.wol_success_title),
+                    stringResource(
+                        R.string.wol_success_title_device,
+                        state.deviceName ?: report.macAddress,
+                    ),
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(

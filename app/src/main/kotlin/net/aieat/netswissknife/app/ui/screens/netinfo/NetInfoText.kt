@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.netinfo
 
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import net.aieat.netswissknife.app.R
@@ -46,6 +47,19 @@ internal fun addressLabel(address: LocalAddress): String {
         }
     val label = "$family · ${stringResource(scopeLabelRes(address.scope))}"
     return if (address.deprecated) "$label · ${stringResource(R.string.netinfo_address_deprecated)}" else label
+}
+
+/** A gateway or DNS server label with its address family, such as "IPv6 · Gateway", matching the address rows. */
+@Composable
+internal fun familyLabel(
+    address: String,
+    @StringRes labelRes: Int,
+): String {
+    val family =
+        stringResource(
+            if (address.contains(':')) R.string.netinfo_family_ipv6 else R.string.netinfo_family_ipv4,
+        )
+    return stringResource(R.string.netinfo_family_label, family, stringResource(labelRes))
 }
 
 @Composable
