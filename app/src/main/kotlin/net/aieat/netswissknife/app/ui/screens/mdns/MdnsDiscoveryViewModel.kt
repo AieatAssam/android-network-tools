@@ -291,6 +291,7 @@ class MdnsDiscoveryViewModel
                             } else {
                                 state.copy(
                                     error = e.message ?: "Discovery failed",
+                                    isScanning = false,
                                     errorReason = e.toMdnsScanFailure(),
                                     networkErrorKind = e.toNetworkErrorKind(),
                                 )
