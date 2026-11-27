@@ -51,7 +51,10 @@ check(!releaseSigningConfigured || releaseSigningValues.all { !it.second.isNullO
 
 android {
     namespace = "net.aieat.netswissknife.app"
-    compileSdk = 37
+    // Compose 1.13 requires compiling against 37.1; targetSdk stays at 37.
+    compileSdk {
+        version = release(37) { minorApiLevel = 1 }
+    }
 
     defaultConfig {
         applicationId = "net.aieat.netswissknife"
