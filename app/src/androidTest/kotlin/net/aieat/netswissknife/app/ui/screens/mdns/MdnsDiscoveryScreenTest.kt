@@ -234,7 +234,7 @@ class MdnsDiscoveryScreenTest {
     }
 
     @Test
-    fun socketSetupFailure_showsErrorAndDismissResets() {
+    fun socketSetupFailure_showsErrorAndDismissClearsOnlyTheError() {
         val viewModel =
             fakeViewModel(
                 state = MdnsDiscoveryUiState(error = "setsockopt failed: ENODEV"),
@@ -250,7 +250,27 @@ class MdnsDiscoveryScreenTest {
         composeRule.onNodeWithText("setsockopt failed: ENODEV").assertDoesNotExist()
         composeRule.onNodeWithText(context.getString(R.string.mdns_error_dismiss)).performClick()
 
-        verify(exactly = 1) { viewModel.reset() }
+        verify(exactly = 1) { viewModel.dismissError() }
+        verify(exactly = 0) { viewModel.reset() }
+    }
+
+    @Test
+    fun errorState_retryButtonStartsAScanAgain() {
+        val viewModel =
+            fakeViewModel(
+                state = MdnsDiscoveryUiState(error = "network down", errorReason = MdnsScanFailure.NETWORK_FAILED),
+            )
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                MdnsDiscoveryScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.mdns_error_network_failed)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.mdns_error_retry)).performClick()
+
+        verify(exactly = 1) { viewModel.startScan() }
     }
 
     @Test
@@ -511,6 +531,19 @@ class MdnsDiscoveryScreenTest {
         ipAddresses = listOf("192.168.1.50"),
         txtRecords = emptyMap(),
     )
+
+    @Test
+    fun networkChange_saysThatTheEarlierResultsWereCleared() {
+        val stateFlow = MutableStateFlow(MdnsDiscoveryUiState(resultsClearedForNetworkChange = true))
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                MdnsDiscoveryScreen(viewModel = fakeViewModel(flow = stateFlow))
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.onNodeWithText(context.getString(R.string.mdns_network_changed_notice)).assertIsDisplayed()
+    }
 
     private fun fakeViewModel(
         state: MdnsDiscoveryUiState? = null,

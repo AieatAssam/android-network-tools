@@ -9,19 +9,53 @@ object HttpSecurityAnalyzer {
             responseHeaders.entries
                 .groupBy { it.key.lowercase() }
                 .mapValues { (_, entries) -> entries.flatMap { it.value } }
-        return listOf(
-            checkHsts(normalized, isHttps),
-            checkContentSecurityPolicy(normalized),
-            checkXFrameOptions(normalized),
-            checkXssProtection(normalized),
-            checkXContentTypeOptions(normalized),
-            checkReferrerPolicy(normalized),
-            checkPermissionsPolicy(normalized),
-            checkCrossOriginOpenerPolicy(normalized),
-            checkCrossOriginEmbedderPolicy(normalized),
-            checkServerHeader(normalized),
-        ) + CookieAnalyzer.analyze(responseHeaders, isHttps)
+        val checks =
+            listOf(
+                checkHsts(normalized, isHttps),
+                checkContentSecurityPolicy(normalized),
+                checkXFrameOptions(normalized),
+                checkXssProtection(normalized),
+                checkXContentTypeOptions(normalized),
+                checkReferrerPolicy(normalized),
+                checkPermissionsPolicy(normalized),
+                checkCrossOriginOpenerPolicy(normalized),
+                checkCrossOriginEmbedderPolicy(normalized),
+                checkServerHeader(normalized),
+            ) + CookieAnalyzer.analyze(responseHeaders, isHttps)
+        return if (isDocumentResponse(normalized)) checks else checks.map(::notApplicableToNonDocument)
     }
+
+    /** Without a Content-Type the response is treated as a document, as browsers do for sniffed content. */
+    private fun isDocumentResponse(headers: Map<String, List<String>>): Boolean {
+        val contentType = headers["content-type"]?.firstOrNull()?.lowercase() ?: return true
+        return "text/html" in contentType || "application/xhtml+xml" in contentType
+    }
+
+    /**
+     * Headers that only a browser acts on when rendering a document. On JSON, text or images they
+     * cannot protect anything, so a missing value is informational rather than a failure.
+     */
+    private fun notApplicableToNonDocument(check: SecurityHeaderCheck): SecurityHeaderCheck {
+        val browserOnly = check.headerName.lowercase() in DOCUMENT_ONLY_HEADERS
+        return if (browserOnly && check.rating != SecurityRating.PASS) {
+            check.copy(
+                rating = SecurityRating.INFO,
+                description = "Browsers apply this header to HTML documents, so it has no effect on this response.",
+                descriptionKey = "httprobe_sec_document_header_not_applicable",
+            )
+        } else {
+            check
+        }
+    }
+
+    private val DOCUMENT_ONLY_HEADERS =
+        setOf(
+            "content-security-policy",
+            "x-frame-options",
+            "x-xss-protection",
+            "cross-origin-opener-policy",
+            "cross-origin-embedder-policy",
+        )
 
     private fun rawValues(
         headers: Map<String, List<String>>,

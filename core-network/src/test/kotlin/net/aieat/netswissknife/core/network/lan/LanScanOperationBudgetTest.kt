@@ -10,8 +10,8 @@ class LanScanOperationBudgetTest {
         val oneWave = LanScanOperationBudget.estimate(50, 1_000, 50)
         val twoWaves = LanScanOperationBudget.estimate(51, 1_000, 50)
 
-        assertEquals(19_250L, oneWave.timeoutMillis)
-        assertEquals(37_500L, twoWaves.timeoutMillis)
+        assertEquals(20_500L, oneWave.timeoutMillis)
+        assertEquals(40_000L, twoWaves.timeoutMillis)
         assertTrue(twoWaves.timeoutMillis > oneWave.timeoutMillis)
     }
 

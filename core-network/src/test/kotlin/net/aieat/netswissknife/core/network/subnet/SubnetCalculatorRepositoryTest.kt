@@ -1,13 +1,12 @@
 package net.aieat.netswissknife.core.network.subnet
 
-import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.ErrorCode
+import net.aieat.netswissknife.core.network.NetworkResult
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class SubnetCalculatorRepositoryTest {
-
     private val repo = SubnetCalculatorRepositoryImpl()
 
     // ── CIDR notation ──────────────────────────────────────────────────────────
@@ -236,6 +235,13 @@ class SubnetCalculatorRepositoryTest {
         val info = (result as NetworkResult.Success).data
         assertEquals("10.0.70.0", info.networkAddress)
         assertEquals(23, info.prefixLength)
+    }
+
+    @Test
+    fun `calculateRange reports inverted bounds with its own error code`() {
+        val result = repo.calculateRange("192.168.1.200", "192.168.1.10")
+        assertTrue(result is NetworkResult.Error)
+        assertEquals(ErrorCode.SUBNET_RANGE_INVERTED, (result as NetworkResult.Error).info?.code)
     }
 
     @Test

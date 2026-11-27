@@ -402,4 +402,27 @@ class TracerouteUseCaseTest {
             assert(results[0] is TracerouteFlowResult.Hop)
         }
     }
+
+    @Nested
+    @DisplayName("repeated hop reports")
+    inner class RepeatedReports {
+        private val geo = HopGeoLocation("8.8.8.8", "United States", "US", "Mountain View", 37.39, -122.08)
+
+        @Test
+        fun `a hop reported once per probe is looked up once`() =
+            runTest {
+                val first = HopResult(2, "8.8.8.8", null, 20L, HopStatus.SUCCESS, probeRttsMs = listOf(20L))
+                val second = first.copy(probeRttsMs = listOf(20L, 22L))
+                val third = first.copy(probeRttsMs = listOf(20L, 22L, 21L))
+                every { tracerouteRepo.trace(any(), any(), any(), any(), any(), any(), any()) } returns
+                    flowOf(first, second, third)
+                coEvery { geoRepo.lookup("8.8.8.8", any()) } returns geo
+
+                val results = useCase(TracerouteParams("google.com", probesPerHop = 3)).toList()
+
+                assertEquals(3, results.count { it is TracerouteFlowResult.Hop })
+                assertEquals(1, results.count { it is TracerouteFlowResult.HopEnriched })
+                io.mockk.coVerify(exactly = 1) { geoRepo.lookup("8.8.8.8", any()) }
+            }
+    }
 }

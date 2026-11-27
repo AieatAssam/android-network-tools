@@ -376,7 +376,7 @@ class TopologyDiscoveryScreenTest {
         composeRule.setContent {
             NetSwissKnifeTheme {
                 TopologyDiscoveryScreen(
-                    viewModel = fakeViewModel(TopologyUiState.Done(graph = graph, selectedNodeIp = "10.0.0.1"))
+                    viewModel = fakeViewModel(TopologyUiState.Done(graph = graph, selectedNodeIp = "10.0.0.1")),
                 )
             }
         }
@@ -566,5 +566,29 @@ class TopologyDiscoveryScreenTest {
             NetworkStatus(hasInternet = true, hasLocalNetwork = true)
         )
         return viewModel
+    }
+
+    @Test
+    fun expandedSnmpCard_keepsLldpOptionFullyReachable() {
+        val viewModel = fakeViewModel(TopologyUiState.Idle)
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                TopologyDiscoveryScreen(viewModel = viewModel)
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(500L)
+
+        val configTitle = composeRule.onNodeWithText(context.getString(R.string.topology_config_title))
+        configTitle.performClick()
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        configTitle.performClick()
+        composeRule.mainClock.advanceTimeBy(1_000L)
+
+        composeRule.mainClock.autoAdvance = true
+        composeRule
+            .onNodeWithTag("topology_query_discovered_neighbors")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.mainClock.autoAdvance = false
     }
 }

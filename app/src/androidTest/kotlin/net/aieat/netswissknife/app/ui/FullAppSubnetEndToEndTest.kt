@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -8,7 +9,7 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
@@ -16,7 +17,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import net.aieat.netswissknife.app.MainActivity
 import net.aieat.netswissknife.app.R
-import net.aieat.netswissknife.app.ui.navigation.NavRoutes
 import net.aieat.netswissknife.app.ui.screens.HomeScreenTestTags
 import org.junit.Before
 import org.junit.Rule
@@ -42,9 +42,9 @@ class FullAppSubnetEndToEndTest {
         completeFirstRunOnboardingIfVisible()
 
         composeRule.onNodeWithText(context.getString(R.string.app_name_full)).assertIsDisplayed()
-        val subnetIndex = NavRoutes.allTools.indexOfFirst { it.route == NavRoutes.SubnetCalculator.route }
-        check(subnetIndex >= 0) { "Subnet Calculator must be listed on Home" }
-        composeRule.onNodeWithTag(HomeScreenTestTags.TOOL_GRID).performScrollToIndex(subnetIndex)
+        composeRule
+            .onNodeWithTag(HomeScreenTestTags.TOOL_GRID)
+            .performScrollToNode(hasText(context.getString(R.string.tool_subnet_label)))
         composeRule.onNodeWithText(context.getString(R.string.tool_subnet_label)).performClick()
         composeRule.mainClock.advanceTimeBy(1_000L)
 

@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.AppModalBottomSheet
+import net.aieat.netswissknife.app.ui.components.bottomScrollEdgeFade
 import net.aieat.netswissknife.app.ui.components.hapticAction
 
 internal data class ToolSection(
@@ -135,7 +136,13 @@ fun MoreToolsSheet(
                 // On a short screen (landscape phone or tablet) the pinned footer takes most of the sheet,
                 // so Settings and Debug Logs scroll with the tools instead (V6B-12).
                 val inlineFooter = LocalConfiguration.current.screenHeightDp < COMPACT_SHEET_HEIGHT_DP
-                Box(modifier = Modifier.weight(1f)) {
+                // The list scrolls above the pinned footer; the fade shows that more tools follow.
+                Box(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .bottomScrollEdgeFade(canScrollForward = scrollState.canScrollForward),
+                ) {
                     Column(
                         modifier =
                             Modifier

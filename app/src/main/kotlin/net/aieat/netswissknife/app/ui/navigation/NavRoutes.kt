@@ -5,7 +5,6 @@ import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ManageSearch
 import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.Devices
@@ -35,40 +34,39 @@ data class ToolInfo(
 
 sealed class NavRoutes(
     val route: String,
-    val label: String,
-    val icon: ImageVector,
 ) {
-    object Home : NavRoutes("home", "Home", Icons.Default.Home)
+    object Home : NavRoutes("home")
 
-    object Ping : NavRoutes("ping?host={host}&intent={intent}", "Ping", Icons.Default.NetworkCheck) {
-        const val baseRoute = "ping"
+    object Ping : NavRoutes("ping?host={host}&intent={intent}") {
+        const val BASE_ROUTE = "ping"
 
         /** Keep the established bare Ping route while allowing host-target handoffs. */
         fun createRoute(host: String?): String =
             host
                 ?.takeIf { it.isNotBlank() }
-                ?.let { "$baseRoute?host=${Uri.encode(it)}" }
-                ?: baseRoute
+                ?.let { "$BASE_ROUTE?host=${Uri.encode(it)}" }
+                ?: BASE_ROUTE
 
         fun createRoute(intent: ToolIntent): String {
             val target =
                 intent.destination as? ToolDestination.HostTarget
                     ?: throw IllegalArgumentException("Ping route requires a host destination")
             require(target.tool == HostTool.PING)
-            return "$baseRoute?host=${Uri.encode(target.host.value)}&intent=${Uri.encode(ToolIntentCodec.encode(intent))}"
+            return "$BASE_ROUTE?host=${Uri.encode(target.host.value)}" +
+                "&intent=${Uri.encode(ToolIntentCodec.encode(intent))}"
         }
     }
 
-    object Traceroute : NavRoutes("traceroute", "Traceroute", Icons.Default.Router)
+    object Traceroute : NavRoutes("traceroute")
 
-    object Ports : NavRoutes("ports?host={host}&intent={intent}", "Port Scanner", Icons.Default.TravelExplore) {
-        const val baseRoute = "ports"
+    object Ports : NavRoutes("ports?host={host}&intent={intent}") {
+        const val BASE_ROUTE = "ports"
 
         fun createRoute(host: String?): String =
             host
                 ?.takeIf { it.isNotBlank() }
-                ?.let { "$baseRoute?host=${Uri.encode(it)}" }
-                ?: baseRoute
+                ?.let { "$BASE_ROUTE?host=${Uri.encode(it)}" }
+                ?: BASE_ROUTE
 
         /** New typed handoffs use the versioned payload; the legacy host route remains supported. */
         fun createRoute(intent: ToolIntent): String {
@@ -76,37 +74,38 @@ sealed class NavRoutes(
                 intent.destination as? ToolDestination.HostTarget
                     ?: throw IllegalArgumentException("Ports route requires a host destination")
             require(target.tool == HostTool.PORTS)
-            return "$baseRoute?host=${Uri.encode(target.host.value)}&intent=${Uri.encode(ToolIntentCodec.encode(intent))}"
+            return "$BASE_ROUTE?host=${Uri.encode(target.host.value)}" +
+                "&intent=${Uri.encode(ToolIntentCodec.encode(intent))}"
         }
     }
 
-    object Lan : NavRoutes("lan", "LAN Scanner", Icons.Default.Devices)
+    object Lan : NavRoutes("lan")
 
-    object Dns : NavRoutes("dns", "DNS Lookup", Icons.Default.Language)
+    object Dns : NavRoutes("dns")
 
-    object DebugLogs : NavRoutes("debug_logs", "Debug Logs", Icons.Default.BugReport)
+    object DebugLogs : NavRoutes("debug_logs")
 
-    object WifiScan : NavRoutes("wifi_scan", "Wi-Fi Scanner", Icons.Default.WifiFind)
+    object WifiScan : NavRoutes("wifi_scan")
 
-    object TopologyDiscovery : NavRoutes("topology", "Network Topology", Icons.Default.AccountTree)
+    object TopologyDiscovery : NavRoutes("topology")
 
-    object TlsInspector : NavRoutes("tls?intent={intent}&host={host}&port={port}", "TLS Inspector", Icons.Default.Lock) {
-        const val baseRoute = "tls"
+    object TlsInspector : NavRoutes("tls?intent={intent}&host={host}&port={port}") {
+        const val BASE_ROUTE = "tls"
 
         fun createRoute(intent: ToolIntent): String {
             val target =
                 intent.destination as? ToolDestination.HostTarget
                     ?: throw IllegalArgumentException("TLS Inspector route requires a host destination")
             require(target.tool == HostTool.TLS && target.port != null)
-            return "$baseRoute?intent=${Uri.encode(ToolIntentCodec.encode(intent))}" +
+            return "$BASE_ROUTE?intent=${Uri.encode(ToolIntentCodec.encode(intent))}" +
                 "&host=${Uri.encode(target.host.value)}&port=${target.port.value}"
         }
     }
 
-    object WhoisLookup : NavRoutes("whois", "WHOIS Lookup", Icons.AutoMirrored.Filled.ManageSearch)
+    object WhoisLookup : NavRoutes("whois")
 
-    object HttpProbe : NavRoutes("httprobe?intent={intent}&host={host}", "HTTP Probe", Icons.Default.Http) {
-        const val baseRoute = "httprobe"
+    object HttpProbe : NavRoutes("httprobe?intent={intent}&host={host}") {
+        const val BASE_ROUTE = "httprobe"
 
         /** Typed host handoffs keep HTTP inputs separate from arbitrary URL route arguments. */
         fun createRoute(intent: ToolIntent): String {
@@ -114,34 +113,35 @@ sealed class NavRoutes(
                 intent.destination as? ToolDestination.HostTarget
                     ?: throw IllegalArgumentException("HTTP Probe route requires a host destination")
             require(target.tool == HostTool.HTTP && target.port != null)
-            return "$baseRoute?intent=${Uri.encode(ToolIntentCodec.encode(intent))}&host=${Uri.encode(target.host.value)}"
+            return "$BASE_ROUTE?intent=${Uri.encode(ToolIntentCodec.encode(intent))}" +
+                "&host=${Uri.encode(target.host.value)}"
         }
     }
 
-    object SubnetCalculator : NavRoutes("subnet", "Subnet Calculator", Icons.Default.Calculate)
+    object SubnetCalculator : NavRoutes("subnet")
 
-    object MdnsDiscovery : NavRoutes("mdns", "mDNS Browser", Icons.Default.CellTower)
+    object MdnsDiscovery : NavRoutes("mdns")
 
-    object SpeedTest : NavRoutes("speedtest", "Speed Test", Icons.Default.Speed)
+    object SpeedTest : NavRoutes("speedtest")
 
-    object WakeOnLan : NavRoutes("wol?intent={intent}&mac={mac}", "Wake-on-LAN", Icons.Default.PowerSettingsNew) {
-        const val baseRoute = "wol"
+    object WakeOnLan : NavRoutes("wol?intent={intent}&mac={mac}") {
+        const val BASE_ROUTE = "wol"
 
         fun createRoute(intent: ToolIntent): String {
             val destination =
                 intent.destination as? ToolDestination.WakeOnLan
                     ?: throw IllegalArgumentException("Wake-on-LAN route requires a WOL destination")
             require(intent.source == ToolSource.LAN)
-            return "$baseRoute?intent=${Uri.encode(ToolIntentCodec.encode(intent))}" +
+            return "$BASE_ROUTE?intent=${Uri.encode(ToolIntentCodec.encode(intent))}" +
                 "&mac=${Uri.encode(destination.mac.value)}"
         }
     }
 
-    object NetworkInfo : NavRoutes("netinfo", "Network Info", Icons.Default.SettingsEthernet)
+    object NetworkInfo : NavRoutes("netinfo")
 
-    object MacLookup : NavRoutes("oui", "MAC Lookup", Icons.Default.Fingerprint)
+    object MacLookup : NavRoutes("oui")
 
-    object Settings : NavRoutes("settings", "Settings", Icons.Default.Settings)
+    object Settings : NavRoutes("settings")
 
     companion object {
         /** All navigable tool screens (excluding Home). */

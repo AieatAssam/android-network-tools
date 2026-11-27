@@ -35,17 +35,6 @@ data class TlsInspectorResult(
         get() {
             if (!handshakeCompleted) return false
             if (!isChainTrusted || hostnameMatches == false || pinMatch == false) return false
-            return chainIssues.none { it in BLOCKING_ISSUES }
+            return chainIssues.none { it.isBlocking }
         }
-
-    private companion object {
-        val BLOCKING_ISSUES =
-            setOf(
-                ChainIssue.UNTRUSTED,
-                ChainIssue.EXPIRED,
-                ChainIssue.NOT_YET_VALID,
-                ChainIssue.HOSTNAME_MISMATCH,
-                ChainIssue.PIN_MISMATCH,
-            )
-    }
 }

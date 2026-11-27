@@ -37,9 +37,9 @@ enum class WifiStandard(
         when (this) {
             WIFI_4 -> {
                 if (channelWidthMhz <= NARROW_WIDTH_MHZ) {
-                    PhyRateCeiling("289 Mbps", NARROW_WIDTH_MHZ)
+                    PhyRateCeiling("289 Mbps", NARROW_WIDTH_MHZ, WIFI_4_STREAMS)
                 } else {
-                    PhyRateCeiling("600 Mbps", WIDE_WIDTH_MHZ)
+                    PhyRateCeiling("600 Mbps", WIDE_WIDTH_MHZ, WIFI_4_STREAMS)
                 }
             }
 
@@ -51,9 +51,11 @@ enum class WifiStandard(
 
 private const val NARROW_WIDTH_MHZ = 20
 private const val WIDE_WIDTH_MHZ = 40
+private const val WIFI_4_STREAMS = 4
 
 /** A theoretical PHY rate ceiling; [widthMhz] is set only when the figure is tied to one channel width. */
 data class PhyRateCeiling(
     val label: String,
     val widthMhz: Int?,
+    val streams: Int? = null,
 )

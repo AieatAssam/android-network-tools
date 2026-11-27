@@ -102,6 +102,23 @@ class LanScanScreenTest {
     }
 
     @Test
+    fun scanning_progressCardOffersStop() {
+        val viewModel =
+            fakeViewModel(state = LanScanUiState.Scanning(hosts = emptyList(), scannedCount = 64, totalCount = 254))
+        composeRule.setContent {
+            NetSwissKnifeTheme { LanScreen(viewModel = viewModel) }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        composeRule
+            .onNodeWithText(context.getString(R.string.lan_stop_button))
+            .performScrollTo()
+            .performClick()
+
+        verify(exactly = 1) { viewModel.onStopScan() }
+    }
+
+    @Test
     fun scanning_hostsAccumulateAsTheyAreFound() {
         val stateFlow =
             MutableStateFlow<LanScanUiState>(
@@ -169,7 +186,7 @@ class LanScanScreenTest {
     }
 
     @Test
-    fun detectSubnetIcon_callsRefreshSubnet() {
+    fun detectSubnetIcon_callsDetectSubnet() {
         val viewModel = fakeViewModel(subnet = "")
         composeRule.setContent {
             NetSwissKnifeTheme {
@@ -182,7 +199,7 @@ class LanScanScreenTest {
             .onNodeWithContentDescription(context.getString(R.string.lan_detect_subnet))
             .performClick()
 
-        verify(exactly = 1) { viewModel.refreshSubnet() }
+        verify(exactly = 1) { viewModel.detectSubnet() }
     }
 
     @Test
@@ -330,8 +347,8 @@ class LanScanScreenTest {
     }
 
     @Test
-    fun rescan_resetsSearchAndFilterTogetherForNewResults() {
-        val host = fakeHost("192.168.1.50")
+    fun rescan_resetsSearchAndKeepsSavedFilterForNewResults() {
+        val host = fakeHost("192.168.1.50").copy(openPorts = listOf(80))
         val summary =
             LanScanSummary(
                 subnet = "192.168.1.0/24",
@@ -396,6 +413,7 @@ class LanScanScreenTest {
             .onFirst()
             .also { swipeContentUp() }
             .assertIsDisplayed()
+        assertEquals(LanHostFilter.HasPorts, viewModel.hostFilter.value)
         verify(exactly = 1) { viewModel.startScan() }
     }
 
@@ -502,7 +520,7 @@ class LanScanScreenTest {
             .performScrollTo()
             .assertIsDisplayed()
             .performClick()
-        composeRule.onNodeWithTag("lan_action_tls_8000").assertIsDisplayed()
+        composeRule.onNodeWithTag("lan_action_tls_8000").assertDoesNotExist()
         composeRule.onNodeWithTag("lan_action_tls_8443").assertDoesNotExist()
 
         verify(exactly = 1) { viewModel.onInspectTls(ip, 443) }
@@ -510,7 +528,7 @@ class LanScanScreenTest {
     }
 
     @Test
-    fun expandedHost_offersEditableHttpProbeUsingKnownPortOrPort80Fallback() {
+    fun expandedHost_offersHttpProbeOnlyWhenAConventionalWebPortIsOpen() {
         val ip = "192.168.1.52"
         val stateFlow =
             MutableStateFlow<LanScanUiState>(
@@ -552,12 +570,8 @@ class LanScanScreenTest {
             )
         composeRule.mainClock.advanceTimeBy(500L)
         repeat(2) { composeRule.onNodeWithTag("lan_content").performTouchInput { swipeUp() } }
-        composeRule
-            .onNodeWithText("Probe HTTP (port 80)")
-            .performScrollTo()
-            .assertIsDisplayed()
-            .performClick()
-        verify(exactly = 1) { viewModel.onProbeHttp(fallbackIp, 80) }
+        composeRule.onNodeWithTag("lan_action_http").assertDoesNotExist()
+        verify(exactly = 0) { viewModel.onProbeHttp(fallbackIp, any()) }
 
         val unknownIp = "192.168.1.54"
         stateFlow.value =
@@ -573,12 +587,8 @@ class LanScanScreenTest {
             )
         composeRule.mainClock.advanceTimeBy(500L)
         repeat(2) { composeRule.onNodeWithTag("lan_content").performTouchInput { swipeUp() } }
-        composeRule
-            .onNodeWithText("Probe HTTP (port 80)")
-            .performScrollTo()
-            .assertIsDisplayed()
-            .performClick()
-        verify(exactly = 1) { viewModel.onProbeHttp(unknownIp, 80) }
+        composeRule.onNodeWithTag("lan_action_http").assertDoesNotExist()
+        verify(exactly = 0) { viewModel.onProbeHttp(unknownIp, any()) }
     }
 
     @Test
@@ -761,6 +771,11 @@ class LanScanScreenTest {
         every { viewModel.timeoutMs } returns MutableStateFlow(500)
         every { viewModel.concurrency } returns MutableStateFlow(32)
         every { viewModel.hostSortOrder } returns MutableStateFlow(LanHostSortOrder.IP)
+        val hostFilter = MutableStateFlow(LanHostFilter.All)
+        every { viewModel.hostFilter } returns hostFilter
+        every { viewModel.onHostFilterChange(any()) } answers { hostFilter.value = firstArg() }
+        every { viewModel.subnetNarrowedFrom } returns MutableStateFlow(null)
+        every { viewModel.concurrencyRaisedFrom } returns MutableStateFlow(null)
         every { viewModel.isSubnetLoading } returns MutableStateFlow(false)
         every { viewModel.searchQuery } returns searchQueryFlow
         every { viewModel.onSearchQueryChange(any()) } answers { searchQueryFlow.value = firstArg() }

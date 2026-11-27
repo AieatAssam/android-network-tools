@@ -8,9 +8,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import net.aieat.netswissknife.app.data.ToolSessionMemory
 import net.aieat.netswissknife.app.mdns.MdnsNoLocalNetworkException
 import net.aieat.netswissknife.app.mdns.MdnsPacketIoException
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
@@ -70,7 +74,86 @@ data class MdnsDiscoveryUiState(
     val networkErrorKind: NetworkErrorKind = NetworkErrorKind.GENERAL,
     /** The network changed after services were found; those services are kept and a note is shown. */
     val networkInterrupted: Boolean = false,
+    /** Services listed before the network changed were cleared; the screen says so until the next scan or Clear. */
+    val resultsClearedForNetworkChange: Boolean = false,
+    /** The search text; kept with the results when the tool is left and reopened. */
+    val searchQuery: String = "",
+    /** Whether the list groups services by device; kept with the results when the tool is left. */
+    val groupByDevice: Boolean = false,
 )
+
+/** [ToolSessionMemory] slot holding the listed services, the view choices and the network they were found on. */
+private const val MDNS_SESSION_KEY = "mdnsSession"
+
+/**
+ * What the screen shows when the tool is left and opened again. The scan flags and any error are
+ * not kept: a scan that was running when the tool was left has ended.
+ */
+internal data class MdnsSessionSnapshot(
+    val services: List<DiscoveredService>,
+    val totalFound: Int,
+    val scanComplete: Boolean,
+    val truncationReasons: Set<MdnsTruncationReason>,
+    val searchQuery: String,
+    val groupByDevice: Boolean,
+    val networkId: String?,
+)
+
+internal fun MdnsDiscoveryUiState.toSessionSnapshot(networkId: String?): MdnsSessionSnapshot =
+    MdnsSessionSnapshot(
+        services = services,
+        totalFound = totalFound,
+        scanComplete = scanComplete,
+        truncationReasons = truncationReasons,
+        searchQuery = searchQuery,
+        groupByDevice = groupByDevice,
+        networkId = networkId,
+    )
+
+/**
+ * Rebuilds the listed services when the tool is opened again. Services found on another network are
+ * never shown: they are cleared with the same note as a live network change.
+ */
+internal fun MdnsSessionSnapshot.restoreFor(currentNetworkId: String?): MdnsDiscoveryUiState {
+    val restored =
+        MdnsDiscoveryUiState(
+            services = services,
+            servicesByType = services.groupBy { it.serviceType }.toSortedMap(),
+            totalFound = totalFound,
+            scanComplete = scanComplete,
+            truncationReasons = truncationReasons,
+            searchQuery = searchQuery,
+            groupByDevice = groupByDevice,
+        )
+    return if (networkId == currentNetworkId) restored else restored.afterNetworkChange()
+}
+
+/**
+ * Services accumulate across scans until Clear, so a rescan starts from what is already listed.
+ * Everything else describes one scan and is reset here: completion, cancellation, network
+ * interruption and errors. Truncation notes are kept as a union because they also describe
+ * services that are still listed.
+ */
+internal fun MdnsDiscoveryUiState.startingScan(): MdnsDiscoveryUiState =
+    MdnsDiscoveryUiState(
+        isScanning = true,
+        services = services,
+        servicesByType = servicesByType,
+        truncationReasons = truncationReasons,
+        searchQuery = searchQuery,
+        groupByDevice = groupByDevice,
+    )
+
+/**
+ * A change of network drops every listed service, because they were found on the old network.
+ * The new state is built from scratch, so a running scan's state is dropped with them.
+ */
+internal fun MdnsDiscoveryUiState.afterNetworkChange(): MdnsDiscoveryUiState =
+    MdnsDiscoveryUiState(
+        resultsClearedForNetworkChange = services.isNotEmpty(),
+        searchQuery = searchQuery,
+        groupByDevice = groupByDevice,
+    )
 
 @HiltViewModel
 class MdnsDiscoveryViewModel
@@ -78,9 +161,11 @@ class MdnsDiscoveryViewModel
     constructor(
         private val useCase: MdnsDiscoveryUseCase,
         networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+        private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
     ) : ViewModel() {
         companion object {
             const val DEFAULT_SCAN_DURATION_MS = 8_000L
+            const val ELAPSED_TICK_MS = 1_000L
             private const val LIFECYCLE_CLOSEABLE_KEY = "mdns_operation_lifecycle"
         }
 
@@ -96,7 +181,13 @@ class MdnsDiscoveryViewModel
         private var activeScanGeneration: Long? = null
         private var timerGeneration: Long? = null
 
+        /** The network the listed services were found on; a change of network clears them. */
+        private var resultsNetworkId: String? = networkStatus.value.networkId
+
         init {
+            sessionMemory.get<MdnsSessionSnapshot>(MDNS_SESSION_KEY)?.let { snapshot ->
+                _uiState.value = snapshot.restoreFor(networkStatus.value.networkId)
+            }
             // ViewModel closes registered resources before cancelling viewModelScope. Record the
             // lifecycle reason at that boundary so the operation owner sees it before parent cancel.
             addCloseable(
@@ -106,6 +197,21 @@ class MdnsDiscoveryViewModel
                     stopTimer()
                 },
             )
+            // Persist after the lifecycle closeable is registered, so the pause reason is recorded first.
+            viewModelScope.launch {
+                _uiState
+                    .map { it.toSessionSnapshot(resultsNetworkId) }
+                    .distinctUntilChanged()
+                    .collect { sessionMemory.put(MDNS_SESSION_KEY, it) }
+            }
+            // The first value is the network already in use when the screen opens, so it is not a change.
+            viewModelScope.launch {
+                networkStatus
+                    .map { it.networkId }
+                    .distinctUntilChanged()
+                    .drop(1)
+                    .collect { onNetworkChanged() }
+            }
         }
 
         fun startScan(timeoutMs: Long = DEFAULT_SCAN_DURATION_MS) {
@@ -117,7 +223,7 @@ class MdnsDiscoveryViewModel
             val session = MdnsOperation.newSession(timeoutMs = scanWindowMs)
             operationSession = session
 
-            _uiState.value = MdnsDiscoveryUiState(isScanning = true)
+            _uiState.update { previous -> previous.startingScan() }
 
             val startTime = SystemMonotonicClock.nowNanos()
 
@@ -125,7 +231,9 @@ class MdnsDiscoveryViewModel
             timerJob =
                 viewModelScope.launch {
                     while (true) {
-                        delay(100)
+                        // The screen shows whole seconds, so a 1 s tick is enough and avoids
+                        // recomposing 10 times a second.
+                        delay(ELAPSED_TICK_MS)
                         val elapsedMs = ((SystemMonotonicClock.nowNanos() - startTime).coerceAtLeast(0L) / 1_000_000L)
                         if (activeScanGeneration == generation) {
                             _uiState.update { state ->
@@ -166,7 +274,7 @@ class MdnsDiscoveryViewModel
                                             state.copy(
                                                 scanComplete = true,
                                                 totalFound = update.totalFound,
-                                                truncationReasons = update.truncationReasons,
+                                                truncationReasons = state.truncationReasons + update.truncationReasons,
                                                 networkInterrupted = update.networkInterrupted,
                                             )
                                         }
@@ -183,6 +291,7 @@ class MdnsDiscoveryViewModel
                             } else {
                                 state.copy(
                                     error = e.message ?: "Discovery failed",
+                                    isScanning = false,
                                     errorReason = e.toMdnsScanFailure(),
                                     networkErrorKind = e.toNetworkErrorKind(),
                                 )
@@ -229,12 +338,38 @@ class MdnsDiscoveryViewModel
             scanJob = null
         }
 
+        fun onSearchChange(query: String) {
+            _uiState.update { it.copy(searchQuery = query) }
+        }
+
+        fun onGroupByDeviceChange(enabled: Boolean) {
+            _uiState.update { it.copy(groupByDevice = enabled) }
+        }
+
+        /** Stops a scan that was running on the old network and clears everything it listed. */
+        private fun onNetworkChanged() {
+            resultsNetworkId = networkStatus.value.networkId
+            activeScanGeneration = null
+            cancelScan(CancellationReason.NETWORK_LOST)
+            stopTimer()
+            _uiState.update { previous -> previous.afterNetworkChange() }
+        }
+
+        /** Clears a failed scan's message only; the services found so far stay listed. */
+        fun dismissError() {
+            _uiState.update { state ->
+                state.copy(error = null, errorReason = null, networkErrorKind = NetworkErrorKind.GENERAL)
+            }
+        }
+
         fun reset() {
             scanGeneration++
             activeScanGeneration = null
             cancelScan(CancellationReason.USER_STOP)
             stopTimer()
-            _uiState.value = MdnsDiscoveryUiState()
+            _uiState.update { previous ->
+                MdnsDiscoveryUiState(searchQuery = previous.searchQuery, groupByDevice = previous.groupByDevice)
+            }
         }
 
         private fun stopTimer(generation: Long? = null) {

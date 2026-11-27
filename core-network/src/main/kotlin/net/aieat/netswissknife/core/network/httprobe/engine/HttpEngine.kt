@@ -27,6 +27,8 @@ data class HttpEngineResponse(
     val protocol: String,
     val timings: HttpTimings,
     val timingSnapshot: () -> HttpTimings = { timings },
+    /** Request headers as the engine put them on the wire, including headers the engine adds itself. */
+    val requestHeaders: List<Pair<String, String>> = emptyList(),
 )
 
 data class HttpTimings(

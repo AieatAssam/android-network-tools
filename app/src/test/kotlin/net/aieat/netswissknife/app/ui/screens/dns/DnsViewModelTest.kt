@@ -1,26 +1,26 @@
 package net.aieat.netswissknife.app.ui.screens.dns
 
+import androidx.lifecycle.viewModelScope
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
-import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.util.SystemDnsAddressProvider
 import net.aieat.netswissknife.core.domain.DnsLookupUseCase
@@ -30,24 +30,23 @@ import net.aieat.netswissknife.core.network.dns.DnsRecordType
 import net.aieat.netswissknife.core.network.dns.DnsResult
 import net.aieat.netswissknife.core.network.dns.DnsServer
 import net.aieat.netswissknife.core.network.operation.CancellationReason
-import net.aieat.netswissknife.core.network.operation.OperationSession
 import net.aieat.netswissknife.core.network.operation.OperationRunner
+import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
-import java.util.concurrent.CountDownLatch
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import java.util.concurrent.CountDownLatch
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("DnsViewModel")
 class DnsViewModelTest {
-
     private val testDispatcher = UnconfinedTestDispatcher()
 
     private lateinit var useCase: DnsLookupUseCase
@@ -55,39 +54,42 @@ class DnsViewModelTest {
     private lateinit var recentHostsRepository: RecentHostsRepository
     private lateinit var viewModel: DnsViewModel
 
-    private val stubResult = DnsResult(
-        domain = "example.com",
-        recordType = DnsRecordType.A,
-        server = DnsServer.Google,
-        records = listOf(DnsRecord(DnsRecordType.A, "example.com", "93.184.216.34", 300L, "raw")),
-        queryTimeMs = 42L,
-        rawResponse = ";; raw"
-    )
+    private val stubResult =
+        DnsResult(
+            domain = "example.com",
+            recordType = DnsRecordType.A,
+            server = DnsServer.Google,
+            records = listOf(DnsRecord(DnsRecordType.A, "example.com", "93.184.216.34", 300L, "raw")),
+            queryTimeMs = 42L,
+            rawResponse = ";; raw",
+        )
 
     @BeforeEach
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         useCase = mockk()
         systemDnsProvider = mockk { every { getAddresses() } returns emptyList() }
-        recentHostsRepository = mockk(relaxed = true) {
-            every { getRecents(any()) } returns flowOf(emptyList())
-        }
+        recentHostsRepository =
+            mockk(relaxed = true) {
+                every { getRecents(any()) } returns flowOf(emptyList())
+            }
         viewModel = DnsViewModel(useCase, systemDnsProvider, recentHostsRepository)
     }
 
     @AfterEach
-    fun tearDown() = runBlocking {
-        // recentHosts uses stateIn(Eagerly), which owns a long-lived collector.
-        // Cancel it before replacing Dispatchers.Main so no prior test can
-        // retain a coroutine or contend with the next test's setup.
-        viewModel.viewModelScope.coroutineContext.job.cancelAndJoin()
-        Dispatchers.resetMain()
-    }
+    fun tearDown() =
+        runBlocking {
+            // recentHosts uses stateIn(Eagerly), which owns a long-lived collector.
+            // Cancel it before replacing Dispatchers.Main so no prior test can
+            // retain a coroutine or contend with the next test's setup.
+            viewModel.viewModelScope.coroutineContext.job
+                .cancelAndJoin()
+            Dispatchers.resetMain()
+        }
 
     @Nested
     @DisplayName("custom server address editing")
     inner class CustomServerEditing {
-
         @Test
         fun `typing custom address when preset is active switches selectedServer to Custom`() {
             // starts on System (default preset)
@@ -97,7 +99,7 @@ class DnsViewModelTest {
 
             assertTrue(
                 viewModel.selectedServer.value is DnsServer.Custom,
-                "Expected Custom but got ${viewModel.selectedServer.value}"
+                "Expected Custom but got ${viewModel.selectedServer.value}",
             )
         }
 
@@ -135,7 +137,6 @@ class DnsViewModelTest {
     @Nested
     @DisplayName("preset server selection")
     inner class PresetSelection {
-
         @Test
         fun `selecting a preset server stores it`() {
             viewModel.onServerChange(DnsServer.Google)
@@ -155,120 +156,127 @@ class DnsViewModelTest {
     @Nested
     @DisplayName("lookup uses custom server address")
     inner class LookupWithCustomServer {
-
         @Test
-        fun `performLookup passes custom address to use case`() = runTest {
-            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
+        fun `performLookup passes custom address to use case`() =
+            runTest {
+                coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
 
-            viewModel.onDomainChange("example.com")
-            viewModel.onCustomServerAddressChange("192.168.1.1")
-            viewModel.performLookup()
+                viewModel.onDomainChange("example.com")
+                viewModel.onCustomServerAddressChange("192.168.1.1")
+                viewModel.performLookup()
 
-            coVerify { useCase(match { it.server == DnsServer.Custom("192.168.1.1") }, any()) }
-        }
+                coVerify { useCase(match { it.server == DnsServer.Custom("192.168.1.1") }, any()) }
+            }
     }
 
     @Nested
     @DisplayName("state transitions")
     inner class StateTransitions {
-
         @Test
         fun `initial state is Idle`() {
             assertTrue(viewModel.uiState.value is DnsUiState.Idle)
         }
 
         @Test
-        fun `success transitions to Success`() = runTest {
-            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
-            viewModel.onDomainChange("example.com")
-            viewModel.performLookup()
-            assertTrue(viewModel.uiState.value is DnsUiState.Success)
-        }
+        fun `success transitions to Success`() =
+            runTest {
+                coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
+                viewModel.onDomainChange("example.com")
+                viewModel.performLookup()
+                assertTrue(viewModel.uiState.value is DnsUiState.Success)
+            }
 
         @Test
-        fun `error transitions to Error with message`() = runTest {
-            coEvery { useCase(any(), any()) } returns NetworkResult.Error("nxdomain")
-            viewModel.onDomainChange("nonexistent.invalid")
-            viewModel.performLookup()
-            val state = viewModel.uiState.value
-            assertTrue(state is DnsUiState.Error)
-            assertEquals("nxdomain", (state as DnsUiState.Error).message)
-        }
+        fun `error transitions to Error with message`() =
+            runTest {
+                coEvery { useCase(any(), any()) } returns NetworkResult.Error("nxdomain")
+                viewModel.onDomainChange("nonexistent.invalid")
+                viewModel.performLookup()
+                val state = viewModel.uiState.value
+                assertTrue(state is DnsUiState.Error)
+                assertEquals("nxdomain", (state as DnsUiState.Error).message)
+            }
 
         @Test
-        fun `onClearResults resets to Idle`() = runTest {
-            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
-            viewModel.onDomainChange("example.com")
-            viewModel.performLookup()
-            viewModel.onClearResults()
-            assertTrue(viewModel.uiState.value is DnsUiState.Idle)
-        }
+        fun `onClearResults resets to Idle`() =
+            runTest {
+                coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
+                viewModel.onDomainChange("example.com")
+                viewModel.performLookup()
+                viewModel.onClearResults()
+                assertTrue(viewModel.uiState.value is DnsUiState.Idle)
+            }
 
         @Test
-        fun `Stop waits for cleanup then shows canceled and blocks duplicate starts`() = runTest {
-            var session: OperationSession? = null
-            val cleanupStarted = CompletableDeferred<Unit>()
-            val cleanupGate = CountDownLatch(1)
-            val runnerFinished = CompletableDeferred<Unit>()
-            coEvery { useCase(any(), any()) } coAnswers {
-                session = secondArg()
-                try {
-                    OperationRunner.run(checkNotNull(session)) {
-                        resources.register(AutoCloseable {
-                            cleanupStarted.complete(Unit)
-                            cleanupGate.await()
-                        })
-                        awaitCancellation()
+        fun `Stop waits for cleanup then shows canceled and blocks duplicate starts`() =
+            runTest {
+                var session: OperationSession? = null
+                val cleanupStarted = CompletableDeferred<Unit>()
+                val cleanupGate = CountDownLatch(1)
+                val runnerFinished = CompletableDeferred<Unit>()
+                coEvery { useCase(any(), any()) } coAnswers {
+                    session = secondArg()
+                    try {
+                        OperationRunner.run(checkNotNull(session)) {
+                            resources.register(
+                                AutoCloseable {
+                                    cleanupStarted.complete(Unit)
+                                    cleanupGate.await()
+                                },
+                            )
+                            awaitCancellation()
+                        }
+                    } finally {
+                        runnerFinished.complete(Unit)
                     }
-                } finally {
-                    runnerFinished.complete(Unit)
                 }
+                viewModel.onDomainChange("example.com")
+                viewModel.performLookup()
+
+                viewModel.onStopLookup()
+                cleanupStarted.await()
+
+                assertEquals(CancellationReason.USER_STOP, session?.cancellationReason)
+                assertTrue(viewModel.uiState.value is DnsUiState.Canceling)
+                assertFalse(session?.resources?.isClosed ?: true)
+                viewModel.onDomainChange("preserved.example")
+                viewModel.performLookup()
+                coVerify(exactly = 1) { useCase(any(), any()) }
+                assertEquals("preserved.example", viewModel.domain.value)
+
+                cleanupGate.countDown()
+                withContext(Dispatchers.IO) { runnerFinished.await() }
+                assertTrue(session?.resources?.isClosed == true)
+                val terminalState =
+                    withContext(Dispatchers.IO) {
+                        withTimeout(2_000) {
+                            viewModel.uiState.first { it is DnsUiState.Canceled }
+                        }
+                    }
+                assertTrue(terminalState is DnsUiState.Canceled)
+                viewModel.onClearResults()
+                assertTrue(viewModel.uiState.value is DnsUiState.Idle)
             }
-            viewModel.onDomainChange("example.com")
-            viewModel.performLookup()
-
-            viewModel.onStopLookup()
-            cleanupStarted.await()
-
-            assertEquals(CancellationReason.USER_STOP, session?.cancellationReason)
-            assertTrue(viewModel.uiState.value is DnsUiState.Canceling)
-            assertFalse(session?.resources?.isClosed ?: true)
-            viewModel.onDomainChange("preserved.example")
-            viewModel.performLookup()
-            coVerify(exactly = 1) { useCase(any(), any()) }
-            assertEquals("preserved.example", viewModel.domain.value)
-
-            cleanupGate.countDown()
-            withContext(Dispatchers.IO) { runnerFinished.await() }
-            assertTrue(session?.resources?.isClosed == true)
-            val terminalState = withContext(Dispatchers.IO) {
-                withTimeout(2_000) {
-                    viewModel.uiState.first { it is DnsUiState.Canceled }
-                }
-            }
-            assertTrue(terminalState is DnsUiState.Canceled)
-            viewModel.onClearResults()
-            assertTrue(viewModel.uiState.value is DnsUiState.Idle)
-        }
 
         @Test
-        fun `lifecycle cancellation does not present user canceled state`() = runTest {
-            var session: OperationSession? = null
-            coEvery { useCase(any(), any()) } coAnswers {
-                session = secondArg()
-                awaitCancellation()
-            }
-            viewModel.onDomainChange("example.com")
-            viewModel.performLookup()
-            androidx.lifecycle.ViewModelStore().also { store ->
-                store.put("dns", viewModel)
-                store.clear()
-            }
+        fun `lifecycle cancellation does not present user canceled state`() =
+            runTest {
+                var session: OperationSession? = null
+                coEvery { useCase(any(), any()) } coAnswers {
+                    session = secondArg()
+                    awaitCancellation()
+                }
+                viewModel.onDomainChange("example.com")
+                viewModel.performLookup()
+                androidx.lifecycle.ViewModelStore().also { store ->
+                    store.put("dns", viewModel)
+                    store.clear()
+                }
 
-            assertEquals(CancellationReason.LIFECYCLE_PAUSE, session?.cancellationReason)
-            assertTrue(viewModel.uiState.value !is DnsUiState.Canceled)
-            assertTrue(viewModel.uiState.value !is DnsUiState.Canceling)
-        }
+                assertEquals(CancellationReason.LIFECYCLE_PAUSE, session?.cancellationReason)
+                assertTrue(viewModel.uiState.value !is DnsUiState.Canceled)
+                assertTrue(viewModel.uiState.value !is DnsUiState.Canceling)
+            }
 
         @Test
         fun `invalid name is rejected before the use case runs`() {
@@ -305,115 +313,153 @@ class DnsViewModelTest {
         }
 
         @Test
-        fun `addRecent is called on performLookup`() = runTest {
-            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
-            viewModel.onDomainChange("example.com")
-            viewModel.performLookup()
-            coVerify { recentHostsRepository.addRecent(
-                net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
-                "example.com"
-            ) }
-        }
-
-        @Test
-        fun `DNS error results are not saved to recents`() = runTest {
-            coEvery { useCase(any(), any()) } returns NetworkResult.Error("Invalid domain")
-
-            listOf("nxdomain.example", "missing.example").forEach { query ->
-                viewModel.onDomainChange(query)
+        fun `addRecent is called on performLookup`() =
+            runTest {
+                coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
+                viewModel.onDomainChange("example.com")
                 viewModel.performLookup()
-                assertTrue(viewModel.uiState.value is DnsUiState.Error, "Expected error for $query")
-            }
-
-            coVerify(exactly = 0) {
-                recentHostsRepository.addRecent(
-                    net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
-                    any()
-                )
-            }
-        }
-
-        @Test
-        fun `recent persistence failure does not replace successful DNS result`() = runTest {
-            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
-            coEvery {
-                recentHostsRepository.addRecent(any(), any())
-            } throws IllegalStateException("recent store unavailable")
-            viewModel.onDomainChange("example.com")
-
-            viewModel.performLookup()
-
-            val state = viewModel.uiState.value
-            assertTrue(state is DnsUiState.Success)
-            assertEquals(stubResult, (state as DnsUiState.Success).result)
-        }
-
-        @Test
-        fun `duplicate submit while loading is ignored and recent host uses captured input`() = runTest {
-            val answer = CompletableDeferred<NetworkResult<DnsResult>>()
-            coEvery { useCase(any(), any()) } coAnswers { answer.await() }
-            viewModel.onDomainChange("queried.example")
-
-            viewModel.performLookup()
-
-            assertTrue(viewModel.uiState.value is DnsUiState.Loading)
-            viewModel.onDomainChange("edited.example")
-            viewModel.performLookup()
-            coVerify(exactly = 1) { useCase(any(), any()) }
-
-            answer.complete(NetworkResult.Success(stubResult.copy(domain = "queried.example")))
-            val success = viewModel.uiState.first { it is DnsUiState.Success } as DnsUiState.Success
-            assertEquals("queried.example", success.result.domain)
-            coVerify(exactly = 1) {
-                recentHostsRepository.addRecent(
-                    net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
-                    "queried.example"
-                )
-            }
-            coVerify(exactly = 0) {
-                recentHostsRepository.addRecent(
-                    net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
-                    "edited.example"
-                )
-            }
-        }
-
-        @Test
-        fun `late completion from cleared request cannot replace a newer result`() = runTest {
-            var completeFirst: ((NetworkResult<DnsResult>) -> Unit)? = null
-            coEvery { useCase(match { it.domain == "first.example" }, any()) } coAnswers {
-                suspendCoroutine { continuation ->
-                    completeFirst = { result -> continuation.resume(result) }
+                coVerify {
+                    recentHostsRepository.addRecent(
+                        net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
+                        "example.com",
+                    )
                 }
             }
-            coEvery { useCase(match { it.domain == "second.example" }, any()) } returns
-                NetworkResult.Success(stubResult.copy(domain = "second.example"))
 
-            viewModel.onDomainChange("first.example")
-            viewModel.performLookup()
-            viewModel.onClearResults()
-            assertTrue(viewModel.uiState.value is DnsUiState.Idle)
+        @Test
+        fun `DNS error results are not saved to recents`() =
+            runTest {
+                coEvery { useCase(any(), any()) } returns NetworkResult.Error("Invalid domain")
 
-            viewModel.onDomainChange("second.example")
-            viewModel.performLookup()
-            coVerify(exactly = 0) { useCase(match { it.domain == "second.example" }, any()) }
+                listOf("nxdomain.example", "missing.example").forEach { query ->
+                    viewModel.onDomainChange(query)
+                    viewModel.performLookup()
+                    assertTrue(viewModel.uiState.value is DnsUiState.Error, "Expected error for $query")
+                }
 
-            runCatching {
-                completeFirst!!(NetworkResult.Success(stubResult.copy(domain = "first.example")))
+                coVerify(exactly = 0) {
+                    recentHostsRepository.addRecent(
+                        net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
+                        any(),
+                    )
+                }
             }
-            runCurrent()
-            assertTrue(viewModel.uiState.value is DnsUiState.Idle)
 
-            viewModel.performLookup()
-            val latest = viewModel.uiState.first { it is DnsUiState.Success } as DnsUiState.Success
-            assertEquals("second.example", latest.result.domain)
-            assertEquals(latest, viewModel.uiState.value)
-            coVerify(exactly = 0) {
-                recentHostsRepository.addRecent(
-                    net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
-                    "first.example"
-                )
+        @Test
+        fun `NXDOMAIN and other non-NOERROR responses are not saved to recents`() =
+            runTest {
+                coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult.copy(rcode = "NXDOMAIN"))
+                viewModel.onDomainChange("missing.example")
+                viewModel.performLookup()
+
+                assertTrue(viewModel.uiState.value is DnsUiState.Success)
+                coVerify(exactly = 0) {
+                    recentHostsRepository.addRecent(
+                        net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
+                        any(),
+                    )
+                }
             }
-        }
+
+        @Test
+        fun `error keeps the typed error info for the UI to map`() =
+            runTest {
+                val info =
+                    net.aieat.netswissknife.core.network.ErrorInfo(
+                        code = net.aieat.netswissknife.core.network.ErrorCode.NETWORK_TIMEOUT,
+                    )
+                coEvery { useCase(any(), any()) } returns NetworkResult.Error(message = "timed out", info = info)
+                viewModel.onDomainChange("example.com")
+                viewModel.performLookup()
+
+                val state = viewModel.uiState.value as DnsUiState.Error
+                assertEquals(info, state.errorInfo)
+            }
+
+        @Test
+        fun `recent persistence failure does not replace successful DNS result`() =
+            runTest {
+                coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubResult)
+                coEvery {
+                    recentHostsRepository.addRecent(any(), any())
+                } throws IllegalStateException("recent store unavailable")
+                viewModel.onDomainChange("example.com")
+
+                viewModel.performLookup()
+
+                val state = viewModel.uiState.value
+                assertTrue(state is DnsUiState.Success)
+                assertEquals(stubResult, (state as DnsUiState.Success).result)
+            }
+
+        @Test
+        fun `duplicate submit while loading is ignored and recent host uses captured input`() =
+            runTest {
+                val answer = CompletableDeferred<NetworkResult<DnsResult>>()
+                coEvery { useCase(any(), any()) } coAnswers { answer.await() }
+                viewModel.onDomainChange("queried.example")
+
+                viewModel.performLookup()
+
+                assertTrue(viewModel.uiState.value is DnsUiState.Loading)
+                viewModel.onDomainChange("edited.example")
+                viewModel.performLookup()
+                coVerify(exactly = 1) { useCase(any(), any()) }
+
+                answer.complete(NetworkResult.Success(stubResult.copy(domain = "queried.example")))
+                val success = viewModel.uiState.first { it is DnsUiState.Success } as DnsUiState.Success
+                assertEquals("queried.example", success.result.domain)
+                coVerify(exactly = 1) {
+                    recentHostsRepository.addRecent(
+                        net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
+                        "queried.example",
+                    )
+                }
+                coVerify(exactly = 0) {
+                    recentHostsRepository.addRecent(
+                        net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
+                        "edited.example",
+                    )
+                }
+            }
+
+        @Test
+        fun `late completion from cleared request cannot replace a newer result`() =
+            runTest {
+                var completeFirst: ((NetworkResult<DnsResult>) -> Unit)? = null
+                coEvery { useCase(match { it.domain == "first.example" }, any()) } coAnswers {
+                    suspendCoroutine { continuation ->
+                        completeFirst = { result -> continuation.resume(result) }
+                    }
+                }
+                coEvery { useCase(match { it.domain == "second.example" }, any()) } returns
+                    NetworkResult.Success(stubResult.copy(domain = "second.example"))
+
+                viewModel.onDomainChange("first.example")
+                viewModel.performLookup()
+                viewModel.onClearResults()
+                assertTrue(viewModel.uiState.value is DnsUiState.Idle)
+
+                viewModel.onDomainChange("second.example")
+                viewModel.performLookup()
+                coVerify(exactly = 0) { useCase(match { it.domain == "second.example" }, any()) }
+
+                runCatching {
+                    completeFirst!!(NetworkResult.Success(stubResult.copy(domain = "first.example")))
+                }
+                runCurrent()
+                assertTrue(viewModel.uiState.value is DnsUiState.Idle)
+
+                viewModel.performLookup()
+                val latest = viewModel.uiState.first { it is DnsUiState.Success } as DnsUiState.Success
+                assertEquals("second.example", latest.result.domain)
+                assertEquals(latest, viewModel.uiState.value)
+                coVerify(exactly = 0) {
+                    recentHostsRepository.addRecent(
+                        net.aieat.netswissknife.app.data.AppPreferenceKeys.RECENT_DNS_HOSTS,
+                        "first.example",
+                    )
+                }
+            }
     }
 }

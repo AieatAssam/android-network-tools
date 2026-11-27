@@ -1,6 +1,7 @@
 package net.aieat.netswissknife.app.ui.screens.settings
 
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -8,11 +9,13 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,13 +26,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SmartToy
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -57,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -64,7 +63,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -74,8 +72,6 @@ import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.screens.wifi.WifiRefreshIntervalPicker
 import net.aieat.netswissknife.app.ui.theme.AppMotion
-import net.aieat.netswissknife.app.ui.theme.AppShapes
-import kotlin.math.roundToInt
 
 object SettingsScreenTestTags {
     const val DEFAULT_CONCURRENCY_SLIDER = "settings_default_concurrency_slider"
@@ -122,7 +118,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             SettingsHeader(onBack = onBack)
-            AnimatedVisibility(visible = visibleSections >= 1, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
+            SettingsSectionReveal(visible = visibleSections >= 1) {
                 ThemeSection(
                     themeOverride = themeOverride,
                     onThemeChange = viewModel::setThemeOverride,
@@ -130,7 +126,7 @@ fun SettingsScreen(
                     onDynamicColorChange = viewModel::setDynamicColor,
                 )
             }
-            AnimatedVisibility(visible = visibleSections >= 2, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
+            SettingsSectionReveal(visible = visibleSections >= 2) {
                 DefaultsSection(
                     pingCount = defaultPingCount,
                     timeoutMs = defaultTimeoutMs,
@@ -142,23 +138,40 @@ fun SettingsScreen(
                     onWifiRefreshIntervalChange = viewModel::setWifiRefreshInterval,
                 )
             }
-            AnimatedVisibility(visible = visibleSections >= 3, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
+            SettingsSectionReveal(visible = visibleSections >= 3) {
                 DataSection(onClearRecents = viewModel::clearAllRecentHosts)
             }
-            AnimatedVisibility(visible = visibleSections >= 4, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
+            SettingsSectionReveal(visible = visibleSections >= 4) {
                 OnboardingResetSection(onReset = viewModel::resetOnboarding)
             }
-            AnimatedVisibility(visible = visibleSections >= 5, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
+            SettingsSectionReveal(visible = visibleSections >= 5) {
                 AboutSection()
             }
-            AnimatedVisibility(visible = visibleSections >= 6, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
+            SettingsSectionReveal(visible = visibleSections >= 6) {
                 AttributionsSection()
             }
-            AnimatedVisibility(visible = visibleSections >= 7, enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 }) {
+            SettingsSectionReveal(visible = visibleSections >= 7) {
                 LicensesSection()
             }
             Spacer(Modifier.height(8.dp))
         }
+    }
+}
+
+/**
+ * Reveals one Settings section. The section's header and card are stacked in a column: placed straight
+ * into AnimatedVisibility they would overlap, and the card would hide the header.
+ */
+@Composable
+private fun SettingsSectionReveal(
+    visible: Boolean,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 3 },
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
     }
 }
 
@@ -195,7 +208,7 @@ private fun ThemeSection(
     dynamicColor: Boolean,
     onDynamicColorChange: (Boolean) -> Unit,
 ) {
-    SectionHeader(Icons.Default.DarkMode, stringResource(R.string.settings_theme_section))
+    SectionHeader(stringResource(R.string.settings_theme_section))
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -261,30 +274,33 @@ private fun DefaultsSection(
     onConcurrencyChange: (Int) -> Unit,
     onWifiRefreshIntervalChange: (Long?) -> Unit,
 ) {
-    SectionHeader(Icons.Default.Tune, stringResource(R.string.settings_defaults_section))
+    SectionHeader(stringResource(R.string.settings_defaults_section))
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             SliderSetting(
-                label = stringResource(R.string.settings_ping_count_label, pingCount),
-                value = pingCount.toFloat(),
-                valueRange = 1f..100f,
-                steps = 98,
-                onValueChange = { onPingCountChange(it.roundToInt()) },
+                value = pingCount,
+                steps = SettingSteps.PING_COUNT,
+                label = { stringResource(R.string.settings_ping_count_label, it) },
+                valueText = { it.toString() },
+                usage = stringResource(R.string.settings_ping_count_usage),
+                onValueCommit = onPingCountChange,
             )
             SliderSetting(
-                label = stringResource(R.string.settings_timeout_label, timeoutMs),
-                value = timeoutMs.toFloat(),
-                valueRange = 500f..10_000f,
-                steps = 18,
-                onValueChange = { onTimeoutChange((it / 500).roundToInt() * 500) },
+                value = timeoutMs,
+                steps = SettingSteps.TIMEOUT_MS,
+                label = { stringResource(R.string.settings_timeout_label, it) },
+                valueText = { stringResource(R.string.settings_timeout_value, it) },
+                usage = stringResource(R.string.settings_timeout_usage),
+                onValueCommit = onTimeoutChange,
             )
             SliderSetting(
-                label = stringResource(R.string.settings_concurrency_label, concurrency),
-                value = concurrency.toFloat(),
-                valueRange = 1f..500f,
-                steps = 498,
-                onValueChange = { onConcurrencyChange(it.roundToInt()) },
+                value = concurrency,
+                steps = SettingSteps.CONCURRENCY,
+                label = { stringResource(R.string.settings_concurrency_label, it) },
+                valueText = { it.toString() },
+                usage = stringResource(R.string.settings_concurrency_usage),
+                onValueCommit = onConcurrencyChange,
                 testTag = SettingsScreenTestTags.DEFAULT_CONCURRENCY_SLIDER,
             )
             Text(
@@ -300,32 +316,57 @@ private fun DefaultsSection(
     }
 }
 
+/**
+ * A default that steps through [steps], with tick marks, the current value above and the range below.
+ * The thumb follows the finger and the preference is written once, when the finger lifts.
+ */
 @Composable
 private fun SliderSetting(
-    label: String,
-    value: Float,
-    valueRange: ClosedFloatingPointRange<Float>,
-    steps: Int,
-    onValueChange: (Float) -> Unit,
+    value: Int,
+    steps: SettingSteps,
+    label: @Composable (Int) -> String,
+    valueText: @Composable (Int) -> String,
+    usage: String,
+    onValueCommit: (Int) -> Unit,
     testTag: String? = null,
 ) {
+    var position by remember(value, steps) { mutableIntStateOf(steps.indexOf(value)) }
+    val shownLabel = label(steps.shownValue(value, position))
     Column {
         Text(
-            text = label,
+            text = shownLabel,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange,
-            steps = steps,
+            value = position.toFloat(),
+            onValueChange = { position = steps.indexOf(steps.valueAt(it)) },
+            onValueChangeFinished = { onValueCommit(steps.values[position]) },
+            valueRange = 0f..steps.lastIndex.toFloat(),
+            steps = steps.sliderSteps,
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .semantics {
-                        contentDescription = "$label: ${value.toInt()}"
+                        contentDescription = shownLabel
                     }.then(testTag?.let { Modifier.testTag(it) } ?: Modifier),
+        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                text = valueText(steps.min),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = valueText(steps.max),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(
+            text = usage,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -333,8 +374,10 @@ private fun SliderSetting(
 @Composable
 private fun DataSection(onClearRecents: () -> Unit) {
     var showConfirmDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val clearedMessage = stringResource(R.string.settings_clear_recents_done)
 
-    SectionHeader(Icons.Default.Delete, stringResource(R.string.settings_data_section))
+    SectionHeader(stringResource(R.string.settings_data_section))
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -373,6 +416,7 @@ private fun DataSection(onClearRecents: () -> Unit) {
                     onClick = {
                         onClearRecents()
                         showConfirmDialog = false
+                        Toast.makeText(context, clearedMessage, Toast.LENGTH_SHORT).show()
                     },
                     colors =
                         ButtonDefaults.textButtonColors(
@@ -395,7 +439,7 @@ private fun DataSection(onClearRecents: () -> Unit) {
 private fun OnboardingResetSection(onReset: () -> Unit) {
     var showConfirmDialog by remember { mutableStateOf(false) }
 
-    SectionHeader(Icons.Default.SmartToy, stringResource(R.string.settings_guide_section))
+    SectionHeader(stringResource(R.string.settings_guide_section))
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -440,8 +484,10 @@ private fun OnboardingResetSection(onReset: () -> Unit) {
 @Composable
 private fun AboutSection() {
     val uriHandler = LocalUriHandler.current
+    val sourceCodeUrl = stringResource(R.string.settings_source_code_link)
+    val privacyPolicyUrl = stringResource(R.string.settings_privacy_policy_link)
 
-    SectionHeader(Icons.Default.Info, stringResource(R.string.settings_about_section))
+    SectionHeader(stringResource(R.string.settings_about_section))
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column {
@@ -464,74 +510,153 @@ private fun AboutSection() {
                 )
             }
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { uriHandler.openUri("https://github.com/AieatAssam/android-network-tools") }
-                        .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_source_code_label),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.settings_source_code_url),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        textDecoration = TextDecoration.Underline,
-                    )
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
+            AboutLinkRow(
+                label = stringResource(R.string.settings_source_code_label),
+                linkText = stringResource(R.string.settings_source_code_url),
+                onClick = { uriHandler.openUri(sourceCodeUrl) },
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            AboutLinkRow(
+                label = stringResource(R.string.settings_privacy_policy_label),
+                linkText = stringResource(R.string.settings_privacy_policy_link_text),
+                onClick = { uriHandler.openUri(privacyPolicyUrl) },
+            )
         }
     }
 }
 
 @Composable
-private fun AttributionsSection() {
-    val uriHandler = LocalUriHandler.current
+private fun AboutLinkRow(
+    label: String,
+    linkText: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = linkText,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                textDecoration = TextDecoration.Underline,
+            )
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
 
-    SectionHeader(Icons.Default.Info, stringResource(R.string.settings_attributions_section))
+private data class AttributionSource(
+    val titleRes: Int,
+    val bodyRes: Int,
+    val linkRes: List<Int>,
+)
+
+private val ATTRIBUTION_SOURCES =
+    listOf(
+        AttributionSource(
+            titleRes = R.string.settings_attribution_speedtest_title,
+            bodyRes = R.string.settings_attribution_speedtest_body,
+            linkRes = listOf(R.string.settings_attribution_speedtest_url),
+        ),
+        AttributionSource(
+            titleRes = R.string.settings_attribution_ipify_title,
+            bodyRes = R.string.settings_attribution_ipify_body,
+            linkRes =
+                listOf(
+                    R.string.settings_attribution_ipify_ipv4_url,
+                    R.string.settings_attribution_ipify_ipv6_url,
+                ),
+        ),
+        AttributionSource(
+            titleRes = R.string.settings_attribution_geoip_title,
+            bodyRes = R.string.settings_attribution_geoip_body,
+            linkRes =
+                listOf(
+                    R.string.settings_attribution_ipinfo_url,
+                    R.string.settings_attribution_ipwho_url,
+                    R.string.settings_attribution_ipapi_url,
+                ),
+        ),
+        AttributionSource(
+            titleRes = R.string.settings_attribution_whois_title,
+            bodyRes = R.string.settings_attribution_whois_body,
+            linkRes =
+                listOf(
+                    R.string.settings_attribution_rdap_url,
+                    R.string.settings_attribution_whois_iana_url,
+                    R.string.settings_attribution_whois_arin_url,
+                ),
+        ),
+    )
+
+@Composable
+private fun AttributionsSection() {
+    SectionHeader(stringResource(R.string.settings_attributions_section))
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(imageVector = Icons.Default.Speed, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Text(
-                    text = stringResource(R.string.settings_attribution_speedtest_title),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
+            ATTRIBUTION_SOURCES.forEachIndexed { index, source ->
+                if (index > 0) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                }
+                AttributionEntry(source)
             }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = stringResource(R.string.settings_attribution_speedtest_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+            // Base map of the Traceroute route map: bundled, offline, public domain. Shown once for all sources.
+            NaturalEarthAttribution(
+                modifier = Modifier.fillMaxWidth(),
             )
-            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+@Composable
+private fun AttributionEntry(source: AttributionSource) {
+    val uriHandler = LocalUriHandler.current
+    Column {
+        Text(
+            text = stringResource(source.titleRes),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = stringResource(source.bodyRes),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        source.linkRes.forEach { linkRes ->
+            val url = stringResource(linkRes)
             Row(
                 modifier =
                     Modifier
-                        .clickable { uriHandler.openUri("https://speed.cloudflare.com") }
-                        .padding(vertical = 4.dp),
+                        .clickable { uriHandler.openUri(url) }
+                        .heightIn(min = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "speed.cloudflare.com",
+                    text = url,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     textDecoration = TextDecoration.Underline,
@@ -549,30 +674,27 @@ private fun AttributionsSection() {
 
 private data class LibraryInfo(
     val name: String,
-    val version: String,
     val license: String,
     val copyright: String? = null,
 )
 
 private val THIRD_PARTY_LIBRARIES =
     listOf(
-        LibraryInfo(
-            "dnsjava",
-            "3.6.5",
-            "BSD 3-Clause",
-            "Copyright (c) 1998-2024, Brian Wellington and the dnsjava contributors",
-        ),
-        LibraryInfo("SNMP4J", "3.13.1", "Apache 2.0"),
-        LibraryInfo("icmpenguin", "1.0.0-rc.4", "Apache 2.0"),
-        LibraryInfo("Dagger Hilt", "2.60.1", "Apache 2.0"),
-        LibraryInfo("Kotlin Coroutines", "1.11.0", "Apache 2.0"),
-        LibraryInfo("AndroidX / Jetpack Compose", "N/A", "Apache 2.0"),
-        LibraryInfo("AndroidX DataStore", "1.2.1", "Apache 2.0"),
+        LibraryInfo("AndroidX and Jetpack Compose", "Apache 2.0"),
+        LibraryInfo("AndroidX DataStore", "Apache 2.0"),
+        LibraryInfo("Dagger Hilt", "Apache 2.0"),
+        LibraryInfo("Kotlin Coroutines", "Apache 2.0"),
+        LibraryInfo("Kotlinx Serialization", "Apache 2.0"),
+        LibraryInfo("OkHttp (local fork)", "Apache 2.0"),
+        LibraryInfo("Okio", "Apache 2.0"),
+        LibraryInfo("dnsjava", "BSD 3-Clause", DNSJAVA_COPYRIGHT),
+        LibraryInfo("SNMP4J", "Apache 2.0"),
+        LibraryInfo("icmpenguin", "Apache 2.0"),
     )
 
 @Composable
 private fun LicensesSection() {
-    SectionHeader(Icons.Default.Info, stringResource(R.string.settings_licenses_section))
+    SectionHeader(stringResource(R.string.settings_licenses_section))
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
@@ -624,13 +746,6 @@ private fun LibraryRow(lib: LibraryInfo) {
                 )
             }
         }
-        if (lib.version != "N/A") {
-            Text(
-                text = "v${lib.version}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
         if (lib.copyright != null) {
             Text(
                 text = lib.copyright,
@@ -643,25 +758,13 @@ private fun LibraryRow(lib: LibraryInfo) {
 
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
-private fun SectionHeader(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp),
-        )
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-    }
+private fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onBackground,
+    )
 }
+
+private const val DNSJAVA_COPYRIGHT = "Copyright (c) 1998-2024, Brian Wellington and the dnsjava contributors"

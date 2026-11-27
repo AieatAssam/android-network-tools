@@ -5,7 +5,6 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -36,14 +35,15 @@ import net.aieat.netswissknife.core.network.whois.WhoisResult
 import net.aieat.netswissknife.core.network.whois.WhoisServer
 import net.aieat.netswissknife.core.network.whois.WhoisServerRole
 import net.aieat.netswissknife.core.network.whois.answeringProtocol
+import javax.inject.Inject
 
-enum class HopStatus { PENDING, QUERYING, DONE, FAILED, SKIPPED }
+enum class HopStatus { PENDING, DONE, FAILED, SKIPPED }
 
 data class HopUiState(
     val server: WhoisServer,
     val status: HopStatus,
     val queryTimeMs: Long? = null,
-    val referral: String? = null
+    val referral: String? = null,
 )
 
 data class WhoisUiState(
@@ -58,7 +58,7 @@ data class WhoisUiState(
     val error: String? = null,
     /** True while the query is not a domain, IP or ASN. Shown inline; Look up is disabled. */
     val queryInvalid: Boolean = false,
-    val showRawResponse: Boolean = false
+    val showRawResponse: Boolean = false,
 )
 
 /** SavedStateHandle keys for the WHOIS form; they survive process death and rotation. */
@@ -80,328 +80,363 @@ internal data class WhoisSessionSnapshot(
 )
 
 @HiltViewModel
-class WhoisViewModel @Inject constructor(
-    private val whoisLookupUseCase: WhoisLookupUseCase,
-    private val recentHostsRepository: RecentHostsRepository,
-    private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
-    // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
-    @param:SuppressLint("VisibleForTests")
-    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
-    private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
-) : ViewModel() {
+class WhoisViewModel
+    @Inject
+    constructor(
+        private val whoisLookupUseCase: WhoisLookupUseCase,
+        private val recentHostsRepository: RecentHostsRepository,
+        private val networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+        // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
+        @param:SuppressLint("VisibleForTests")
+        private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+        private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
+    ) : ViewModel() {
+        // Restore order: a SavedStateHandle value (rotation) wins over the snapshot kept when the tool
+        // was left, which in turn wins over the defaults.
+        private val restoredSession: WhoisSessionSnapshot? =
+            sessionMemory.get<WhoisSessionSnapshot>(WHOIS_SESSION_KEY)
+        private val initialQuery: String =
+            savedStateHandle.get<String>(WHOIS_QUERY_KEY) ?: restoredSession?.query.orEmpty()
 
-    // Restore order: a SavedStateHandle value (rotation) wins over the snapshot kept when the tool
-    // was left, which in turn wins over the defaults.
-    private val restoredSession: WhoisSessionSnapshot? =
-        sessionMemory.get<WhoisSessionSnapshot>(WHOIS_SESSION_KEY)
-    private val initialQuery: String =
-        savedStateHandle.get<String>(WHOIS_QUERY_KEY) ?: restoredSession?.query.orEmpty()
+        private val _uiState =
+            MutableStateFlow(
+                WhoisUiState(
+                    query = initialQuery,
+                    protocol =
+                        enumFromSavedName(
+                            savedStateHandle.get<String>(WHOIS_PROTOCOL_KEY) ?: restoredSession?.protocol?.name,
+                            WhoisProtocol.entries,
+                        ) ?: WhoisProtocol.AUTO,
+                    hopStates = restoredSession?.takeIf { it.result != null }?.hopStates.orEmpty(),
+                    result =
+                        restoredSession?.result?.takeIf {
+                            lookupIdentity(initialQuery) == lookupIdentity(it.query)
+                        },
+                ),
+            )
+        val uiState: StateFlow<WhoisUiState> = _uiState.asStateFlow()
+        val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
-    private val _uiState =
-        MutableStateFlow(
-            WhoisUiState(
-                query = initialQuery,
-                protocol =
-                    enumFromSavedName(
-                        savedStateHandle.get<String>(WHOIS_PROTOCOL_KEY) ?: restoredSession?.protocol?.name,
-                        WhoisProtocol.entries,
-                    ) ?: WhoisProtocol.AUTO,
-                hopStates = restoredSession?.takeIf { it.result != null }?.hopStates.orEmpty(),
-                result = restoredSession?.result?.takeIf { lookupIdentity(initialQuery) == lookupIdentity(it.query) },
-            ),
-        )
-    val uiState: StateFlow<WhoisUiState> = _uiState.asStateFlow()
-    val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
+        val recentHosts: StateFlow<List<String>> =
+            recentHostsRepository
+                .getRecents(AppPreferenceKeys.RECENT_WHOIS_HOSTS)
+                .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val recentHosts: StateFlow<List<String>> = recentHostsRepository
-        .getRecents(AppPreferenceKeys.RECENT_WHOIS_HOSTS)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        private var progressJob: Job? = null
+        private var resultJob: Job? = null
+        private var cancellationJob: Job? = null
+        private var pendingReplacementQuery: String? = null
+        private var cancellationReason: CancellationReason = CancellationReason.USER_STOP
+        private var operationSession: OperationSession? = null
 
-    private var progressJob: Job? = null
-    private var resultJob: Job? = null
-    private var cancellationJob: Job? = null
-    private var pendingReplacementQuery: String? = null
-    private var cancellationReason: CancellationReason = CancellationReason.USER_STOP
-    private var operationSession: OperationSession? = null
+        fun onQueryChange(value: String) {
+            savedStateHandle[WHOIS_QUERY_KEY] = value
+            _uiState.update { state ->
+                val effectiveQueryChanged = lookupIdentity(value) != lookupIdentity(state.query)
+                val invalid = isWhoisQueryInvalid(value)
+                val hasTerminalCard = state.isCanceled || state.result != null || state.error != null
+                if (hasTerminalCard && effectiveQueryChanged) {
+                    // The canceled card and its partial relay chain belong to the query that produced
+                    // it. Once the user changes the input, Retry must not appear to retry that old
+                    // operation while actually submitting a different query.
+                    state.copy(
+                        query = value,
+                        queryInvalid = invalid,
+                        isCanceled = false,
+                        isLifecyclePaused = false,
+                        hopStates = emptyList(),
+                        result = null,
+                        error = null,
+                    )
+                } else {
+                    state.copy(query = value, queryInvalid = invalid)
+                }
+            }
+        }
 
-    fun onQueryChange(value: String) {
-        savedStateHandle[WHOIS_QUERY_KEY] = value
-        _uiState.update { state ->
-            val effectiveQueryChanged = lookupIdentity(value) != lookupIdentity(state.query)
-            val invalid = isWhoisQueryInvalid(value)
-            if (state.isCanceled && effectiveQueryChanged) {
-                // The canceled card and its partial relay chain belong to the query that
-                // was stopped. Once the user changes the input, Retry must not appear to
-                // retry that old operation while actually submitting a different query.
-                state.copy(
-                    query = value,
-                    queryInvalid = invalid,
+        fun onProtocolChange(protocol: WhoisProtocol) {
+            if (_uiState.value.isLoading || _uiState.value.isCanceling) return
+            if (_uiState.value.protocol == protocol) return
+            savedStateHandle[WHOIS_PROTOCOL_KEY] = protocol.name
+            _uiState.update {
+                it.copy(
+                    protocol = protocol,
+                    hopStates = emptyList(),
+                    result = null,
+                    error = null,
+                    isCanceled = false,
+                    isLifecyclePaused = false,
+                )
+            }
+        }
+
+        private fun lookupIdentity(query: String): String =
+            WhoisQueryTypeDetector
+                .normalize(query)
+                ?.let {
+                    "${it.type}:${it.value}"
+                }
+                ?: query.trim()
+
+        override fun onCleared() {
+            // A lookup still running (or being stopped) is not kept; only a finished result for the current query is.
+            val state = _uiState.value
+            val finished = state.result?.takeIf { !state.isLoading && !state.isCanceling }
+            val kept = finished?.takeIf { lookupIdentity(state.query) == lookupIdentity(it.query) }
+            sessionMemory.put(
+                WHOIS_SESSION_KEY,
+                WhoisSessionSnapshot(
+                    query = state.query,
+                    protocol = state.protocol,
+                    hopStates = if (kept != null) state.hopStates else emptyList(),
+                    result = kept,
+                ),
+            )
+        }
+
+        fun onToggleRawResponse() {
+            _uiState.update { it.copy(showRawResponse = !it.showRawResponse) }
+        }
+
+        fun removeRecentHost(host: String) {
+            viewModelScope.launch {
+                recentHostsRepository.removeRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, host)
+            }
+        }
+
+        fun clearRecentHosts() {
+            viewModelScope.launch {
+                recentHostsRepository.clearAll(AppPreferenceKeys.RECENT_WHOIS_HOSTS)
+            }
+        }
+
+        fun lookup() {
+            // Keep the current operation session fenced until its cancellation cleanup
+            // finishes. A second lookup during that window could otherwise overlap it.
+            if (_uiState.value.isCanceling) return
+            val query = _uiState.value.query.trim()
+            if (query.isBlank()) return
+            if (isWhoisQueryInvalid(query)) {
+                // Invalid input is a field message, not a failed lookup: nothing is sent and there is nothing to retry.
+                _uiState.update { it.copy(queryInvalid = true) }
+                return
+            }
+
+            val activeSession = operationSession
+            if (activeSession != null) {
+                replaceActiveOperation(query, activeSession)
+                return
+            }
+            startLookup(query)
+        }
+
+        private fun startLookup(query: String) {
+            val protocol = _uiState.value.protocol
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    isCanceling = false,
                     isCanceled = false,
                     isLifecyclePaused = false,
                     hopStates = emptyList(),
                     result = null,
                     error = null,
+                    queryInvalid = false,
                 )
-            } else {
-                state.copy(query = value, queryInvalid = invalid)
             }
-        }
-    }
 
-    fun onProtocolChange(protocol: WhoisProtocol) {
-        if (_uiState.value.isLoading || _uiState.value.isCanceling) return
-        if (_uiState.value.protocol == protocol) return
-        savedStateHandle[WHOIS_PROTOCOL_KEY] = protocol.name
-        _uiState.update {
-            it.copy(
-                protocol = protocol,
-                hopStates = emptyList(),
-                result = null,
-                error = null,
-                isCanceled = false,
-                isLifecyclePaused = false,
-            )
-        }
-    }
+            val session = WhoisOperation.newSession()
+            operationSession = session
 
-    private fun lookupIdentity(query: String): String =
-        WhoisQueryTypeDetector.normalize(query)?.let { "${it.type}:${it.value}" } ?: query.trim()
-
-    override fun onCleared() {
-        // A lookup still running (or being stopped) is not kept; only a finished result for the current query is.
-        val state = _uiState.value
-        val finished = state.result?.takeIf { !state.isLoading && !state.isCanceling }
-        val kept = finished?.takeIf { lookupIdentity(state.query) == lookupIdentity(it.query) }
-        sessionMemory.put(
-            WHOIS_SESSION_KEY,
-            WhoisSessionSnapshot(
-                query = state.query,
-                protocol = state.protocol,
-                hopStates = if (kept != null) state.hopStates else emptyList(),
-                result = kept,
-            ),
-        )
-    }
-
-    fun onToggleRawResponse() {
-        _uiState.update { it.copy(showRawResponse = !it.showRawResponse) }
-    }
-
-    fun removeRecentHost(host: String) {
-        viewModelScope.launch {
-            recentHostsRepository.removeRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, host)
-        }
-    }
-
-    fun clearRecentHosts() {
-        viewModelScope.launch {
-            recentHostsRepository.clearAll(AppPreferenceKeys.RECENT_WHOIS_HOSTS)
-        }
-    }
-
-    fun lookup() {
-        // Keep the current operation session fenced until its cancellation cleanup
-        // finishes. A second lookup during that window could otherwise overlap it.
-        if (_uiState.value.isCanceling) return
-        val query = _uiState.value.query.trim()
-        if (query.isBlank()) return
-        if (isWhoisQueryInvalid(query)) {
-            // Invalid input is a field message, not a failed lookup: nothing is sent and there is nothing to retry.
-            _uiState.update { it.copy(queryInvalid = true) }
-            return
-        }
-
-        val activeSession = operationSession
-        if (activeSession != null) {
-            replaceActiveOperation(query, activeSession)
-            return
-        }
-        startLookup(query)
-    }
-
-    private fun startLookup(query: String) {
-        val protocol = _uiState.value.protocol
-        _uiState.update {
-            it.copy(
-                isLoading = true,
-                isCanceling = false,
-                isCanceled = false,
-                isLifecyclePaused = false,
-                hopStates = emptyList(),
-                result = null,
-                error = null,
-                queryInvalid = false,
-            )
-        }
-
-        val session = WhoisOperation.newSession()
-        operationSession = session
-
-        // Subscribe to hop progress to animate each server node in real time. The operation
-        // id prevents buffered progress from a cancelled/replaced lookup leaking into this one.
-        progressJob = viewModelScope.launch {
-            whoisLookupUseCase.hopProgress.collect { hop ->
-                if (operationSession !== session || hop.operationId != session.budget.operationId) return@collect
-                _uiState.update { state ->
-                    val existing = state.hopStates
-                    // Mark previous QUERYING → DONE, then add new hop as DONE
-                    val updated = existing.map { h ->
-                        if (h.status == HopStatus.QUERYING) h.copy(status = HopStatus.DONE) else h
-                    } + HopUiState(
-                        server = hop.server,
-                        status = if (hop.error != null) HopStatus.FAILED else HopStatus.DONE,
-                        queryTimeMs = hop.queryTimeMs,
-                        referral = hop.referral
-                    )
-                    state.copy(hopStates = updated)
-                }
-            }
-        }
-
-        resultJob = viewModelScope.launch {
-            // Yield so the progress-collection coroutine above can reach collect() first
-            kotlinx.coroutines.yield()
-            val result = whoisLookupUseCase(WhoisParams(query = query, protocol = protocol), session)
-            if (operationSession !== session) return@launch
-            if (result is NetworkResult.Success) saveRecentHostAfterSuccess(query)
-            if (operationSession !== session) return@launch
-            progressJob?.cancel()
-            progressJob = null
-            operationSession = null
-            resultJob = null
-            _uiState.update { state ->
-                when (result) {
-                    is NetworkResult.Success -> state.copy(
-                        isLoading = false,
-                        result = result.data,
-                        hopStates = result.data.hops.map { hop ->
-                            HopUiState(
-                                server = hop.server,
-                                status = if (hop.error != null) HopStatus.FAILED else HopStatus.DONE,
-                                queryTimeMs = hop.queryTimeMs,
-                                referral = hop.referral
-                            )
+            // Subscribe to hop progress to animate each server node in real time. The operation
+            // id prevents buffered progress from a cancelled/replaced lookup leaking into this one.
+            progressJob =
+                viewModelScope.launch {
+                    whoisLookupUseCase.hopProgress.collect { hop ->
+                        if (
+                            operationSession !== session ||
+                            hop.operationId != session.budget.operationId
+                        ) {
+                            return@collect
                         }
-                    )
-                    is NetworkResult.Error -> state.copy(
-                        isLoading = false,
-                        error = result.message,
-                    )
+                        _uiState.update { state ->
+                            val existing = state.hopStates
+                            val updated =
+                                existing +
+                                    HopUiState(
+                                        server = hop.server,
+                                        status = if (hop.error != null) HopStatus.FAILED else HopStatus.DONE,
+                                        queryTimeMs = hop.queryTimeMs,
+                                        referral = hop.referral,
+                                    )
+                            state.copy(hopStates = updated)
+                        }
+                    }
+                }
+
+            resultJob =
+                viewModelScope.launch {
+                    // Yield so the progress-collection coroutine above can reach collect() first
+                    kotlinx.coroutines.yield()
+                    val result = whoisLookupUseCase(WhoisParams(query = query, protocol = protocol), session)
+                    if (operationSession !== session) return@launch
+                    if (result is NetworkResult.Success) saveRecentHostAfterSuccess(query)
+                    if (operationSession !== session) return@launch
+                    progressJob?.cancel()
+                    progressJob = null
+                    operationSession = null
+                    resultJob = null
+                    _uiState.update { state ->
+                        when (result) {
+                            is NetworkResult.Success -> {
+                                state.copy(
+                                    isLoading = false,
+                                    result = result.data,
+                                    hopStates =
+                                        result.data.hops.map { hop ->
+                                            HopUiState(
+                                                server = hop.server,
+                                                status = if (hop.error != null) HopStatus.FAILED else HopStatus.DONE,
+                                                queryTimeMs = hop.queryTimeMs,
+                                                referral = hop.referral,
+                                            )
+                                        },
+                                )
+                            }
+
+                            is NetworkResult.Error -> {
+                                state.copy(
+                                    isLoading = false,
+                                    error = result.message,
+                                )
+                            }
+                        }
+                    }
+                }
+        }
+
+        private fun saveRecentHostAfterSuccess(query: String) {
+            viewModelScope.launch {
+                try {
+                    recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, query)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // Recents are best-effort and must not replace the lookup result.
                 }
             }
         }
-    }
 
-    private fun saveRecentHostAfterSuccess(query: String) {
-        viewModelScope.launch {
-            try {
-                recentHostsRepository.addRecent(AppPreferenceKeys.RECENT_WHOIS_HOSTS, query)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                // Recents are best-effort and must not replace the lookup result.
+        fun stopLookup() = cancelActiveOperation(CancellationReason.USER_STOP, updateState = true)
+
+        /**
+         * Stop an in-flight lookup when this tool leaves the foreground. A [configurationChange]
+         * (rotation) also reaches the screen's stop callbacks, so the lookup keeps running across it.
+         */
+        fun onLifecyclePause(configurationChange: Boolean = false) {
+            if (configurationChange) return
+            if (_uiState.value.isCanceling) {
+                // If a replacement was requested while cleanup ran, do not start it
+                // after the screen has left the foreground. Finish this as a pause.
+                pendingReplacementQuery = null
+                cancellationReason = CancellationReason.LIFECYCLE_PAUSE
+                return
+            }
+            cancelActiveOperation(CancellationReason.LIFECYCLE_PAUSE, updateState = true)
+        }
+
+        private fun cancelActiveOperation(
+            reason: CancellationReason,
+            updateState: Boolean,
+        ) {
+            if (_uiState.value.isCanceling) return
+            val session = operationSession
+            if (session == null) return
+            val (oldProgressJob, oldResultJob) = detachOperation(session, reason)
+            cancellationReason = reason
+            pendingReplacementQuery = null
+            if (updateState) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = true,
+                        isCanceling = true,
+                        isCanceled = false,
+                        isLifecyclePaused = false,
+                        error = null,
+                    )
+                }
+            }
+            oldProgressJob?.cancel()
+            oldResultJob?.cancel()
+
+            if (updateState) {
+                cancellationJob =
+                    viewModelScope.launch {
+                        oldProgressJob?.cancelAndJoin()
+                        oldResultJob?.cancelAndJoin()
+                        finishCanceledState()
+                        cancellationJob = null
+                    }
             }
         }
-    }
 
-    fun stopLookup() = cancelActiveOperation(CancellationReason.USER_STOP, updateState = true)
-
-    /**
-     * Stop an in-flight lookup when this tool leaves the foreground. A [configurationChange]
-     * (rotation) also reaches the screen's stop callbacks, so the lookup keeps running across it.
-     */
-    fun onLifecyclePause(configurationChange: Boolean = false) {
-        if (configurationChange) return
-        if (_uiState.value.isCanceling) {
-            // If a replacement was requested while cleanup ran, do not start it
-            // after the screen has left the foreground. Finish this as a pause.
-            pendingReplacementQuery = null
-            cancellationReason = CancellationReason.LIFECYCLE_PAUSE
-            return
-        }
-        cancelActiveOperation(CancellationReason.LIFECYCLE_PAUSE, updateState = true)
-    }
-
-    private fun cancelActiveOperation(reason: CancellationReason, updateState: Boolean) {
-        if (_uiState.value.isCanceling) return
-        val session = operationSession
-        if (session == null) return
-        val (oldProgressJob, oldResultJob) = detachOperation(session, reason)
-        cancellationReason = reason
-        pendingReplacementQuery = null
-        if (updateState) {
+        private fun replaceActiveOperation(
+            query: String,
+            session: OperationSession,
+        ) {
+            val (oldProgressJob, oldResultJob) = detachOperation(session, CancellationReason.USER_STOP)
+            cancellationReason = CancellationReason.USER_STOP
+            pendingReplacementQuery = query
             _uiState.update {
                 it.copy(
                     isLoading = true,
                     isCanceling = true,
                     isCanceled = false,
                     isLifecyclePaused = false,
+                    hopStates = emptyList(),
+                    result = null,
                     error = null,
                 )
             }
+            oldProgressJob?.cancel()
+            oldResultJob?.cancel()
+            cancellationJob =
+                viewModelScope.launch {
+                    oldProgressJob?.cancelAndJoin()
+                    oldResultJob?.cancelAndJoin()
+                    val replacement = pendingReplacementQuery
+                    pendingReplacementQuery = null
+                    cancellationJob = null
+                    if (replacement != null) startLookup(replacement) else finishCanceledState()
+                }
         }
-        oldProgressJob?.cancel()
-        oldResultJob?.cancel()
 
-        if (updateState) {
-            cancellationJob = viewModelScope.launch {
-                oldProgressJob?.cancelAndJoin()
-                oldResultJob?.cancelAndJoin()
-                finishCanceledState()
-                cancellationJob = null
+        private fun detachOperation(
+            session: OperationSession,
+            reason: CancellationReason,
+        ): Pair<Job?, Job?> {
+            operationSession = null
+            session.cancel(reason)
+            val oldProgressJob = progressJob
+            val oldResultJob = resultJob
+            progressJob = null
+            resultJob = null
+            return oldProgressJob to oldResultJob
+        }
+
+        private fun finishCanceledState() {
+            _uiState.update { state ->
+                if (!state.isCanceling) {
+                    state
+                } else {
+                    state.copy(
+                        isLoading = false,
+                        isCanceling = false,
+                        isCanceled = true,
+                        isLifecyclePaused = cancellationReason == CancellationReason.LIFECYCLE_PAUSE,
+                        error = null,
+                    )
+                }
             }
         }
     }
-
-    private fun replaceActiveOperation(query: String, session: OperationSession) {
-        val (oldProgressJob, oldResultJob) = detachOperation(session, CancellationReason.USER_STOP)
-        cancellationReason = CancellationReason.USER_STOP
-        pendingReplacementQuery = query
-        _uiState.update {
-            it.copy(
-                isLoading = true,
-                isCanceling = true,
-                isCanceled = false,
-                isLifecyclePaused = false,
-                hopStates = emptyList(),
-                result = null,
-                error = null,
-            )
-        }
-        oldProgressJob?.cancel()
-        oldResultJob?.cancel()
-        cancellationJob = viewModelScope.launch {
-            oldProgressJob?.cancelAndJoin()
-            oldResultJob?.cancelAndJoin()
-            val replacement = pendingReplacementQuery
-            pendingReplacementQuery = null
-            cancellationJob = null
-            if (replacement != null) startLookup(replacement) else finishCanceledState()
-        }
-    }
-
-    private fun detachOperation(
-        session: OperationSession,
-        reason: CancellationReason,
-    ): Pair<Job?, Job?> {
-        operationSession = null
-        session.cancel(reason)
-        val oldProgressJob = progressJob
-        val oldResultJob = resultJob
-        progressJob = null
-        resultJob = null
-        return oldProgressJob to oldResultJob
-    }
-
-    private fun finishCanceledState() {
-        _uiState.update { state ->
-            if (!state.isCanceling) state else state.copy(
-                isLoading = false,
-                isCanceling = false,
-                isCanceled = true,
-                isLifecyclePaused = cancellationReason == CancellationReason.LIFECYCLE_PAUSE,
-                error = null,
-            )
-        }
-    }
-}

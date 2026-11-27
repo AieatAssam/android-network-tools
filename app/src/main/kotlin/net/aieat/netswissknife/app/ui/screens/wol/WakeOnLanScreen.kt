@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,9 +32,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Devices
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -40,13 +39,11 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -63,6 +60,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -77,14 +75,14 @@ import net.aieat.netswissknife.app.platform.NetworkErrorKind
 import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
-import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
 import net.aieat.netswissknife.app.ui.components.ToolRetryButton
 import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
-import net.aieat.netswissknife.app.ui.components.ResultActionsRow
 import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.rememberLocalNetworkPermissionRequester
 import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
@@ -96,7 +94,6 @@ import net.aieat.netswissknife.app.ui.theme.AppSpacing
 import net.aieat.netswissknife.app.util.shareText
 import net.aieat.netswissknife.core.network.wol.WolBroadcastProblem
 import net.aieat.netswissknife.core.network.wol.WolMacProblem
-import net.aieat.netswissknife.core.network.wol.WolSendReport
 import java.time.Instant
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -107,7 +104,7 @@ object WakeOnLanScreenTestTags {
     const val CLEAR_PREFILL_ACTION = "wol_clear_prefill_action"
 }
 
-private val MinTouchTarget = 48.dp
+internal val MinTouchTarget = 48.dp
 
 @Composable
 fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
@@ -129,12 +126,7 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
     val editingMac by viewModel.editingMac.collectAsStateWithLifecycle()
     val saveConflict by viewModel.saveConflict.collectAsStateWithLifecycle()
     val saveNotice by viewModel.saveNotice.collectAsStateWithLifecycle()
-    val announcementPhase = when (uiState) {
-        WolUiState.Idle -> null
-        WolUiState.Sending -> ToolAnnouncementPhase.RUNNING
-        is WolUiState.Success -> ToolAnnouncementPhase.FINISHED
-        is WolUiState.Error -> ToolAnnouncementPhase.ERROR
-    }
+    val announcementPhase = uiState.announcementPhase()
     ToolStateAnnouncer(stringResource(R.string.wol_screen_title), announcementPhase)
 
     var visible by remember { mutableStateOf(false) }
@@ -146,15 +138,16 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(AppMotion.enter(400)) + slideInVertically(AppMotion.enter(400)) { it / 4 }
+        enter = fadeIn(AppMotion.enter(400)) + slideInVertically(AppMotion.enter(400)) { it / 4 },
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .verticalScroll(rememberScrollState())
-                .padding(AppSpacing.screenPadding),
-            verticalArrangement = Arrangement.spacedBy(AppSpacing.cardGap)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+                    .verticalScroll(rememberScrollState())
+                    .padding(AppSpacing.screenPadding),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.cardGap),
         ) {
             ToolHeroHeader(
                 title = stringResource(R.string.wol_screen_title),
@@ -206,12 +199,15 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
                         editingMac = editingMac,
                         conflict = saveConflict,
                         notice = saveNotice,
-                        canSave = macProblem == null && macAddress.isNotBlank() && !isSending,
+                        canSave =
+                            macProblem == null && broadcastProblem == null && !portInvalid &&
+                                macAddress.isNotBlank() && !isSending,
                         isSending = isSending,
                         onNameChange = viewModel.savedDeviceEditor::onDeviceNameChange,
                         onSave = viewModel.savedDeviceEditor::saveDevice,
                         onCancelEdit = viewModel.savedDeviceEditor::cancelEdit,
                         onUse = viewModel.savedDeviceEditor::useDevice,
+                        onWake = viewModel::wakeDevice,
                         onEdit = viewModel.savedDeviceEditor::startEditDevice,
                         onDelete = { pendingDelete = it },
                     )
@@ -221,58 +217,59 @@ fun WakeOnLanScreen(viewModel: WakeOnLanViewModel = hiltViewModel()) {
             WolStateCard(
                 uiState = uiState,
                 onCancel = viewModel::stopSending,
-                onSendAgain = viewModel::reset,
+                onSendAgain = viewModel::send,
                 onRetry = viewModel::send,
             )
         }
     }
 
     pendingDelete?.let { device ->
-        val label = WolSavedDevices.displayName(device)
-        AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            title = { Text(stringResource(R.string.wol_delete_confirm_title)) },
-            text = { Text(stringResource(R.string.wol_delete_confirm_body, label)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.savedDeviceEditor.deleteDevice(device.mac)
-                        pendingDelete = null
-                    },
-                ) {
-                    Text(stringResource(R.string.wol_delete_confirm_action), color = MaterialTheme.colorScheme.error)
-                }
+        WolDeleteDeviceDialog(
+            device = device,
+            onConfirm = {
+                viewModel.savedDeviceEditor.deleteDevice(device.mac)
+                pendingDelete = null
             },
-            dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
+            onDismiss = { pendingDelete = null },
         )
     }
 
     if (showHelp) {
-        ToolHelpSheet(
-            title = stringResource(R.string.wol_screen_title),
-            conceptHeading = stringResource(R.string.help_wol_concept_heading),
-            conceptBody = stringResource(R.string.help_wol_concept_body),
-            sections = listOf(
+        WolHelpSheet(onDismiss = { showHelp = false })
+    }
+}
+
+private fun WolUiState.announcementPhase(): ToolAnnouncementPhase? =
+    when (this) {
+        WolUiState.Idle -> null
+        WolUiState.Sending -> ToolAnnouncementPhase.RUNNING
+        is WolUiState.Success -> ToolAnnouncementPhase.FINISHED
+        is WolUiState.Error -> ToolAnnouncementPhase.ERROR
+    }
+
+@Composable
+private fun WolHelpSheet(onDismiss: () -> Unit) {
+    ToolHelpSheet(
+        title = stringResource(R.string.wol_screen_title),
+        conceptHeading = stringResource(R.string.help_wol_concept_heading),
+        conceptBody = stringResource(R.string.help_wol_concept_body),
+        sections =
+            listOf(
                 HelpSection(
                     heading = stringResource(R.string.help_wol_mac_heading),
-                    body = stringResource(R.string.help_wol_mac_body)
+                    body = stringResource(R.string.help_wol_mac_body),
                 ),
                 HelpSection(
                     heading = stringResource(R.string.help_wol_requirements_heading),
-                    body = stringResource(R.string.help_wol_requirements_body)
+                    body = stringResource(R.string.help_wol_requirements_body),
                 ),
                 HelpSection(
                     heading = stringResource(R.string.help_wol_broadcast_heading),
-                    body = stringResource(R.string.help_wol_broadcast_body)
+                    body = stringResource(R.string.help_wol_broadcast_body),
                 ),
             ),
-            onDismiss = { showHelp = false }
-        )
-    }
+        onDismiss = onDismiss,
+    )
 }
 
 @Composable
@@ -346,7 +343,7 @@ private fun WolInputCard(
     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = AppShapes.large) {
         Column(
             modifier = Modifier.padding(AppSpacing.m),
-            verticalArrangement = Arrangement.spacedBy(AppSpacing.s + AppSpacing.xs)
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.s + AppSpacing.xs),
         ) {
             ToolTextField(
                 value = macAddress,
@@ -371,7 +368,7 @@ private fun WolInputCard(
             // Advanced options (broadcast address + port)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 TextButton(
                     onClick = { showAdvanced = !showAdvanced },
@@ -385,7 +382,7 @@ private fun WolInputCard(
                             stringResource(
                                 if (showAdvanced) R.string.action_collapse else R.string.action_expand,
                             ),
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
@@ -433,8 +430,8 @@ private fun WolInputCard(
                         supportingText = {
                             Text(
                                 stringResource(
-                                    if (portInvalid) R.string.wol_port_invalid else R.string.wol_port_hint
-                                )
+                                    if (portInvalid) R.string.wol_port_invalid else R.string.wol_port_hint,
+                                ),
                             )
                         },
                         isError = portInvalid,
@@ -478,7 +475,13 @@ private fun WolStateCard(
     onSendAgain: () -> Unit,
     onRetry: () -> Unit,
 ) {
+    // The card sits below the saved devices list, so a send result would be off screen; bring it into view.
+    val inView = remember { BringIntoViewRequester() }
+    LaunchedEffect(uiState) {
+        if (uiState !is WolUiState.Idle) inView.bringIntoView()
+    }
     AnimatedContent(
+        modifier = Modifier.bringIntoViewRequester(inView),
         targetState = uiState,
         transitionSpec = {
             (fadeIn(AppMotion.enter(250)) + slideInVertically(AppMotion.enter(250)) { it / 6 }) togetherWith
@@ -496,7 +499,7 @@ private fun WolStateCard(
             }
 
             is WolUiState.Success -> {
-                WolSuccessCard(state.report, onSendAgain = onSendAgain)
+                WolSuccessCard(state, onSendAgain = onSendAgain)
             }
 
             is WolUiState.Error -> {
@@ -509,181 +512,6 @@ private fun WolStateCard(
     }
 }
 
-// ── Saved devices ─────────────────────────────────────────────────────────────
-
-@Composable
-@Suppress("FunctionNaming", "ktlint:standard:function-naming")
-private fun WolSavedDevicesSection(
-    devices: List<WolSavedDevice>,
-    deviceName: String,
-    editingMac: String?,
-    conflict: Boolean,
-    notice: WolSaveNotice?,
-    canSave: Boolean,
-    isSending: Boolean,
-    onNameChange: (String) -> Unit,
-    onSave: () -> Unit,
-    onCancelEdit: () -> Unit,
-    onUse: (WolSavedDevice) -> Unit,
-    onEdit: (WolSavedDevice) -> Unit,
-    onDelete: (WolSavedDevice) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.s + AppSpacing.xs)) {
-        Text(
-            text = stringResource(R.string.wol_saved_title),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        WolSavedDeviceForm(
-            deviceName = deviceName,
-            editingMac = editingMac,
-            conflict = conflict,
-            notice = notice,
-            canSave = canSave,
-            isSending = isSending,
-            onNameChange = onNameChange,
-            onSave = onSave,
-            onCancelEdit = onCancelEdit,
-        )
-        HorizontalDivider()
-        if (devices.isEmpty()) {
-            Text(
-                text = stringResource(R.string.wol_saved_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            devices.forEach { device ->
-                WolSavedDeviceRow(
-                    device = device,
-                    isSending = isSending,
-                    onUse = { onUse(device) },
-                    onEdit = { onEdit(device) },
-                    onDelete = { onDelete(device) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-@Suppress("FunctionNaming", "ktlint:standard:function-naming")
-private fun WolSavedDeviceForm(
-    deviceName: String,
-    editingMac: String?,
-    conflict: Boolean,
-    notice: WolSaveNotice?,
-    canSave: Boolean,
-    isSending: Boolean,
-    onNameChange: (String) -> Unit,
-    onSave: () -> Unit,
-    onCancelEdit: () -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.s + AppSpacing.xs)) {
-        ToolTextField(
-            value = deviceName,
-            onValueChange = onNameChange,
-            label = { Text(stringResource(R.string.wol_device_name_label)) },
-            leadingIcon = {
-                Icon(Icons.Default.Devices, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            },
-            singleLine = true,
-            enabled = !isSending,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            modifier = Modifier.fillMaxWidth(),
-            shape = AppShapes.medium,
-        )
-        if (conflict) {
-            Text(
-                text = stringResource(R.string.wol_device_conflict),
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        notice?.let { WolSaveNoticeText(it) }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(AppSpacing.s),
-        ) {
-            Button(
-                onClick = hapticAction(onSave),
-                enabled = canSave,
-                modifier = Modifier.heightIn(min = MinTouchTarget),
-            ) {
-                val label = if (editingMac != null) R.string.wol_update_device else R.string.wol_save_device
-                Text(stringResource(label))
-            }
-            if (editingMac != null) {
-                TextButton(
-                    onClick = onCancelEdit,
-                    enabled = !isSending,
-                    modifier = Modifier.heightIn(min = MinTouchTarget),
-                ) {
-                    Text(stringResource(R.string.wol_cancel_edit))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-@Suppress("FunctionNaming", "ktlint:standard:function-naming")
-private fun WolSavedDeviceRow(
-    device: WolSavedDevice,
-    isSending: Boolean,
-    onUse: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    val label = WolSavedDevices.displayName(device)
-    val editDescription = stringResource(R.string.wol_edit_device_description, label)
-    val deleteDescription = stringResource(R.string.wol_delete_device_description, label)
-    // The MAC gets the full row width (never wrapped mid-address); the actions sit on their own line.
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        if (label != device.mac) {
-            Text(
-                text = device.mac,
-                style = MaterialTheme.typography.labelSmall,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.End,
-        ) {
-            TextButton(
-                onClick = hapticAction(onUse),
-                enabled = !isSending,
-                modifier = Modifier.heightIn(min = MinTouchTarget),
-            ) {
-                Text(stringResource(R.string.wol_use_device))
-            }
-            IconButton(
-                onClick = onEdit,
-                enabled = !isSending,
-                modifier = Modifier.semantics { contentDescription = editDescription },
-            ) {
-                Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            }
-            IconButton(
-                onClick = onDelete,
-                enabled = !isSending,
-                modifier = Modifier.semantics { contentDescription = deleteDescription },
-            ) {
-                Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-            }
-        }
-    }
-}
-
 // ── State cards ───────────────────────────────────────────────────────────────
 
 @Composable
@@ -691,22 +519,24 @@ private fun WolSendingCard(onCancel: () -> Unit) {
     val sendingLabel = stringResource(R.string.wol_sending)
     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = AppShapes.large) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(AppSpacing.l),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(AppSpacing.l),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             CircularProgressIndicator(
-                modifier = Modifier
-                    .size(24.dp)
-                    .semantics { contentDescription = sendingLabel }
+                modifier =
+                    Modifier
+                        .size(24.dp)
+                        .semantics { contentDescription = sendingLabel },
             )
             Spacer(Modifier.width(AppSpacing.m))
             Text(
                 text = sendingLabel,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             TextButton(
                 onClick = onCancel,
@@ -719,74 +549,92 @@ private fun WolSendingCard(onCancel: () -> Unit) {
 }
 
 @Composable
-private fun WolSuccessCard(report: WolSendReport, onSendAgain: () -> Unit) {
+private fun WolSuccessCard(
+    state: WolUiState.Success,
+    onSendAgain: () -> Unit,
+) {
+    val report = state.report
     var iconReady by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { iconReady = true }
     val iconScale by animateFloatAsState(
         targetValue = if (iconReady) 1f else 0.3f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "wol-success-icon"
+        animationSpec =
+            spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMediumLow,
+            ),
+        label = "wol-success-icon",
     )
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.share_subject_wol, report.macAddress)
 
     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = AppShapes.large) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                            MaterialTheme.colorScheme.surface,
-                        )
-                    )
-                )
-                .padding(AppSpacing.l),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                MaterialTheme.colorScheme.surface,
+                            ),
+                        ),
+                    ).padding(AppSpacing.l),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(AppSpacing.s)
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.s),
         ) {
             Box(
-                modifier = Modifier
-                    .scale(iconScale)
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .scale(iconScale)
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = Icons.Default.Check,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(32.dp),
                 )
             }
 
             Text(
-                text = stringResource(R.string.wol_success_title),
+                text =
+                    stringResource(
+                        R.string.wol_success_title_device,
+                        state.deviceName ?: report.macAddress,
+                    ),
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                text = stringResource(
-                    R.string.wol_success_detail,
-                    report.macAddress,
-                    report.broadcastAddress,
-                    report.port,
-                    report.packetsSent
-                ),
+                text =
+                    stringResource(
+                        R.string.wol_success_detail,
+                        report.macAddress,
+                        report.broadcastAddress,
+                        report.port,
+                        report.packetsSent,
+                    ),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (state.sendNumber > 1) {
+                Text(
+                    text = pluralStringResource(R.plurals.wol_send_count, state.sendNumber, state.sendNumber),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             HorizontalDivider(Modifier.padding(vertical = AppSpacing.xs))
 
             Text(
                 text = stringResource(R.string.wol_success_note),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             ResultActionsRow(
@@ -806,30 +654,34 @@ private fun WolSuccessCard(report: WolSendReport, onSendAgain: () -> Unit) {
 }
 
 @Composable
-private fun WolErrorCard(message: String, onRetry: () -> Unit) {
+private fun WolErrorCard(
+    message: String,
+    onRetry: () -> Unit,
+) {
     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = AppShapes.large) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(AppSpacing.l),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(AppSpacing.l),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(AppSpacing.s)
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.s),
         ) {
             Icon(
                 imageVector = Icons.Default.ErrorOutline,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(40.dp),
             )
             Text(
                 text = stringResource(R.string.wol_error_title),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.error
+                color = MaterialTheme.colorScheme.error,
             )
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             ToolRetryButton(text = stringResource(R.string.wol_retry_button), onClick = onRetry)
         }

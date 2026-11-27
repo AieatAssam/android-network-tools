@@ -5,6 +5,7 @@ import net.aieat.netswissknife.core.network.dns.DnsRecordType
 import net.aieat.netswissknife.core.network.dns.DnsResult
 import net.aieat.netswissknife.core.network.dns.DnsServer
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class DnsShareTextTest {
@@ -29,9 +30,10 @@ class DnsShareTextTest {
             )
         val expected =
             listOf(
-                "DNS A – example.com",
+                "DNS A: example.com",
                 "Server: System resolver",
                 "Query time: 12ms",
+                "Response code: NOERROR",
                 "",
                 "A\t93.184.216.34\tTTL: 3600s",
             ).joinToString(separator = "\n", postfix = "\n")
@@ -52,13 +54,32 @@ class DnsShareTextTest {
             )
         val expected =
             listOf(
-                "DNS AAAA – missing.example",
+                "DNS AAAA: missing.example",
                 "Server: System resolver",
                 "Query time: 4ms",
+                "Response code: NOERROR",
                 "",
                 "No records found.",
             ).joinToString(separator = "\n", postfix = "\n")
 
         assertEquals(expected, buildDnsShareText(result, "Server: System resolver"))
+    }
+
+    @Test
+    fun `share text names the response code for a negative answer`() {
+        val result =
+            DnsResult(
+                domain = "missing.example.com",
+                recordType = DnsRecordType.A,
+                server = DnsServer.System(),
+                records = emptyList(),
+                queryTimeMs = 7,
+                rawResponse = "",
+                rcode = "NXDOMAIN",
+            )
+
+        val text = buildDnsShareText(result, "Server: System resolver")
+
+        assertTrue(text.contains("Response code: NXDOMAIN\n"))
     }
 }

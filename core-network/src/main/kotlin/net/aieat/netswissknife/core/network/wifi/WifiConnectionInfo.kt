@@ -29,14 +29,5 @@ data class WifiConnectionInfo(
     /** Gateway selected by the active network's default route, if available. */
     val gateway: String? = null,
     /** DNS servers advertised by the active network, in platform order. */
-    val dnsServers: List<String> = emptyList()
-) {
-    val signalQualityPercent: Int get() = when {
-        rssi >= -50 -> 100
-        rssi >= -60 -> (100 - ((-50 - rssi) * 2)).coerceIn(0, 100)
-        rssi >= -70 -> (80  - ((-60 - rssi) * 2)).coerceIn(0, 100)
-        rssi >= -80 -> (60  - ((-70 - rssi) * 2)).coerceIn(0, 100)
-        rssi >= -90 -> (40  - ((-80 - rssi) * 2)).coerceIn(0, 100)
-        else        -> 0
-    }
-}
+    val dnsServers: List<String> = emptyList(),
+)

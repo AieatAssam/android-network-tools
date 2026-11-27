@@ -379,9 +379,9 @@ class PingScreenTest {
         composeRule.mainClock.advanceTimeBy(2_000L)
         composeRule.onNodeWithText(context.getString(R.string.action_expand)).performClick()
         composeRule.mainClock.advanceTimeBy(1_000L)
-        composeRule.onNodeWithText("Payload size: 56 bytes").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("TTL: 64").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Interval: 1000 ms").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Payload size: 56 bytes").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("TTL: 64").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Interval: 1000 ms").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -415,9 +415,9 @@ class PingScreenTest {
         composeRule.onNodeWithText(context.getString(R.string.action_expand)).performClick()
         composeRule.mainClock.advanceTimeBy(1_000L)
 
-        composeRule.onNodeWithText("Payload size: 512 bytes").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("TTL: 128").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Interval: 2500 ms").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Payload size: 512 bytes").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("TTL: 128").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Interval: 2500 ms").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -433,7 +433,7 @@ class PingScreenTest {
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule.onNodeWithText(context.getString(R.string.action_collapse)).performClick()
         composeRule.mainClock.advanceTimeBy(1_000L)
-        composeRule.onNodeWithText("Payload size: 56 bytes").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Payload size: 56 bytes").assertDoesNotExist()
     }
 
     @Test
@@ -445,7 +445,7 @@ class PingScreenTest {
         }
 
         composeRule.mainClock.advanceTimeBy(2_000L)
-        composeRule.onNodeWithText("Count: 100").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Count: 100").performScrollTo().assertIsDisplayed()
 
         val slider = composeRule.onNodeWithTag(PingScreenTestTags.COUNT_SLIDER)
             .fetchSemanticsNode()

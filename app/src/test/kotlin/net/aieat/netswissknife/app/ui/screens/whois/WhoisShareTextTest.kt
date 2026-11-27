@@ -6,9 +6,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class WhoisShareTextTest {
     @Test
@@ -37,7 +34,7 @@ class WhoisShareTextTest {
             )
         val expected =
             listOf(
-                "WHOIS – example.com",
+                "WHOIS: example.com",
                 "",
                 "Registrar: Example Registrar",
                 "Name Servers: ns1.example.com, ns2.example.com",
@@ -79,8 +76,44 @@ class WhoisShareTextTest {
         assertTrue(text.contains("Expires: ${calendarDate(1_818_129_600_000L)}"))
     }
 
-    private fun calendarDate(epochMs: Long): String {
-        val format = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        return format.format(Date(epochMs))
+    private fun calendarDate(epochMs: Long): String =
+        java.time.Instant
+            .ofEpochMilli(epochMs)
+            .atZone(java.time.ZoneOffset.UTC)
+            .toLocalDate()
+            .toString()
+
+    @Test
+    fun `IP and ASN results list the network fields after the query`() {
+        val result =
+            WhoisResult(
+                query = "8.8.8.8",
+                queryType = WhoisQueryType.IPV4,
+                hops = emptyList(),
+                domainName = null,
+                registrar = null,
+                registrarUrl = null,
+                registeredOn = null,
+                expiresOn = null,
+                updatedOn = null,
+                nameServers = emptyList(),
+                statusCodes = emptyList(),
+                registrantOrg = null,
+                registrantCountry = null,
+                dnssec = null,
+                netName = "LVLT-GOGL-8-8-8",
+                netRange = "8.8.8.0 - 8.8.8.255",
+                orgName = "Google LLC",
+                country = "US",
+                totalQueryTimeMs = 30,
+            )
+        val text = buildWhoisShareText(result)
+
+        assertTrue(text.startsWith("WHOIS: 8.8.8.8\n"))
+        assertTrue(text.contains("Network: LVLT-GOGL-8-8-8\n"))
+        assertTrue(text.contains("Range: 8.8.8.0 - 8.8.8.255\n"))
+        assertTrue(text.contains("Organization: Google LLC\n"))
+        assertTrue(text.contains("Country: US\n"))
+        assertFalse(text.contains("Registrar:"))
     }
 }

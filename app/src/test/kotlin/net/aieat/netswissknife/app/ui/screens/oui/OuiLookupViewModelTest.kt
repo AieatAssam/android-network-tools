@@ -65,7 +65,7 @@ class OuiLookupViewModelTest {
 
         assertEquals("", vm.uiState.value.input)
         assertEquals(OuiLookupPhase.Idle, vm.uiState.value.phase)
-        assertEquals(0, vm.uiState.value.invalidEntryCount)
+        assertEquals(0, vm.uiState.value.invalidEntries.size)
     }
 
     @Test
@@ -124,7 +124,7 @@ class OuiLookupViewModelTest {
 
         vm.onInputChange("B8:27:EB:11:22:33, nope\nzz")
 
-        assertEquals(2, vm.uiState.value.invalidEntryCount)
+        assertEquals(2, vm.uiState.value.invalidEntries.size)
     }
 
     @Test
@@ -162,14 +162,37 @@ class OuiLookupViewModelTest {
     }
 
     @Test
-    fun `clear empties the input and drops the result`() {
+    fun `editing the lookup text drops the result for the earlier input`() {
+        coEvery { useCase.invoke(any()) } returns OuiLookupReport(listOf(address("B8:27:EB")), false)
+        val vm = viewModel()
+        vm.onRecentSelected("B8:27:EB")
+        assertTrue(vm.uiState.value.phase is OuiLookupPhase.Results)
+
+        vm.onInputChange("B8:27:EC")
+
+        assertEquals(OuiLookupPhase.Idle, vm.uiState.value.phase)
+    }
+
+    @Test
+    fun `changing only the case or surrounding spaces keeps the result`() {
+        coEvery { useCase.invoke(any()) } returns OuiLookupReport(listOf(address("B8:27:EB")), false)
+        val vm = viewModel()
+        vm.onRecentSelected("B8:27:EB")
+
+        vm.onInputChange("  b8:27:eb ")
+
+        assertTrue(vm.uiState.value.phase is OuiLookupPhase.Results)
+    }
+
+    @Test
+    fun `clear results drops the result and keeps the input`() {
         coEvery { useCase.invoke(any()) } returns OuiLookupReport(listOf(address("B8:27:EB")), false)
         val vm = viewModel()
         vm.onRecentSelected("B8:27:EB")
 
         vm.onClear()
 
-        assertEquals("", vm.uiState.value.input)
+        assertEquals("B8:27:EB", vm.uiState.value.input)
         assertEquals(OuiLookupPhase.Idle, vm.uiState.value.phase)
     }
 

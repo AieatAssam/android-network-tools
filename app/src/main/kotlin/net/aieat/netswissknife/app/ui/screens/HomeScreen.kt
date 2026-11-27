@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -60,16 +59,18 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.bottomScrollEdgeFade
 import net.aieat.netswissknife.app.ui.components.hapticAction
 import net.aieat.netswissknife.app.ui.components.homeGridColumns
 import net.aieat.netswissknife.app.ui.components.isCompactHero
+import net.aieat.netswissknife.app.ui.navigation.MORE_TOOL_SECTIONS
 import net.aieat.netswissknife.app.ui.navigation.NavRoutes
 import net.aieat.netswissknife.app.ui.navigation.ToolInfo
+import net.aieat.netswissknife.app.ui.navigation.ToolSection
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 
 object HomeScreenTestTags {
     const val TOOL_GRID = "home_tool_grid"
-    const val SCROLL_HINT = "home_tools_scroll_hint"
 }
 
 @Composable
@@ -160,15 +161,6 @@ private fun HeroHeader(compact: Boolean) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                     textAlign = TextAlign.Center,
                 )
-
-                Box(Modifier.height(4.dp))
-
-                Text(
-                    text = stringResource(R.string.home_subtitle),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
             }
         }
     }
@@ -223,35 +215,36 @@ private fun ToolGrid(onNavigate: (String) -> Unit) {
         gridAppeared = true
     }
 
-    val listState = rememberLazyListState()
+    val groups = groupBySection(MORE_TOOL_SECTIONS, NavRoutes.allTools) { it.route }
+    // Global index of each section's first tool, so the entrance stagger runs down the whole screen.
+    val sectionOffsets = groups.runningFold(0) { acc, group -> acc + group.second.size }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = stringResource(R.string.home_all_tools),
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-        )
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val columns = homeGridColumns(availableWidthDp = maxWidth.value.toInt() - 32)
         // Rows are laid out by hand so every tile in a row shares that row's height (PHA-22). A lazy
         // grid measures each tile on its own, so tiles with longer descriptions left ragged row ends.
-        BoxWithConstraints(
+        val listState = rememberLazyListState()
+        LazyColumn(
+            state = listState,
             modifier =
                 Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
+                    .fillMaxSize()
+                    .bottomScrollEdgeFade(canScrollForward = listState.canScrollForward)
+                    .testTag(HomeScreenTestTags.TOOL_GRID),
+            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            val columns = homeGridColumns(availableWidthDp = maxWidth.value.toInt() - 32)
-            val rows = NavRoutes.allTools.chunked(columns)
-            LazyColumn(
-                state = listState,
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .testTag(HomeScreenTestTags.TOOL_GRID),
-                contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                itemsIndexed(rows, key = { _, row -> row.first().route }) { rowIndex, row ->
+            groups.forEachIndexed { sectionIndex, (section, tools) ->
+                val sectionBase = sectionOffsets[sectionIndex]
+                item(key = "section-${section.labelRes}") {
+                    Text(
+                        text = stringResource(section.labelRes),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(start = 4.dp, top = if (sectionIndex == 0) 0.dp else 8.dp),
+                    )
+                }
+                itemsIndexed(tools.chunked(columns), key = { _, row -> row.first().route }) { rowIndex, row ->
                     Row(
                         modifier =
                             Modifier
@@ -262,7 +255,7 @@ private fun ToolGrid(onNavigate: (String) -> Unit) {
                         row.forEachIndexed { column, tool ->
                             AnimatedToolCard(
                                 tool = tool,
-                                delayMs = (rowIndex * columns + column) * 60,
+                                delayMs = (sectionBase + rowIndex * columns + column) * 60,
                                 skipEntrance = gridAppeared,
                                 onClick = hapticAction { onNavigate(tool.route) },
                                 modifier =
@@ -277,36 +270,23 @@ private fun ToolGrid(onNavigate: (String) -> Unit) {
                 }
             }
         }
-
-        // The hint has its own slot below the grid. It never overlays a tile, and the slot keeps its
-        // height whether or not the grid can scroll, so the grid does not resize when the hint appears.
-        HomeScrollHint(visible = listState.canScrollForward)
     }
 }
 
-/** The "scroll for more tools" line. Only its alpha animates; the slot height is fixed. */
-@Composable
-@Suppress("FunctionNaming", "ktlint:standard:function-naming")
-private fun HomeScrollHint(visible: Boolean) {
-    val alpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = AppMotion.enter(200),
-        label = "home-scroll-hint-alpha",
-    )
-    Box(
-        modifier = Modifier.fillMaxWidth().height(HOME_SCROLL_HINT_HEIGHT),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = stringResource(R.string.home_tools_scroll_hint),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.alpha(alpha).testTag(HomeScreenTestTags.SCROLL_HINT),
-        )
-    }
+/**
+ * Splits [items] into the [sections] they belong to, keeping each section's own order and
+ * dropping sections that have no matching items. Items whose route is in no section are left out.
+ */
+internal fun <T> groupBySection(
+    sections: List<ToolSection>,
+    items: List<T>,
+    routeOf: (T) -> String,
+): List<Pair<ToolSection, List<T>>> {
+    val byRoute = items.associateBy(routeOf)
+    return sections
+        .map { section -> section to section.routes.mapNotNull { byRoute[it] } }
+        .filter { (_, members) -> members.isNotEmpty() }
 }
-
-private val HOME_SCROLL_HINT_HEIGHT = 32.dp
 
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
@@ -368,6 +348,7 @@ private fun AnimatedToolCard(
             Text(
                 text = stringResource(tool.labelRes),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                minLines = 2,
             )
 
             Text(

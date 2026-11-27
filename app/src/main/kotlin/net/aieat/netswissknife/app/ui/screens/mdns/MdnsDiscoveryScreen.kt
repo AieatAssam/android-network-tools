@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.app.ui.screens.mdns
 
+import android.content.res.Resources
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -31,19 +32,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Http
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.NetworkPing
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
@@ -54,19 +54,21 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,7 +76,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -133,58 +137,104 @@ fun MdnsDiscoveryScreen(
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
     var showHelp by remember { mutableStateOf(false) }
+    // The search text and grouping live in the view model so they survive leaving the tool.
+    val searchQuery = uiState.searchQuery
+    val groupByDevice = uiState.groupByDevice
+    val expandedGroups = remember { mutableStateMapOf<String, Boolean>() }
 
-    // The scan has its own status in the hero and list; the pull indicator here would sit over the title (PHB-13).
-    PullToRefreshBox(
-        isRefreshing = false,
-        onRefresh = { viewModel.startScan() },
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(AppMotion.enter(400)) + slideInVertically(AppMotion.enter(400)) { 40 },
+    // Filtering and grouping run once per change to the inputs, not on every recomposition.
+    val filteredByType =
+        remember(uiState.servicesByType, searchQuery) {
+            filterMdnsServices(uiState.servicesByType, searchQuery)
+        }
+    val groups =
+        remember(filteredByType, groupByDevice) {
+            if (groupByDevice) groupMdnsServicesByDevice(filteredByType.values.flatten()) else filteredByType
+        }
+    val truncationNote =
+        uiState.truncationReasons.takeIf { it.isNotEmpty() }?.let {
+            stringResource(R.string.mdns_partial_results_status, limitsText(it))
+        }
+    val resources = LocalContext.current.resources
+    // Copy and Share export exactly what the list shows, so the filter is part of the report.
+    val report =
+        remember(
+            filteredByType,
+            uiState.isScanning,
+            uiState.isCanceling,
+            uiState.scanCanceled,
+            truncationNote,
+            searchQuery,
+            resources,
         ) {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                HeroCard(uiState, onHelpClick = { showHelp = true })
+            buildMdnsShareText(
+                services = filteredByType.values.flatten(),
+                isScanning = uiState.isScanning,
+                isCanceling = uiState.isCanceling,
+                scanCanceled = uiState.scanCanceled,
+                truncationNote = truncationNote,
+                labels = mdnsShareLabels(resources),
+                filterQuery = searchQuery,
+            )
+        }
+    val context = LocalContext.current
+    val shareSubject = stringResource(R.string.mdns_screen_title)
+    val noMatch = searchQuery.isNotBlank() && filteredByType.isEmpty() && uiState.servicesByType.isNotEmpty()
 
+    val contentState =
+        when {
+            uiState.error != null -> "error"
+            uiState.services.isEmpty() && uiState.isCanceling -> "canceling_empty"
+            uiState.services.isEmpty() && uiState.scanCanceled -> "canceled_empty"
+            uiState.services.isEmpty() && !uiState.isScanning && !uiState.scanComplete -> "idle"
+            uiState.services.isEmpty() && uiState.isScanning -> "scanning_empty"
+            uiState.services.isEmpty() && uiState.scanComplete -> "empty_done"
+            else -> "results"
+        }
+
+    // A single LazyColumn so the results are real lazy items with stable keys. The header
+    // cards and status banners stay above the list and scroll with it.
+    AnimatedVisibility(
+        visible = visible,
+        modifier = Modifier.fillMaxSize(),
+        enter = fadeIn(AppMotion.enter(400)) + slideInVertically(AppMotion.enter(400)) { 40 },
+    ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item(key = "hero") {
+                HeroCard(uiState, onHelpClick = { showHelp = true })
+            }
+
+            item(key = "network_status") {
                 NetworkStatusBanner(
                     status = networkStatus,
                     scope = NetworkStatusScope.LOCAL_NETWORK,
                     permissionDenied = uiState.networkErrorKind == NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED,
                     onGrantPermission = requestLocalNetworkPermission,
                 )
+            }
 
-                if (uiState.truncationReasons.isNotEmpty()) {
+            if (uiState.truncationReasons.isNotEmpty()) {
+                item(key = "truncation") {
                     TruncationBanner(uiState.truncationReasons, scanComplete = uiState.scanComplete)
                 }
+            }
 
-                if (uiState.networkInterrupted) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.Top,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Text(
-                            text = stringResource(R.string.mdns_interrupted_notice),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+            if (uiState.networkInterrupted) {
+                item(key = "interrupted") {
+                    MdnsNoticeRow(stringResource(R.string.mdns_interrupted_notice))
                 }
+            }
 
+            if (uiState.resultsClearedForNetworkChange) {
+                item(key = "network_changed") {
+                    MdnsNoticeRow(stringResource(R.string.mdns_network_changed_notice))
+                }
+            }
+
+            item(key = "controls") {
                 ControlRow(
                     isScanning = uiState.isScanning,
                     isCanceling = uiState.isCanceling,
@@ -193,84 +243,87 @@ fun MdnsDiscoveryScreen(
                     onReset = { viewModel.reset() },
                     hasPriorResults = uiState.services.isNotEmpty() || uiState.scanComplete || uiState.scanCanceled,
                 )
+            }
 
-                AnimatedContent(
-                    targetState =
-                        when {
-                            uiState.error != null -> "error"
-                            uiState.services.isEmpty() && uiState.isCanceling -> "canceling_empty"
-                            uiState.services.isEmpty() && uiState.scanCanceled -> "canceled_empty"
-                            uiState.services.isEmpty() && !uiState.isScanning && !uiState.scanComplete -> "idle"
-                            uiState.services.isEmpty() && uiState.isScanning -> "scanning_empty"
-                            uiState.services.isEmpty() && uiState.scanComplete -> "empty_done"
-                            else -> "results"
-                        },
-                    transitionSpec = {
-                        fadeIn(AppMotion.enter(300)) togetherWith fadeOut(AppMotion.exit(200))
-                    },
-                    label = "mdns-state",
-                    modifier = Modifier.fillMaxWidth(),
-                ) { state ->
-                    when (state) {
-                        "idle" -> {
-                            IdleHint()
-                        }
-
-                        "canceling_empty" -> {
-                            CancelingPlaceholder()
-                        }
-
-                        "canceled_empty" -> {
-                            CanceledEmptyHint()
-                        }
-
-                        "scanning_empty" -> {
-                            ScanningPlaceholder()
-                        }
-
-                        "empty_done" -> {
-                            EmptyResultHint()
-                        }
-
-                        "error" -> {
-                            ErrorCard(stringResource(uiState.errorReason.messageRes())) { viewModel.reset() }
-                        }
-
-                        else -> {
-                            ServiceList(
-                                servicesByType = uiState.servicesByType,
-                                isScanning = uiState.isScanning,
-                                isCanceling = uiState.isCanceling,
-                                scanCanceled = uiState.scanCanceled,
-                                truncationReasons = uiState.truncationReasons,
-                                onPingHost = { host ->
-                                    ToolHost.parse(host)?.let { validatedHost ->
-                                        onNavigate(
-                                            NavRoutes.Ping.createRoute(
-                                                ToolIntent(
-                                                    destination =
-                                                        ToolDestination.HostTarget(
-                                                            HostTool.PING,
-                                                            validatedHost,
-                                                        ),
-                                                    source = ToolSource.MDNS,
-                                                ),
+            if (contentState == "results") {
+                serviceResultItems(
+                    uiState = uiState,
+                    filteredByType = filteredByType,
+                    groups = groups,
+                    groupByDevice = groupByDevice,
+                    noMatch = noMatch,
+                    searchQuery = searchQuery,
+                    onSearchChange = viewModel::onSearchChange,
+                    onGroupByDevice = viewModel::onGroupByDeviceChange,
+                    expandedGroups = expandedGroups,
+                    report = report,
+                    onShare = { context.shareText(report, shareSubject) },
+                    onPingHost = { host ->
+                        ToolHost.parse(host)?.let { validatedHost ->
+                            onNavigate(
+                                NavRoutes.Ping.createRoute(
+                                    ToolIntent(
+                                        destination =
+                                            ToolDestination.HostTarget(
+                                                HostTool.PING,
+                                                validatedHost,
                                             ),
-                                        )
-                                    }
-                                },
-                                onHttpProbe = { service ->
-                                    mdnsHttpIntent(service)?.let { intent ->
-                                        onNavigate(NavRoutes.HttpProbe.createRoute(intent))
-                                    }
-                                },
+                                        source = ToolSource.MDNS,
+                                    ),
+                                ),
                             )
+                        }
+                    },
+                    onHttpProbe = { service ->
+                        mdnsHttpIntent(service)?.let { intent ->
+                            onNavigate(NavRoutes.HttpProbe.createRoute(intent))
+                        }
+                    },
+                )
+            } else {
+                item(key = "state") {
+                    AnimatedContent(
+                        targetState = contentState,
+                        transitionSpec = {
+                            fadeIn(AppMotion.enter(300)) togetherWith fadeOut(AppMotion.exit(200))
+                        },
+                        label = "mdns-state",
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { state ->
+                        when (state) {
+                            "idle" -> {
+                                IdleHint()
+                            }
+
+                            "canceling_empty" -> {
+                                CancelingPlaceholder()
+                            }
+
+                            "canceled_empty" -> {
+                                CanceledEmptyHint()
+                            }
+
+                            "scanning_empty" -> {
+                                ScanningPlaceholder()
+                            }
+
+                            "empty_done" -> {
+                                EmptyResultHint()
+                            }
+
+                            else -> {
+                                ErrorCard(
+                                    message = stringResource(uiState.errorReason.messageRes()),
+                                    onRetry = { viewModel.startScan() },
+                                    onDismiss = { viewModel.dismissError() },
+                                )
+                            }
                         }
                     }
                 }
             }
         }
-    } // end PullToRefreshBox
+    }
 
     if (showHelp) {
         ToolHelpSheet(
@@ -332,7 +385,7 @@ private fun HeroCard(
                         Modifier
                             .size(if (compact) 40.dp else 52.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                            .background(MaterialTheme.colorScheme.surface),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -366,7 +419,7 @@ private fun HeroCard(
                 Text(
                     text = stringResource(R.string.mdns_screen_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
 
@@ -382,11 +435,24 @@ private fun HeroCard(
                     )
                     if (state.isScanning) {
                         StatBadge(
-                            value = "${state.elapsedMs / 1000}s",
+                            value =
+                                stringResource(
+                                    R.string.mdns_elapsed_value,
+                                    mdnsElapsedSeconds(state.elapsedMs).toInt(),
+                                ),
                             label = stringResource(R.string.mdns_stat_elapsed),
                         )
                     }
                 }
+            }
+
+            if (state.isScanning) {
+                LinearProgressIndicator(
+                    progress = {
+                        mdnsScanProgress(state.elapsedMs, MdnsDiscoveryViewModel.DEFAULT_SCAN_DURATION_MS)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }
@@ -402,7 +468,7 @@ private fun StatBadge(
         modifier =
             Modifier
                 .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
+                .background(MaterialTheme.colorScheme.surface)
                 .padding(horizontal = 10.dp, vertical = 4.dp),
     ) {
         Text(
@@ -414,7 +480,7 @@ private fun StatBadge(
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -564,19 +630,19 @@ private fun IdleHint() {
                 imageVector = Icons.Default.NetworkPing,
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(12.dp))
             Text(
                 text = stringResource(R.string.mdns_idle_hint),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(4.dp))
             Text(
                 text = stringResource(R.string.mdns_idle_body),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -612,7 +678,7 @@ private fun ScanningPlaceholder() {
         Text(
             text = stringResource(R.string.mdns_scanning_hint),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -649,6 +715,7 @@ private fun CanceledEmptyHint() {
 private fun ErrorCard(
     message: String,
     onRetry: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
     ElevatedCard(
         shape = AppShapes.large,
@@ -667,9 +734,12 @@ private fun ErrorCard(
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                color = MaterialTheme.colorScheme.onErrorContainer,
             )
-            FilledTonalButton(onClick = onRetry) { Text(stringResource(R.string.mdns_error_dismiss)) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(onClick = onRetry) { Text(stringResource(R.string.mdns_error_retry)) }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.mdns_error_dismiss)) }
+            }
         }
     }
 }
@@ -686,91 +756,55 @@ internal fun mdnsHttpIntent(service: DiscoveredService): ToolIntent? {
     )
 }
 
+/** Every user-visible word in the mDNS share text, resolved from resources. */
+internal data class MdnsShareLabels(
+    val servicesCount: (Int) -> String,
+    val filter: (String) -> String,
+    val stopping: String,
+    val inProgress: String,
+    val canceled: String,
+    val complete: String,
+    val addresses: (String) -> String,
+    val txt: (String, String) -> String,
+)
+
+internal fun mdnsShareLabels(resources: Resources): MdnsShareLabels =
+    MdnsShareLabels(
+        servicesCount = { count -> resources.getString(R.string.mdns_share_count, count) },
+        filter = { query -> resources.getString(R.string.mdns_share_filter, query) },
+        stopping = resources.getString(R.string.mdns_share_stopping),
+        inProgress = resources.getString(R.string.mdns_share_in_progress),
+        canceled = resources.getString(R.string.mdns_share_canceled),
+        complete = resources.getString(R.string.mdns_share_complete),
+        addresses = { joined -> resources.getString(R.string.mdns_share_addresses, joined) },
+        txt = { key, value -> resources.getString(R.string.mdns_share_txt, key, value) },
+    )
+
 internal fun buildMdnsShareText(
     services: List<DiscoveredService>,
     isScanning: Boolean,
     isCanceling: Boolean,
     scanCanceled: Boolean,
     truncationNote: String?,
+    labels: MdnsShareLabels,
     filterQuery: String = "",
 ): String =
     buildString {
-        appendLine("mDNS services: ${services.size}")
-        if (filterQuery.isNotBlank()) appendLine("Filter: ${filterQuery.trim()}")
+        appendLine(labels.servicesCount(services.size))
+        if (filterQuery.isNotBlank()) appendLine(labels.filter(filterQuery.trim()))
         when {
-            isCanceling -> appendLine("Discovery stopping; partial results.")
-            isScanning -> appendLine("Discovery in progress; partial results.")
-            scanCanceled -> appendLine("Discovery canceled; partial results.")
-            else -> appendLine("Discovery window complete.")
+            isCanceling -> appendLine(labels.stopping)
+            isScanning -> appendLine(labels.inProgress)
+            scanCanceled -> appendLine(labels.canceled)
+            else -> appendLine(labels.complete)
         }
         truncationNote?.let { appendLine(it) }
         services.sortedWith(compareBy({ it.serviceType }, { it.instanceName })).forEach { service ->
             appendLine("${service.displayName} (${service.serviceType}) · ${service.hostname}:${service.port}")
-            if (service.ipAddresses.isNotEmpty()) appendLine("Addresses: ${service.ipAddresses.joinToString()}")
-            service.txtRecords.toSortedMap().forEach { (key, value) -> appendLine("TXT $key=$value") }
+            if (service.ipAddresses.isNotEmpty()) appendLine(labels.addresses(service.ipAddresses.joinToString()))
+            service.txtRecords.toSortedMap().forEach { (key, value) -> appendLine(labels.txt(key, value)) }
         }
     }
-
-@Composable
-private fun ServiceList(
-    servicesByType: Map<String, List<DiscoveredService>>,
-    isScanning: Boolean,
-    isCanceling: Boolean,
-    scanCanceled: Boolean,
-    truncationReasons: Set<MdnsTruncationReason>,
-    onPingHost: (String) -> Unit,
-    onHttpProbe: (DiscoveredService) -> Unit,
-) {
-    val expandedTypes = remember { mutableStateMapOf<String, Boolean>() }
-    var searchQuery by rememberSaveable { mutableStateOf("") }
-    val filteredByType = filterMdnsServices(servicesByType, searchQuery)
-    // Copy and Share export exactly what the list shows, so the filter is part of the report.
-    val truncationNote =
-        truncationReasons.takeIf { it.isNotEmpty() }?.let {
-            stringResource(R.string.mdns_partial_results_status, limitsText(it))
-        }
-    val report =
-        buildMdnsShareText(
-            services = filteredByType.values.flatten(),
-            isScanning = isScanning,
-            isCanceling = isCanceling,
-            scanCanceled = scanCanceled,
-            truncationNote = truncationNote,
-            filterQuery = searchQuery,
-        )
-    val context = LocalContext.current
-    val shareSubject = stringResource(R.string.mdns_screen_title)
-    val noMatch = searchQuery.isNotBlank() && filteredByType.isEmpty() && servicesByType.isNotEmpty()
-
-    // Plain Column, not a LazyColumn: the whole screen scrolls and the result count is bounded
-    // (each service keeps at most 16 addresses), so nested scrolling is not needed.
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        ServiceSearchToolbar(
-            searchQuery = searchQuery,
-            onSearchChange = { searchQuery = it },
-        )
-        if (noMatch) {
-            NoMatchHint(query = searchQuery, onClear = { searchQuery = "" })
-        }
-        if (scanCanceled) {
-            Text(
-                text = stringResource(R.string.mdns_canceled_partial),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(vertical = 4.dp),
-            )
-        }
-        if (isScanning) {
-            ServiceScanningStatus(isCanceling)
-        }
-        ServiceGroups(filteredByType, expandedTypes, onPingHost, onHttpProbe)
-        ResultActionsRow(
-            copyText = report,
-            onShare = { context.shareText(report, shareSubject) },
-        )
-        Spacer(Modifier.height(16.dp))
-    }
-}
 
 internal fun filterMdnsServices(
     servicesByType: Map<String, List<DiscoveredService>>,
@@ -782,12 +816,206 @@ internal fun filterMdnsServices(
                 searchQuery.isBlank() ||
                     listOf(service.serviceType, service.instanceName, service.displayName, service.hostname)
                         .any { it.contains(searchQuery, ignoreCase = true) } ||
-                    service.ipAddresses.any { it.contains(searchQuery, ignoreCase = true) } ||
+                    shownAddresses(service).any { it.value.contains(searchQuery, ignoreCase = true) } ||
                     service.txtRecords.any { (key, value) ->
                         key.contains(searchQuery, true) || value.contains(searchQuery, true)
                     }
             }
         }.filterValues { it.isNotEmpty() }
+
+/**
+ * The results part of the list as lazy items. Each group header and each service has a stable key,
+ * so a refresh that adds or reorders services does not rebuild the rows that did not change.
+ */
+@Suppress("LongParameterList")
+private fun LazyListScope.serviceResultItems(
+    uiState: MdnsDiscoveryUiState,
+    filteredByType: Map<String, List<DiscoveredService>>,
+    groups: Map<String, List<DiscoveredService>>,
+    groupByDevice: Boolean,
+    noMatch: Boolean,
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
+    onGroupByDevice: (Boolean) -> Unit,
+    expandedGroups: MutableMap<String, Boolean>,
+    report: String,
+    onShare: () -> Unit,
+    onPingHost: (String) -> Unit,
+    onHttpProbe: (DiscoveredService) -> Unit,
+) {
+    item(key = "toolbar") {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ServiceSearchToolbar(
+                searchQuery = searchQuery,
+                onSearchChange = onSearchChange,
+            )
+            ServiceGroupModeRow(groupByDevice = groupByDevice, onChange = onGroupByDevice)
+        }
+    }
+    serviceStatusItems(
+        uiState = uiState,
+        filteredByType = filteredByType,
+        noMatch = noMatch,
+        searchQuery = searchQuery,
+        onSearchChange = onSearchChange,
+    )
+    // Copy and Share export the filtered list, so they are hidden when the filter leaves nothing to export.
+    if (filteredByType.isNotEmpty()) {
+        item(key = "report") {
+            ResultActionsRow(
+                copyText = report,
+                onShare = onShare,
+            )
+        }
+    }
+    serviceGroupItems(
+        groups = groups,
+        groupByDevice = groupByDevice,
+        expandedGroups = expandedGroups,
+        onPingHost = onPingHost,
+        onHttpProbe = onHttpProbe,
+    )
+    item(key = "end_spacer") {
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun MdnsNoticeRow(text: String) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Icon(
+            imageVector = Icons.Default.Info,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** The no-match hint, cancel and scanning notes, and the service count shown above the groups. */
+private fun LazyListScope.serviceStatusItems(
+    uiState: MdnsDiscoveryUiState,
+    filteredByType: Map<String, List<DiscoveredService>>,
+    noMatch: Boolean,
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
+) {
+    if (noMatch) {
+        item(key = "no_match") {
+            NoMatchHint(query = searchQuery, onClear = { onSearchChange("") })
+        }
+    }
+    if (uiState.scanCanceled) {
+        item(key = "canceled_partial") {
+            Text(
+                text = stringResource(R.string.mdns_canceled_partial),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
+        }
+    }
+    if (uiState.isScanning) {
+        item(key = "scanning_status") {
+            ServiceScanningStatus(uiState.isCanceling)
+        }
+    }
+    // The header already shows the total, so this line appears only while a filter hides some services.
+    val shown = filteredByType.values.sumOf { it.size }
+    if (uiState.services.isNotEmpty() && shown != uiState.services.size) {
+        item(key = "count") {
+            ServiceCountText(shown = shown, total = uiState.services.size)
+        }
+    }
+}
+
+/** One header per group and, while the group is expanded, one row per service. */
+private fun LazyListScope.serviceGroupItems(
+    groups: Map<String, List<DiscoveredService>>,
+    groupByDevice: Boolean,
+    expandedGroups: MutableMap<String, Boolean>,
+    onPingHost: (String) -> Unit,
+    onHttpProbe: (DiscoveredService) -> Unit,
+) {
+    groups.forEach { (groupKey, services) ->
+        val isExpanded = expandedGroups[groupKey] != false
+        item(key = "group:$groupKey") {
+            ServiceGroupHeader(
+                groupKey = groupKey,
+                groupByDevice = groupByDevice,
+                count = services.size,
+                isExpanded = isExpanded,
+                onClick = { expandedGroups[groupKey] = !isExpanded },
+            )
+        }
+        if (isExpanded) {
+            items(services, key = { service -> "service:${service.instanceName}" }) { service ->
+                ServiceItem(service, onPingHost, onHttpProbe)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServiceCountText(
+    shown: Int,
+    total: Int,
+) {
+    val text =
+        if (shown == total) {
+            pluralStringResource(R.plurals.mdns_services_count, total, total)
+        } else {
+            pluralStringResource(R.plurals.mdns_services_of_total, total, shown, total)
+        }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ServiceGroupModeRow(
+    groupByDevice: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            stringResource(R.string.mdns_group_label),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        SingleChoiceSegmentedButtonRow {
+            SegmentedButton(
+                selected = !groupByDevice,
+                onClick = { onChange(false) },
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+            ) {
+                Text(stringResource(R.string.mdns_group_by_type), style = MaterialTheme.typography.labelSmall)
+            }
+            SegmentedButton(
+                selected = groupByDevice,
+                onClick = { onChange(true) },
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+            ) {
+                Text(stringResource(R.string.mdns_group_by_device), style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
 
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
@@ -824,107 +1052,116 @@ private fun ServiceScanningStatus(isCanceling: Boolean) {
             Text(
                 stringResource(R.string.mdns_canceling_hint),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
 }
 
 @Composable
-@Suppress("FunctionNaming", "ktlint:standard:function-naming")
-private fun ServiceGroups(
-    servicesByType: Map<String, List<DiscoveredService>>,
-    expandedTypes: MutableMap<String, Boolean>,
-    onPingHost: (String) -> Unit,
-    onHttpProbe: (DiscoveredService) -> Unit,
-) {
-    servicesByType.forEach { (serviceType, services) ->
-        val isExpanded = expandedTypes[serviceType] != false
-        ServiceTypeHeader(
-            serviceType = serviceType,
-            count = services.size,
-            isExpanded = isExpanded,
-            onClick = { expandedTypes[serviceType] = !isExpanded },
-        )
-        if (isExpanded) {
-            services.forEach { service ->
-                key(service.instanceName) {
-                    AnimatedVisibility(
-                        visible = true,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically(),
-                    ) {
-                        ServiceItem(service, onPingHost, onHttpProbe)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ServiceTypeHeader(
-    serviceType: String,
+private fun ServiceGroupHeader(
+    groupKey: String,
+    groupByDevice: Boolean,
     count: Int,
     isExpanded: Boolean,
     onClick: () -> Unit,
 ) {
-    val rotationAngle by animateFloatAsState(
-        targetValue = if (isExpanded) 0f else -90f,
+    val typeInfo = if (groupByDevice) null else mdnsServiceTypeInfo(groupKey)
+    val namedLabelRes = typeInfo?.takeIf { it.known }?.labelRes
+    val title = namedLabelRes?.let { stringResource(it) } ?: groupKey
+    val rotation by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
         animationSpec = AppMotion.effect(200),
-        label = "chevron",
+        label = "group-chevron",
     )
+    val chevronDescription =
+        if (isExpanded) {
+            stringResource(R.string.mdns_group_collapse, title)
+        } else {
+            stringResource(R.string.mdns_group_expand, title)
+        }
 
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .clip(AppShapes.medium)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
                 .clickable(onClick = onClick)
                 .semantics { role = Role.Button }
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = Icons.Default.Router,
+            imageVector = typeInfo?.icon ?: Icons.Default.Devices,
             contentDescription = null,
             modifier = Modifier.size(18.dp),
             tint = MaterialTheme.colorScheme.primary,
         )
         Spacer(Modifier.width(8.dp))
-        Text(
-            text = serviceType,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        ServiceGroupTitle(
+            title = title,
+            serviceType = groupKey.takeIf { namedLabelRes != null },
             modifier = Modifier.weight(1f),
         )
-        Box(
-            modifier =
-                Modifier
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary)
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-        ) {
-            Text(
-                text = count.toString(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onPrimary,
-                fontWeight = FontWeight.Bold,
-            )
-        }
+        ServiceGroupCountBadge(count)
         Spacer(Modifier.width(8.dp))
         Icon(
-            imageVector = if (isExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
-            contentDescription = if (isExpanded) "Collapse" else "Expand",
-            modifier = Modifier.rotate(rotationAngle),
+            imageVector = Icons.Default.ExpandMore,
+            contentDescription = chevronDescription,
+            modifier = Modifier.rotate(rotation),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/** The group's title and, for a known service type, the raw type string beneath it. */
+@Composable
+private fun ServiceGroupTitle(
+    title: String,
+    serviceType: String?,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (serviceType != null) {
+            Text(
+                text = serviceType,
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ServiceGroupCountBadge(count: Int) {
+    Box(
+        modifier =
+            Modifier
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary)
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+    ) {
+        Text(
+            text = count.toString(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onPrimary,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
 @Composable
 private fun ServiceItem(
     service: DiscoveredService,
@@ -932,6 +1169,14 @@ private fun ServiceItem(
     onHttpProbe: (DiscoveredService) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var showAllTxt by remember { mutableStateOf(false) }
+    // Only services with TXT data have anything to expand, so the card is clickable only then.
+    val hasTxt = service.txtRecords.isNotEmpty()
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = AppMotion.effect(200),
+        label = "txt-chevron",
+    )
 
     OutlinedCard(
         shape = AppShapes.medium,
@@ -940,128 +1185,203 @@ private fun ServiceItem(
                 .fillMaxWidth()
                 .padding(start = 8.dp)
                 .animateContentSize()
-                .clickable { expanded = !expanded }
-                .semantics { role = Role.Button },
+                .then(
+                    if (hasTxt) {
+                        Modifier
+                            .clickable { expanded = !expanded }
+                            .semantics { role = Role.Button }
+                    } else {
+                        Modifier
+                    },
+                ),
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = service.displayName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (service.port > 0) {
-                    Text(
-                        text = ":${service.port}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontFamily = FontFamily.Monospace,
-                    )
-                }
-            }
+            ServiceItemHeader(service = service, hasTxt = hasTxt, chevronRotation = chevronRotation)
 
-            val validHostname =
-                ToolHost.parse(service.hostname)?.takeUnless {
-                    HostValidator.isValidIpv4(it.value) || HostValidator.isValidIpv6(it.value)
-                }
-            if (mdnsHttpIntent(service) != null) {
-                val httpProbeDescription =
-                    stringResource(
-                        R.string.mdns_http_probe_description,
-                        service.displayName,
-                    )
-                FilledTonalButton(
-                    onClick = { onHttpProbe(service) },
-                    modifier = Modifier.semantics { contentDescription = httpProbeDescription },
-                ) {
-                    Icon(Icons.Default.Http, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.mdns_http_probe))
-                }
+            ServiceHostActions(service = service, onPingHost = onPingHost, onHttpProbe = onHttpProbe)
+
+            ServiceAddressChips(service = service, onPingHost = onPingHost)
+
+            AnimatedVisibility(visible = expanded && hasTxt) {
+                ServiceTxtRecords(
+                    service = service,
+                    showAllTxt = showAllTxt,
+                    onToggleShowAll = { showAllTxt = !showAllTxt },
+                )
             }
-            if (validHostname != null) {
-                val pingHostnameDescription =
-                    stringResource(
-                        R.string.mdns_ping_hostname_description,
-                        validHostname.value,
-                    )
+        }
+    }
+}
+
+/** The TXT records, limited to the first few until the user asks for all of them. */
+@Composable
+private fun ServiceTxtRecords(
+    service: DiscoveredService,
+    showAllTxt: Boolean,
+    onToggleShowAll: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        Text(
+            stringResource(R.string.mdns_txt_records_label),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+        )
+        visibleTxtEntries(service.txtRecords, showAllTxt).forEach { (key, value) ->
+            Row {
                 Text(
-                    text = validHostname.value,
+                    "$key=",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     fontFamily = FontFamily.Monospace,
-                    maxLines = 1,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    value,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                FilledTonalButton(
-                    onClick = { onPingHost(validHostname.value) },
-                    modifier = Modifier.semantics { contentDescription = pingHostnameDescription },
-                ) {
-                    Icon(Icons.Default.NetworkPing, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.mdns_ping_hostname))
-                }
             }
-
-            val validAddresses =
-                service.ipAddresses
-                    .mapNotNull { address ->
-                        ToolHost.parse(address)?.takeIf {
-                            HostValidator.isValidIpv4(it.value) || HostValidator.isValidIpv6(it.value)
-                        }
-                    }.distinctBy { it.canonical }
-            if (validAddresses.isNotEmpty()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    validAddresses.forEach { ip ->
-                        SuggestionChip(
-                            onClick = { onPingHost(ip.value) },
-                            label = {
-                                Text(
-                                    stringResource(R.string.mdns_ping_address, ip.value),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontFamily = FontFamily.Monospace,
-                                )
-                            },
-                        )
-                    }
-                }
+        }
+        if (service.txtRecords.size > MDNS_TXT_VISIBLE_LIMIT) {
+            TextButton(onClick = onToggleShowAll) {
+                Text(
+                    if (showAllTxt) {
+                        stringResource(R.string.mdns_txt_show_less)
+                    } else {
+                        stringResource(R.string.mdns_txt_show_all, service.txtRecords.size)
+                    },
+                )
             }
+        }
+    }
+}
 
-            AnimatedVisibility(visible = expanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (service.txtRecords.isNotEmpty()) {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+/** The service name, its port when known, and a chevron when there are TXT records to expand. */
+@Composable
+private fun ServiceItemHeader(
+    service: DiscoveredService,
+    hasTxt: Boolean,
+    chevronRotation: Float,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = service.displayName,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (service.port > 0) {
+            Text(
+                text = ":${service.port}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontFamily = FontFamily.Monospace,
+            )
+        }
+        if (hasTxt) {
+            Icon(
+                imageVector = Icons.Default.ExpandMore,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp).rotate(chevronRotation),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** The HTTP probe action for a web service and the ping action for a hostname that is not an address. */
+@Composable
+private fun ServiceHostActions(
+    service: DiscoveredService,
+    onPingHost: (String) -> Unit,
+    onHttpProbe: (DiscoveredService) -> Unit,
+) {
+    val validHostname =
+        ToolHost.parse(service.hostname)?.takeUnless {
+            HostValidator.isValidIpv4(it.value) || HostValidator.isValidIpv6(it.value)
+        }
+    if (mdnsHttpIntent(service) != null) {
+        val httpProbeDescription =
+            stringResource(
+                R.string.mdns_http_probe_description,
+                service.displayName,
+            )
+        FilledTonalButton(
+            onClick = { onHttpProbe(service) },
+            modifier = Modifier.semantics { contentDescription = httpProbeDescription },
+        ) {
+            Icon(Icons.Default.Http, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.mdns_http_probe))
+        }
+    }
+    if (validHostname != null) {
+        val pingHostnameDescription =
+            stringResource(
+                R.string.mdns_ping_hostname_description,
+                validHostname.value,
+            )
+        Text(
+            text = validHostname.value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        FilledTonalButton(
+            onClick = { onPingHost(validHostname.value) },
+            modifier = Modifier.semantics { contentDescription = pingHostnameDescription },
+        ) {
+            Icon(Icons.Default.NetworkPing, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.mdns_ping_hostname))
+        }
+    }
+}
+
+/**
+ * The addresses a row can show: valid IPv4 or IPv6, distinct, without unscoped link-local IPv6.
+ * The search matches only these, so a row never matches on an address that is not on screen.
+ */
+internal fun shownAddresses(service: DiscoveredService): List<ToolHost> =
+    service.ipAddresses
+        .mapNotNull { address ->
+            ToolHost.parse(address)?.takeIf {
+                (HostValidator.isValidIpv4(it.value) || HostValidator.isValidIpv6(it.value)) &&
+                    !isUnscopedLinkLocalIpv6(it.value)
+            }
+        }.distinctBy { it.canonical }
+
+/** One ping chip per distinct, reachable address the service announced; unscoped link-local IPv6 is skipped. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ServiceAddressChips(
+    service: DiscoveredService,
+    onPingHost: (String) -> Unit,
+) {
+    val validAddresses = shownAddresses(service)
+    if (validAddresses.isNotEmpty()) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            validAddresses.forEach { ip ->
+                SuggestionChip(
+                    onClick = { onPingHost(ip.value) },
+                    label = {
                         Text(
-                            stringResource(R.string.mdns_txt_records_label),
+                            stringResource(R.string.mdns_ping_address, ip.value),
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = FontFamily.Monospace,
                         )
-                        service.txtRecords.entries.take(10).forEach { (key, value) ->
-                            Row {
-                                Text(
-                                    "$key=",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = MaterialTheme.colorScheme.tertiary,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                                Text(
-                                    value,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                    }
-                }
+                    },
+                )
             }
         }
     }
@@ -1091,12 +1411,12 @@ private fun NoMatchHint(
                 imageVector = Icons.Default.Search,
                 contentDescription = null,
                 modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 text = stringResource(R.string.mdns_no_match_title, query.trim()),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.padding(horizontal = 24.dp),
             )
@@ -1124,17 +1444,17 @@ private fun EmptyResultHint() {
                 imageVector = Icons.Default.NetworkPing,
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 text = stringResource(R.string.mdns_empty_title),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 text = stringResource(R.string.mdns_empty_body),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.padding(horizontal = 24.dp),
             )

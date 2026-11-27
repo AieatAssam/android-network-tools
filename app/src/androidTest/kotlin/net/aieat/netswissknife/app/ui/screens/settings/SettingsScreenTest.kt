@@ -6,8 +6,8 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.mockk.every
 import io.mockk.mockk
@@ -74,7 +74,7 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun concurrencySliderSupportsPersistedRangeThrough500() {
+    fun concurrencySliderStepsThroughThePortScannerValues() {
         val viewModel = mockk<SettingsViewModel>(relaxed = true)
         every { viewModel.themeOverride } returns MutableStateFlow("SYSTEM")
         every { viewModel.dynamicColor } returns MutableStateFlow(true)
@@ -89,18 +89,25 @@ class SettingsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText(context.getString(R.string.settings_concurrency_label, 500))
+        composeRule
+            .onNodeWithText(context.getString(R.string.settings_concurrency_label, 500))
             .performScrollTo()
             .assertIsDisplayed()
 
-        val slider = composeRule.onNodeWithTag(SettingsScreenTestTags.DEFAULT_CONCURRENCY_SLIDER)
-            .fetchSemanticsNode()
+        val slider =
+            composeRule
+                .onNodeWithTag(SettingsScreenTestTags.DEFAULT_CONCURRENCY_SLIDER)
+                .fetchSemanticsNode()
         val range = slider.config[SemanticsProperties.ProgressBarRangeInfo]
-        assertEquals(500f, range.current)
-        assertEquals(1f..500f, range.range)
-        assertEquals(498, range.steps)
+        val steps = SettingSteps.CONCURRENCY
+        assertEquals(steps.lastIndex.toFloat(), range.current)
+        assertEquals(0f..steps.lastIndex.toFloat(), range.range)
+        assertEquals(steps.sliderSteps, range.steps)
     }
 
     private val context
-        get() = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        get() =
+            androidx.test.platform.app.InstrumentationRegistry
+                .getInstrumentation()
+                .targetContext
 }

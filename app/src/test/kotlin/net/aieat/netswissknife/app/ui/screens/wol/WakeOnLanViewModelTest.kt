@@ -5,14 +5,18 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
-import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import net.aieat.netswissknife.app.platform.NetworkErrorKind
+import net.aieat.netswissknife.app.platform.NetworkStatus
+import net.aieat.netswissknife.app.platform.NetworkStatusProvider
+import net.aieat.netswissknife.app.platform.Transport
 import net.aieat.netswissknife.app.ui.navigation.HostTool
 import net.aieat.netswissknife.app.ui.navigation.ToolDestination
 import net.aieat.netswissknife.app.ui.navigation.ToolHost
@@ -22,17 +26,13 @@ import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.core.domain.WakeOnLanParams
 import net.aieat.netswissknife.core.domain.WakeOnLanUseCase
-import net.aieat.netswissknife.app.platform.NetworkStatus
-import net.aieat.netswissknife.app.platform.NetworkStatusProvider
-import net.aieat.netswissknife.app.platform.Transport
 import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
-import net.aieat.netswissknife.core.network.wol.WolBroadcastProblem
-import net.aieat.netswissknife.core.network.wol.WolMacProblem
-import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.core.network.net.LocalNetworkPermissionDeniedException
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationSession
+import net.aieat.netswissknife.core.network.wol.WolBroadcastProblem
+import net.aieat.netswissknife.core.network.wol.WolMacProblem
 import net.aieat.netswissknife.core.network.wol.WolSendReport
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -49,7 +49,6 @@ import kotlin.coroutines.suspendCoroutine
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("WakeOnLanViewModel")
 class WakeOnLanViewModelTest {
-
     private val testDispatcher = UnconfinedTestDispatcher()
 
     private lateinit var useCase: WakeOnLanUseCase
@@ -83,12 +82,14 @@ class WakeOnLanViewModelTest {
     fun `typed LAN WOL handoff pre-fills normalized MAC without sending`() {
         val mac = requireNotNull(ToolMacAddress.parse("02-23-45-67-89-ab"))
         val intent = ToolIntent(ToolDestination.WakeOnLan(mac), ToolSource.LAN)
-        val handoff = WakeOnLanViewModel(
-            useCase,
-            savedStateHandle = SavedStateHandle(
-                mapOf("intent" to ToolIntentCodec.encode(intent), "mac" to mac.value),
-            ),
-        )
+        val handoff =
+            WakeOnLanViewModel(
+                useCase,
+                savedStateHandle =
+                    SavedStateHandle(
+                        mapOf("intent" to ToolIntentCodec.encode(intent), "mac" to mac.value),
+                    ),
+            )
 
         assertEquals("02:23:45:67:89:AB", handoff.macAddress.value)
         assertEquals(ToolSource.LAN, handoff.sourceContext)
@@ -122,13 +123,18 @@ class WakeOnLanViewModelTest {
         assertEquals("", savedState.get<String>("editedWolMac"))
         assertNull(savedState.get<String>("wolHandoffSource"))
 
-        val recreated = WakeOnLanViewModel(
-            useCase,
-            savedStateHandle = SavedStateHandle(routeArgs + mapOf(
-                "editedWolMac" to "",
-                "wolHandoffConsumed" to true,
-            )),
-        )
+        val recreated =
+            WakeOnLanViewModel(
+                useCase,
+                savedStateHandle =
+                    SavedStateHandle(
+                        routeArgs +
+                            mapOf(
+                                "editedWolMac" to "",
+                                "wolHandoffConsumed" to true,
+                            ),
+                    ),
+            )
         recreated.onBroadcastAddressChange("192.0.2.255")
         recreated.onPortChange("9999")
         assertEquals("", recreated.macAddress.value)
@@ -140,28 +146,31 @@ class WakeOnLanViewModelTest {
     }
 
     @Test
-    fun `clear prefill is ignored while WOL send is active`() = runTest {
-        val mac = requireNotNull(ToolMacAddress.parse("02:23:45:67:89:AB"))
-        val intent = ToolIntent(ToolDestination.WakeOnLan(mac), ToolSource.LAN)
-        val active = WakeOnLanViewModel(
-            useCase,
-            savedStateHandle = SavedStateHandle(
-                mapOf("intent" to ToolIntentCodec.encode(intent), "mac" to mac.value),
-            ),
-        )
-        val sessionSlot = slot<OperationSession>()
-        coEvery { useCase(any(), capture(sessionSlot)) } coAnswers { awaitCancellation() }
+    fun `clear prefill is ignored while WOL send is active`() =
+        runTest {
+            val mac = requireNotNull(ToolMacAddress.parse("02:23:45:67:89:AB"))
+            val intent = ToolIntent(ToolDestination.WakeOnLan(mac), ToolSource.LAN)
+            val active =
+                WakeOnLanViewModel(
+                    useCase,
+                    savedStateHandle =
+                        SavedStateHandle(
+                            mapOf("intent" to ToolIntentCodec.encode(intent), "mac" to mac.value),
+                        ),
+                )
+            val sessionSlot = slot<OperationSession>()
+            coEvery { useCase(any(), capture(sessionSlot)) } coAnswers { awaitCancellation() }
 
-        active.send()
-        assertEquals(WolUiState.Sending, active.uiState.value)
-        active.clearPrefill()
+            active.send()
+            assertEquals(WolUiState.Sending, active.uiState.value)
+            active.clearPrefill()
 
-        assertEquals(mac.value, active.macAddress.value)
-        assertEquals(ToolSource.LAN, active.sourceContext)
-        assertEquals(WolUiState.Sending, active.uiState.value)
-        active.stopSending()
-        assertEquals(CancellationReason.USER_STOP, sessionSlot.captured.cancellationReason)
-    }
+            assertEquals(mac.value, active.macAddress.value)
+            assertEquals(ToolSource.LAN, active.sourceContext)
+            assertEquals(WolUiState.Sending, active.uiState.value)
+            active.stopSending()
+            assertEquals(CancellationReason.USER_STOP, sessionSlot.captured.cancellationReason)
+        }
 
     @Test
     fun `edited handoff MAC survives recreation and invalid payload is recoverable`() {
@@ -173,20 +182,22 @@ class WakeOnLanViewModelTest {
         first.onMacAddressChange("02:23:45:67:89:AC")
         assertEquals("02:23:45:67:89:AC", savedState.get<String>("editedWolMac"))
 
-        val restored = WakeOnLanViewModel(
-            useCase,
-            savedStateHandle = SavedStateHandle(routeArgs + ("editedWolMac" to "02:23:45:67:89:AC")),
-        )
+        val restored =
+            WakeOnLanViewModel(
+                useCase,
+                savedStateHandle = SavedStateHandle(routeArgs + ("editedWolMac" to "02:23:45:67:89:AC")),
+            )
         assertEquals("02:23:45:67:89:AC", restored.macAddress.value)
         assertFalse(restored.hasInvalidHandoff.value)
 
-        val invalidState = SavedStateHandle(
-            mapOf(
-                "intent" to "ti1.invalid",
-                "mac" to mac.value,
-                "wolHandoffSource" to "lan",
-            ),
-        )
+        val invalidState =
+            SavedStateHandle(
+                mapOf(
+                    "intent" to "ti1.invalid",
+                    "mac" to mac.value,
+                    "wolHandoffSource" to "lan",
+                ),
+            )
         val invalid = WakeOnLanViewModel(useCase, savedStateHandle = invalidState)
         assertTrue(invalid.hasInvalidHandoff.value)
         assertEquals("", invalid.macAddress.value)
@@ -204,18 +215,20 @@ class WakeOnLanViewModelTest {
         assertFalse(invalid.hasInvalidHandoff.value)
         assertEquals(true, invalidState.get<Boolean>("wolHandoffRecovered"))
 
-        val staleConsumedSource = WakeOnLanViewModel(
-            useCase,
-            savedStateHandle = SavedStateHandle(
-                mapOf(
-                    "intent" to "ti1.invalid",
-                    "mac" to mac.value,
-                    "wolHandoffConsumed" to true,
-                    "wolHandoffSource" to "lan",
-                    "editedWolMac" to "",
-                ),
-            ),
-        )
+        val staleConsumedSource =
+            WakeOnLanViewModel(
+                useCase,
+                savedStateHandle =
+                    SavedStateHandle(
+                        mapOf(
+                            "intent" to "ti1.invalid",
+                            "mac" to mac.value,
+                            "wolHandoffConsumed" to true,
+                            "wolHandoffSource" to "lan",
+                            "editedWolMac" to "",
+                        ),
+                    ),
+            )
         assertNull(staleConsumedSource.sourceContext)
         assertTrue(staleConsumedSource.hasInvalidHandoff.value)
         coVerify(exactly = 0) { useCase(any(), any()) }
@@ -224,10 +237,11 @@ class WakeOnLanViewModelTest {
     @Test
     fun `typed WOL route rejects wrong destination mismatched and incomplete arguments`() {
         val mac = requireNotNull(ToolMacAddress.parse("02:23:45:67:89:AB"))
-        val wrongDestination = ToolIntent(
-            ToolDestination.HostTarget(HostTool.PING, requireNotNull(ToolHost.parse("192.0.2.8"))),
-            ToolSource.LAN,
-        )
+        val wrongDestination =
+            ToolIntent(
+                ToolDestination.HostTarget(HostTool.PING, requireNotNull(ToolHost.parse("192.0.2.8"))),
+                ToolSource.LAN,
+            )
         val wrongSource = ToolIntent(ToolDestination.WakeOnLan(mac), ToolSource.MDNS)
         val missingSource = ToolIntent(ToolDestination.WakeOnLan(mac))
         listOf(
@@ -280,123 +294,191 @@ class WakeOnLanViewModelTest {
     }
 
     @Test
-    fun `send transitions to Success on use case success`() = runTest {
-        coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubReport)
+    fun `send transitions to Success on use case success`() =
+        runTest {
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubReport)
 
-        viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
-        viewModel.send()
-
-        assertEquals(WolUiState.Success(stubReport), viewModel.uiState.value)
-        coVerify { useCase(any(), any()) }
-    }
-
-    @Test
-    fun `send transitions to Error on use case failure`() = runTest {
-        coEvery { useCase(any(), any()) } returns NetworkResult.Error("boom")
-
-        viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
-        viewModel.send()
-
-        assertEquals(WolUiState.Error("boom"), viewModel.uiState.value)
-    }
-
-    @Test
-    fun `send marks local permission denial distinctly from general failure`() = runTest {
-        coEvery { useCase(any(), any()) } returns NetworkResult.Error(
-            "permission denied",
-            LocalNetworkPermissionDeniedException(SecurityException("denied")),
-        )
-
-        viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
-        viewModel.send()
-
-        val denied = viewModel.uiState.value as WolUiState.Error
-        assertEquals(NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED, denied.networkErrorKind)
-
-        coEvery { useCase(any(), any()) } returns NetworkResult.Error("boom")
-        viewModel.send()
-        val generic = viewModel.uiState.value as WolUiState.Error
-        assertEquals(NetworkErrorKind.GENERAL, generic.networkErrorKind)
-    }
-
-    @Test
-    fun `send is a no-op while input is invalid`() = runTest {
-        viewModel.onMacAddressChange("not-a-mac")
-        viewModel.send()
-
-        assertEquals(WolUiState.Idle, viewModel.uiState.value)
-        coVerify(exactly = 0) { useCase(any(), any()) }
-    }
-
-    @Test
-    fun `rejects UDP destination port zero and values above the maximum`() = runTest {
-        viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
-
-        for (port in listOf("0", "65536")) {
-            viewModel.onPortChange(port)
-            assertFalse(viewModel.canSend, "Expected port $port to disable Send")
+            viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
             viewModel.send()
-        }
 
-        coVerify(exactly = 0) { useCase(any(), any()) }
-    }
+            assertEquals(WolUiState.Success(stubReport), viewModel.uiState.value)
+            coVerify { useCase(any(), any()) }
+        }
 
     @Test
-    fun `accepts UDP destination port boundaries`() = runTest {
-        coEvery { useCase(any(), any()) } coAnswers {
-            val params = firstArg<WakeOnLanParams>()
-            NetworkResult.Success(stubReport.copy(port = params.port))
-        }
-        viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+    fun `send transitions to Error on use case failure`() =
+        runTest {
+            coEvery { useCase(any(), any()) } returns NetworkResult.Error("boom")
 
-        for (port in listOf("1", "65535")) {
-            viewModel.onPortChange(port)
-            assertTrue(viewModel.canSend)
+            viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
             viewModel.send()
-            coVerify { useCase(match { it.port == port.toInt() }, any()) }
+
+            assertEquals(WolUiState.Error("boom"), viewModel.uiState.value)
         }
-    }
 
     @Test
-    fun `reset returns to Idle`() = runTest {
-        coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubReport)
-        viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
-        viewModel.send()
+    fun `send marks local permission denial distinctly from general failure`() =
+        runTest {
+            coEvery { useCase(any(), any()) } returns
+                NetworkResult.Error(
+                    "permission denied",
+                    LocalNetworkPermissionDeniedException(SecurityException("denied")),
+                )
 
-        viewModel.reset()
+            viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+            viewModel.send()
 
-        assertEquals(WolUiState.Idle, viewModel.uiState.value)
-    }
+            val denied = viewModel.uiState.value as WolUiState.Error
+            assertEquals(NetworkErrorKind.LOCAL_NETWORK_PERMISSION_DENIED, denied.networkErrorKind)
 
-    @Test
-    fun `stop sending cancels the caller session with user stop reason`() = runTest {
-        val session = slot<OperationSession>()
-        coEvery { useCase(any(), capture(session)) } coAnswers { awaitCancellation() }
-        viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
-
-        viewModel.send()
-        assertEquals(WolUiState.Sending, viewModel.uiState.value)
-        viewModel.stopSending()
-
-        assertEquals(CancellationReason.USER_STOP, session.captured.cancellationReason)
-        assertEquals(WolUiState.Idle, viewModel.uiState.value)
-    }
-
-    @Test
-    fun `late completion after stop cannot restore a stale success`() = runTest {
-        var completion: Continuation<NetworkResult<WolSendReport>>? = null
-        coEvery { useCase(any(), any()) } coAnswers {
-            suspendCoroutine { continuation -> completion = continuation }
+            coEvery { useCase(any(), any()) } returns NetworkResult.Error("boom")
+            viewModel.send()
+            val generic = viewModel.uiState.value as WolUiState.Error
+            assertEquals(NetworkErrorKind.GENERAL, generic.networkErrorKind)
         }
-        viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
 
-        viewModel.send()
-        assertEquals(WolUiState.Sending, viewModel.uiState.value)
-        viewModel.stopSending()
-        completion!!.resume(NetworkResult.Success(stubReport))
+    @Test
+    fun `send is a no-op while input is invalid`() =
+        runTest {
+            viewModel.onMacAddressChange("not-a-mac")
+            viewModel.send()
 
-        assertEquals(WolUiState.Idle, viewModel.uiState.value)
-    }
+            assertEquals(WolUiState.Idle, viewModel.uiState.value)
+            coVerify(exactly = 0) { useCase(any(), any()) }
+        }
+
+    @Test
+    fun `rejects UDP destination port zero and values above the maximum`() =
+        runTest {
+            viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+
+            for (port in listOf("0", "65536")) {
+                viewModel.onPortChange(port)
+                assertFalse(viewModel.canSend, "Expected port $port to disable Send")
+                viewModel.send()
+            }
+
+            coVerify(exactly = 0) { useCase(any(), any()) }
+        }
+
+    @Test
+    fun `accepts UDP destination port boundaries`() =
+        runTest {
+            coEvery { useCase(any(), any()) } coAnswers {
+                val params = firstArg<WakeOnLanParams>()
+                NetworkResult.Success(stubReport.copy(port = params.port))
+            }
+            viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+
+            for (port in listOf("1", "65535")) {
+                viewModel.onPortChange(port)
+                assertTrue(viewModel.canSend)
+                viewModel.send()
+                coVerify { useCase(match { it.port == port.toInt() }, any()) }
+            }
+        }
+
+    @Test
+    fun `changing the MAC after a send discards the finished result`() =
+        runTest {
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubReport)
+            viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+            viewModel.send()
+            assertEquals(WolUiState.Success(stubReport), viewModel.uiState.value)
+
+            viewModel.onMacAddressChange("11:22:33:44:55:66")
+
+            assertEquals(WolUiState.Idle, viewModel.uiState.value)
+        }
+
+    @Test
+    fun `retyping the same MAC keeps the finished result`() =
+        runTest {
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubReport)
+            viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+            viewModel.send()
+
+            viewModel.onMacAddressChange("aa-bb-cc-dd-ee-ff")
+
+            assertEquals(WolUiState.Success(stubReport), viewModel.uiState.value)
+        }
+
+    @Test
+    fun `send again sends the same target a second time`() =
+        runTest {
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubReport)
+            viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+            viewModel.send()
+
+            viewModel.send()
+
+            coVerify(exactly = 2) { useCase(match { it.macAddress == "AA:BB:CC:DD:EE:FF" }, any()) }
+        }
+
+    @Test
+    fun `wake on a saved device sends to its saved broadcast and port`() =
+        runTest {
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubReport)
+            val device = WolSavedDevice("AA:BB:CC:DD:EE:FF", "Desk", "192.168.1.255", 7)
+
+            viewModel.wakeDevice(device)
+
+            coVerify {
+                useCase(
+                    match {
+                        it.macAddress == "AA:BB:CC:DD:EE:FF" &&
+                            it.broadcastAddress == "192.168.1.255" &&
+                            it.port == 7
+                    },
+                    any(),
+                )
+            }
+        }
+
+    @Test
+    fun `send is refused while the broadcast address is invalid even if the derived flow lags`() =
+        runTest {
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(stubReport)
+            viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+            viewModel.onBroadcastAddressChange("not-an-address")
+
+            viewModel.send()
+
+            assertFalse(viewModel.canSend)
+            coVerify(exactly = 0) { useCase(any(), any()) }
+        }
+
+    @Test
+    fun `stop sending cancels the caller session with user stop reason`() =
+        runTest {
+            val session = slot<OperationSession>()
+            coEvery { useCase(any(), capture(session)) } coAnswers { awaitCancellation() }
+            viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+
+            viewModel.send()
+            assertEquals(WolUiState.Sending, viewModel.uiState.value)
+            viewModel.stopSending()
+
+            assertEquals(CancellationReason.USER_STOP, session.captured.cancellationReason)
+            assertEquals(WolUiState.Idle, viewModel.uiState.value)
+        }
+
+    @Test
+    fun `late completion after stop cannot restore a stale success`() =
+        runTest {
+            var completion: Continuation<NetworkResult<WolSendReport>>? = null
+            coEvery { useCase(any(), any()) } coAnswers {
+                suspendCoroutine { continuation -> completion = continuation }
+            }
+            viewModel.onMacAddressChange("AA:BB:CC:DD:EE:FF")
+
+            viewModel.send()
+            assertEquals(WolUiState.Sending, viewModel.uiState.value)
+            viewModel.stopSending()
+            completion!!.resume(NetworkResult.Success(stubReport))
+
+            assertEquals(WolUiState.Idle, viewModel.uiState.value)
+        }
 
     @Test
     fun `dotted, bare and padded MAC notations enable Send and are not flagged`() {

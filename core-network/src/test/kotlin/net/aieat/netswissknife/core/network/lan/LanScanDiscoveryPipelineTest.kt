@@ -157,14 +157,14 @@ class LanScanDiscoveryPipelineTest {
         val summary = repository(
             icmp = { _, _ -> null },
             tcp = { _, _, _ -> TcpPresence.Refused(80) },
-        ).scan(LanScanRequest("192.168.1.0/24", concurrency = 8))
+        ).scan(LanScanRequest("192.168.0.0/21", concurrency = 128))
             .filterIsInstance<LanScanUpdate.ScanComplete>()
             .first()
             .summary
 
-        assertEquals(254, summary.totalScanned)
-        assertEquals(254, summary.uncertainCount)
-        assertEquals(100, summary.uncertainHosts.size)
+        assertEquals(2046, summary.totalScanned)
+        assertEquals(2046, summary.uncertainCount)
+        assertEquals(1024, summary.uncertainHosts.size)
     }
 
     @Test

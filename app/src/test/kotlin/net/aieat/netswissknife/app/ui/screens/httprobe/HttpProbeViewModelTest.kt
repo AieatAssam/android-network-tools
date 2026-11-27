@@ -695,7 +695,8 @@ class HttpProbeViewModelTest {
                 assertEquals("submitted body", stillSubmitted.body)
                 assertEquals(listOf(HeaderEntry("X-Test", "submitted")), stillSubmitted.customHeaders)
                 assertFalse(stillSubmitted.followRedirects)
-                assertFalse(stillSubmitted.headersExpanded)
+                // The toggle is ignored while the request is in flight, so the value set before send() stays.
+                assertTrue(stillSubmitted.headersExpanded)
 
                 finishRequest.complete(NetworkResult.Success(stubResult.copy(request = request)))
                 val completed =

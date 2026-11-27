@@ -23,11 +23,11 @@ fun isCompactHero(
 
 /**
  * Number of tile columns that fit [availableWidthDp] when each tile is at least [tileMinDp] wide
- * with [gapDp] between tiles. Matches `GridCells.Adaptive`, so the Home rows keep the same count
- * they had before the rows were laid out by hand. Never less than one.
+ * with [gapDp] between tiles. Home tiles use a 150dp minimum so a 520dp-wide tablet content area
+ * (488dp after the gutters) gets three columns. Never less than one.
  */
 fun homeGridColumns(
     availableWidthDp: Int,
-    tileMinDp: Int = 160,
+    tileMinDp: Int = 150,
     gapDp: Int = 12,
 ): Int = ((availableWidthDp + gapDp) / (tileMinDp + gapDp)).coerceAtLeast(1)

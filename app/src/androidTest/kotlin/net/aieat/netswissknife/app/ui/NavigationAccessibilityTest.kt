@@ -74,21 +74,6 @@ class NavigationAccessibilityTest {
     }
 
     @Test
-    fun home_showsScrollCueWhenMoreToolsExistBelowFold() {
-        composeRule.setContent {
-            NetSwissKnifeTheme {
-                HomeScreen(onNavigate = {})
-            }
-        }
-
-        composeRule.mainClock.advanceTimeBy(2_000L)
-
-        composeRule
-            .onNodeWithText(context.getString(R.string.home_tools_scroll_hint))
-            .assertIsDisplayed()
-    }
-
-    @Test
     fun moreSheet_containsEveryHomeToolAsMergedClickableButton() {
         val navigated = mutableListOf<String>()
         composeRule.setContent {
@@ -132,7 +117,7 @@ class NavigationAccessibilityTest {
     fun moreSheet_pinAndUnpinButtonsAreIndependentFromToolNavigation() {
         val toggledRoutes = mutableListOf<String>()
         val navigatedRoutes = mutableListOf<String>()
-        val ping = NavRoutes.allTools.first { it.route == NavRoutes.Ping.baseRoute }
+        val ping = NavRoutes.allTools.first { it.route == NavRoutes.Ping.BASE_ROUTE }
 
         composeRule.setContent {
             NetSwissKnifeTheme {

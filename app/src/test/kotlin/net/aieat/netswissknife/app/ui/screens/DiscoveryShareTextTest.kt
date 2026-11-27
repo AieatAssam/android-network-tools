@@ -1,6 +1,8 @@
 package net.aieat.netswissknife.app.ui.screens
 
+import net.aieat.netswissknife.app.ui.screens.mdns.MdnsShareLabels
 import net.aieat.netswissknife.app.ui.screens.mdns.buildMdnsShareText
+import net.aieat.netswissknife.app.ui.screens.topology.TopologyReportLabels
 import net.aieat.netswissknife.app.ui.screens.topology.topologyReport
 import net.aieat.netswissknife.core.network.mdns.DiscoveredService
 import net.aieat.netswissknife.core.network.topology.TopologyGraph
@@ -23,7 +25,18 @@ class DiscoveryShareTextTest {
                 ipAddresses = listOf("192.168.1.2"),
                 txtRecords = mapOf("path" to "/status", "note" to "Office"),
             )
-        val report = buildMdnsShareText(listOf(service), false, false, true, null)
+        val labels =
+            MdnsShareLabels(
+                servicesCount = { count -> "mDNS services: $count" },
+                filter = { query -> "Filter: $query" },
+                stopping = "Stopping scan",
+                inProgress = "Scan in progress",
+                canceled = "canceled; partial results",
+                complete = "Scan complete",
+                addresses = { joined -> "Addresses: $joined" },
+                txt = { key, value -> "TXT $key=$value" },
+            )
+        val report = buildMdnsShareText(listOf(service), false, false, true, null, labels = labels)
         assertTrue(report.contains("canceled; partial results"))
         assertTrue(report.contains("TXT path=/status"))
         assertTrue(report.contains("TXT note=Office"))
@@ -44,19 +57,79 @@ class DiscoveryShareTextTest {
                 refreshStatus = WifiScanRefreshStatus.FAILED,
                 locationEnabled = false,
             )
-        val report = buildWifiShareText(result)
+        val report = buildWifiShareText(result, testWifiShareLabels())
         assertTrue(report.contains("cached or stale"))
         assertTrue(report.contains("30000 ms"))
-        assertTrue(report.contains("FAILED"))
+        assertTrue(report.contains("refresh FAILED"))
         assertTrue(report.contains("Wi-Fi is disabled"))
         assertTrue(report.contains("Location Services are disabled"))
     }
 
     @Test
+    fun `Wi-Fi export takes every label from the supplied resources`() {
+        val result =
+            WifiScanResult(
+                accessPoints = emptyList(),
+                channels = emptyList(),
+                connectedNetwork = null,
+                scanTimestampMs = 0L,
+                isWifiEnabled = true,
+                isFresh = true,
+                scanAgeMs = null,
+                refreshStatus = WifiScanRefreshStatus.UPDATED,
+                locationEnabled = true,
+            )
+        val report = buildWifiShareText(result, testWifiShareLabels())
+        assertTrue(report.contains("0 access points"))
+        assertTrue(report.contains("fresh"))
+        assertTrue(report.contains("unknown"))
+        assertFalse(report.contains("Wi-Fi is disabled"))
+        assertFalse(report.contains("Location Services are disabled"))
+    }
+
+    private fun testWifiShareLabels() =
+        WifiShareLabels(
+            accessPoints = { count -> "$count access points" },
+            freshness = { fresh -> if (fresh) "fresh" else "cached or stale" },
+            sampleAge = { ageMs -> ageMs?.let { "$it ms" } ?: "unknown" },
+            refreshStatus = { status -> "refresh ${status.name}" },
+            sampleTime = { time -> "time $time" },
+            wifiDisabled = "Wi-Fi is disabled",
+            locationDisabled = "Location Services are disabled",
+            rssi = { rssi -> "$rssi dBm" },
+            bandChannel = { band, channel -> "${band.name} channel $channel" },
+        )
+
+    @Test
     fun `partial topology export does not invent query time`() {
         val graph = TopologyGraph(nodes = emptyList(), links = emptyList(), seedIp = "192.168.1.1", queriedAt = 0L)
-        val report = topologyReport(graph, "Discovery canceled; partial results.")
+        val report = topologyReport(graph, "Discovery canceled; partial results.", englishTopologyLabels)
         assertTrue(report.contains("Discovery canceled; partial results."))
         assertFalse(report.contains("Queried:"))
     }
+
+    @Test
+    fun `topology export renders labels from the supplied templates`() {
+        val graph = TopologyGraph(nodes = emptyList(), links = emptyList(), seedIp = "192.168.1.1", queriedAt = 0L)
+        val labels = englishTopologyLabels.copy(title = "Topologie réseau · %1\$s")
+        val report = topologyReport(graph, null, labels)
+        assertTrue(report.startsWith("Topologie réseau · 192.168.1.1"))
+        assertTrue(report.contains("Nodes: 0 · Links: 0"))
+    }
+
+    private val englishTopologyLabels =
+        TopologyReportLabels(
+            title = "Network topology · %1\$s",
+            queried = "Queried: %1\$s",
+            counts = "Nodes: %1\$d · Links: %2\$d",
+            truncated = "Truncated: %1\$s",
+            snmpErrors = "Some SNMP tables returned errors.",
+            vendor = "Vendor: %1\$s",
+            model = "Model: %1\$s",
+            snmp = "SNMP: %1\$s",
+            reachable = "reachable",
+            unavailable = "unavailable",
+            interfaceLine = "Interface %1\$s: %2\$s",
+            vlanLine = "VLAN %1\$s: %2\$s",
+        )
 }

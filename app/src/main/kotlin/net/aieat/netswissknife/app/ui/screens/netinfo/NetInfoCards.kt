@@ -7,7 +7,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import net.aieat.netswissknife.app.R
@@ -111,6 +116,9 @@ internal fun NetInfoWifiCard(
     }
 }
 
+/** Addresses shown before the rest are folded behind a toggle, so the gateway and DNS rows stay reachable. */
+private const val NET_INFO_VISIBLE_ADDRESSES = 3
+
 /** Interface addresses with scope and prefix, then gateway, DNS, MTU, MAC, domains and proxy. */
 @Composable
 @Suppress("FunctionNaming", "ktlint:standard:function-naming")
@@ -118,12 +126,15 @@ internal fun NetInfoIpCard(
     local: NetInfoSnapshot,
     onCopy: (String) -> Unit,
 ) {
+    var showAllAddresses by rememberSaveable { mutableStateOf(false) }
+    val addresses = local.addresses
+    val shownAddresses = if (showAllAddresses) addresses else addresses.take(NET_INFO_VISIBLE_ADDRESSES)
     NetInfoSectionCard(title = stringResource(R.string.netinfo_section_ip)) {
         NetInfoFactRow(
             label = stringResource(R.string.netinfo_interface),
             value = local.interfaceName ?: stringResource(R.string.netinfo_not_available),
         )
-        local.addresses.forEach { address ->
+        shownAddresses.forEach { address ->
             NetInfoValueRow(
                 label = addressLabel(address),
                 value = address.address,
@@ -131,16 +142,27 @@ internal fun NetInfoIpCard(
                 detail = addressDetail(address),
             )
         }
+        if (addresses.size > NET_INFO_VISIBLE_ADDRESSES) {
+            TextButton(onClick = { showAllAddresses = !showAllAddresses }) {
+                Text(
+                    if (showAllAddresses) {
+                        stringResource(R.string.netinfo_show_fewer_addresses)
+                    } else {
+                        stringResource(R.string.netinfo_show_all_addresses, addresses.size)
+                    },
+                )
+            }
+        }
         local.gateways.forEach { gateway ->
             NetInfoValueRow(
-                label = stringResource(R.string.netinfo_gateway),
+                label = familyLabel(gateway, R.string.netinfo_gateway),
                 value = gateway,
                 onCopy = onCopy,
             )
         }
         local.dnsServers.forEach { dns ->
             NetInfoValueRow(
-                label = stringResource(R.string.netinfo_dns),
+                label = familyLabel(dns, R.string.netinfo_dns),
                 value = dns,
                 onCopy = onCopy,
             )

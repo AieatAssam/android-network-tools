@@ -79,6 +79,7 @@ fun NetInfoScreen(viewModel: NetInfoViewModel = hiltViewModel()) {
     val copy = rememberNetInfoCopy()
     val context = LocalContext.current
     val shareSubject = stringResource(R.string.netinfo_share_subject)
+    val refreshed = stringResource(R.string.netinfo_refreshed)
 
     AnimatedVisibility(
         visible = visible,
@@ -95,7 +96,10 @@ fun NetInfoScreen(viewModel: NetInfoViewModel = hiltViewModel()) {
             NetInfoContent(
                 uiState = uiState,
                 onCheck = viewModel::checkPublicIp,
-                onRefresh = viewModel::refresh,
+                onRefresh = {
+                    viewModel.refresh()
+                    Toast.makeText(context, refreshed, Toast.LENGTH_SHORT).show()
+                },
                 onCopy = copy,
                 summaryText = summary,
                 onShare = { context.shareText(summary, shareSubject) },

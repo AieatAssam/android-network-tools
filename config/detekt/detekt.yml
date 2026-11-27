@@ -3,3 +3,10 @@
 config:
   validation: true
   warningsAsErrors: false
+
+# Compose requires PascalCase names for @Composable functions that emit UI, so
+# the function naming rule does not apply to them.
+naming:
+  FunctionNaming:
+    ignoreAnnotated:
+      - 'Composable'

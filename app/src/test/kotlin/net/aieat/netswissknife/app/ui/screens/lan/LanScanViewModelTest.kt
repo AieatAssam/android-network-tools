@@ -47,6 +47,7 @@ import net.aieat.netswissknife.core.network.operation.OperationSession
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -62,9 +63,9 @@ class LanScanViewModelTest {
         val oneWave = LanScanTimeBudget.estimate(targetCount = 50, timeoutMs = 1_000, concurrency = 50)
         val slower = LanScanTimeBudget.estimate(targetCount = 50, timeoutMs = 2_000, concurrency = 50)
 
-        // 1s ICMP + 10 x 400ms TCP + 2 x 300ms name + 1s reverse DNS + 16 x 500ms ports.
-        assertEquals(19_250L, oneWave.timeoutMillis)
-        assertEquals(37_500L, twoWaves.timeoutMillis)
+        // 2 x 1s ICMP + 10 x 400ms TCP + 2 x 300ms name + 1s reverse DNS + 16 x 500ms ports.
+        assertEquals(20_500L, oneWave.timeoutMillis)
+        assertEquals(40_000L, twoWaves.timeoutMillis)
         assertTrue(slower.timeoutMillis > oneWave.timeoutMillis)
         assertTrue(
             LanScanTimeBudget.estimate(65_534, 1_000, 1).exceedsHardCeiling,
@@ -188,13 +189,12 @@ class LanScanViewModelTest {
         }
 
     @Test
-    fun `HTTP handoff prefers a discovered conventional port and falls back to port 80`() {
+    fun `HTTP handoff prefers a discovered conventional web port and offers nothing when none is open`() {
         assertEquals(80, preferredHttpProbePort(listOf(443, 8080, 80)))
         assertEquals(8080, preferredHttpProbePort(listOf(443, 8080)))
-        assertEquals(8000, preferredHttpProbePort(listOf(8888, 8000)))
-        assertEquals(8888, preferredHttpProbePort(listOf(8888)))
-        assertEquals(80, preferredHttpProbePort(listOf(443, 8443)))
-        assertEquals(80, preferredHttpProbePort(emptyList()))
+        assertNull(preferredHttpProbePort(listOf(8888, 8000)))
+        assertNull(preferredHttpProbePort(listOf(443, 8443)))
+        assertNull(preferredHttpProbePort(emptyList()))
     }
 
     @Test

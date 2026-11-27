@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -38,7 +39,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +48,7 @@ import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TooltipAnchorPosition
@@ -100,11 +101,12 @@ import net.aieat.netswissknife.core.network.subnet.SubnetInfo
 fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val inputErrorText = uiState.inputError?.let { ErrorTextMapper.map(it.info, it.message).asString() }
-    val announcementPhase = when {
-        uiState.error != null -> ToolAnnouncementPhase.ERROR
-        uiState.result != null -> ToolAnnouncementPhase.FINISHED
-        else -> null
-    }
+    val announcementPhase =
+        when {
+            uiState.error != null -> ToolAnnouncementPhase.ERROR
+            uiState.result != null -> ToolAnnouncementPhase.FINISHED
+            else -> null
+        }
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -112,14 +114,15 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 }
+        enter = fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 4 },
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // ── Hero header ─────────────────────────────────────────────────────
             Box {
@@ -138,14 +141,14 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
                     // Mode toggle
                     SubnetModeToggle(
                         isRangeMode = uiState.isRangeMode,
-                        onToggle = viewModel::toggleMode
+                        onToggle = viewModel::toggleMode,
                     )
 
                     // Animated switch between input modes
                     AnimatedContent(
                         targetState = uiState.isRangeMode,
                         transitionSpec = { fadeIn(AppMotion.enter(200)) togetherWith fadeOut(AppMotion.exit(150)) },
-                        label = "input-mode"
+                        label = "input-mode",
                     ) { rangeMode ->
                         if (rangeMode) {
                             SubnetRangeInputs(
@@ -153,8 +156,15 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
                                 maxIp = uiState.maxIpInput,
                                 onMinIpChange = viewModel::onMinIpChange,
                                 onMaxIpChange = viewModel::onMaxIpChange,
+                                rangeError =
+                                    uiState.rangeError?.let {
+                                        ErrorTextMapper.map(it.info, it.message).asString()
+                                    },
                                 onCalculate = viewModel::calculateRange,
-                                canCalculate = uiState.minIpInput.isNotBlank() && uiState.maxIpInput.isNotBlank()
+                                canCalculate =
+                                    uiState.minIpInput.isNotBlank() &&
+                                        uiState.maxIpInput.isNotBlank() &&
+                                        uiState.rangeError == null,
                             )
                         } else {
                             SubnetCidrInputs(
@@ -175,16 +185,24 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
                 targetState = Triple(uiState.result, uiState.error, uiState.isRangeMode),
                 transitionSpec = {
                     fadeIn(AppMotion.enter(300)) + slideInVertically(AppMotion.enter(300)) { it / 8 } togetherWith
-                            fadeOut(AppMotion.exit(200))
+                        fadeOut(AppMotion.exit(200))
                 },
-                label = "subnet-state"
+                label = "subnet-state",
             ) { (result, error, rangeMode) ->
                 when {
-                    result != null -> SubnetResultContent(result, uiState, viewModel)
-                    error != null  -> SubnetErrorCard(
-                        message = ErrorTextMapper.map(error.info, error.message).asString(),
-                    )
-                    else           -> SubnetIdleCard(isRangeMode = rangeMode)
+                    result != null -> {
+                        SubnetResultContent(result, uiState, viewModel)
+                    }
+
+                    error != null -> {
+                        SubnetErrorCard(
+                            message = ErrorTextMapper.map(error.info, error.message).asString(),
+                        )
+                    }
+
+                    else -> {
+                        SubnetIdleCard(isRangeMode = rangeMode)
+                    }
                 }
             }
         }
@@ -195,20 +213,21 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
             title = stringResource(R.string.help_subnet_title),
             conceptHeading = stringResource(R.string.help_subnet_concept_heading),
             conceptBody = stringResource(R.string.help_subnet_concept_body),
-            sections = listOf(
-                HelpSection(stringResource(R.string.help_subnet_what_heading), stringResource(R.string.help_subnet_what_body)),
-                HelpSection(
-                    heading = stringResource(R.string.help_subnet_params_heading),
-                    body = "",
-                    bullets = stringArrayResource(R.array.help_subnet_params_bullets).toList()
+            sections =
+                listOf(
+                    HelpSection(stringResource(R.string.help_subnet_what_heading), stringResource(R.string.help_subnet_what_body)),
+                    HelpSection(
+                        heading = stringResource(R.string.help_subnet_params_heading),
+                        body = "",
+                        bullets = stringArrayResource(R.array.help_subnet_params_bullets).toList(),
+                    ),
+                    HelpSection(
+                        heading = stringResource(R.string.help_subnet_results_heading),
+                        body = "",
+                        bullets = stringArrayResource(R.array.help_subnet_results_bullets).toList(),
+                    ),
                 ),
-                HelpSection(
-                    heading = stringResource(R.string.help_subnet_results_heading),
-                    body = "",
-                    bullets = stringArrayResource(R.array.help_subnet_results_bullets).toList()
-                )
-            ),
-            onDismiss = { showHelp = false }
+            onDismiss = { showHelp = false },
         )
     }
 }
@@ -217,19 +236,22 @@ fun SubnetCalculatorScreen(viewModel: SubnetCalculatorViewModel = hiltViewModel(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SubnetModeToggle(isRangeMode: Boolean, onToggle: () -> Unit) {
+private fun SubnetModeToggle(
+    isRangeMode: Boolean,
+    onToggle: () -> Unit,
+) {
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
         SegmentedButton(
             selected = !isRangeMode,
             onClick = { if (isRangeMode) onToggle() },
             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-            label = { Text(stringResource(R.string.subnet_mode_cidr)) }
+            label = { Text(stringResource(R.string.subnet_mode_cidr)) },
         )
         SegmentedButton(
             selected = isRangeMode,
             onClick = { if (!isRangeMode) onToggle() },
             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-            label = { Text(stringResource(R.string.subnet_mode_range)) }
+            label = { Text(stringResource(R.string.subnet_mode_range)) },
         )
     }
 }
@@ -243,7 +265,7 @@ private fun SubnetCidrInputs(
     onCalculate: () -> Unit,
     onExampleSelected: (String) -> Unit,
     inputError: String?,
-    canCalculate: Boolean
+    canCalculate: Boolean,
 ) {
     val dismissKeyboard = rememberDismissKeyboard()
     val submit: () -> Unit = {
@@ -269,7 +291,7 @@ private fun SubnetCidrInputs(
         Button(
             onClick = hapticAction(submit),
             modifier = Modifier.fillMaxWidth(),
-            enabled = canCalculate
+            enabled = canCalculate,
         ) {
             Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
@@ -288,8 +310,9 @@ private fun SubnetRangeInputs(
     maxIp: String,
     onMinIpChange: (String) -> Unit,
     onMaxIpChange: (String) -> Unit,
+    rangeError: String?,
     onCalculate: () -> Unit,
-    canCalculate: Boolean
+    canCalculate: Boolean,
 ) {
     val dismissKeyboard = rememberDismissKeyboard()
     val submit: () -> Unit = {
@@ -306,7 +329,7 @@ private fun SubnetRangeInputs(
             placeholder = { Text(stringResource(R.string.subnet_min_ip_placeholder)) },
             leadingIcon = { Icon(Icons.Default.Lan, contentDescription = null) },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next)
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
         )
 
         ToolTextField(
@@ -317,14 +340,16 @@ private fun SubnetRangeInputs(
             placeholder = { Text(stringResource(R.string.subnet_max_ip_placeholder)) },
             leadingIcon = { Icon(Icons.Default.Lan, contentDescription = null) },
             singleLine = true,
+            isError = rangeError != null,
+            supportingText = rangeError?.let { { Text(it) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { submit() })
+            keyboardActions = KeyboardActions(onDone = { submit() }),
         )
 
         Button(
             onClick = hapticAction(submit),
             modifier = Modifier.fillMaxWidth(),
-            enabled = canCalculate
+            enabled = canCalculate,
         ) {
             Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
@@ -341,13 +366,12 @@ private fun SubnetExampleChips(onExampleSelected: (String) -> Unit) {
     val examples = listOf("192.168.1.0/24", "10.0.0.0/8", "172.16.0.0/12", "192.168.1.1/30", "0.0.0.0/0")
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         examples.forEach { example ->
-            FilterChip(
-                selected = false,
+            SuggestionChip(
                 onClick = { onExampleSelected(example) },
-                label = { Text(example, style = MaterialTheme.typography.labelSmall) }
+                label = { Text(example, style = MaterialTheme.typography.labelSmall) },
             )
         }
     }
@@ -359,32 +383,35 @@ private fun SubnetExampleChips(onExampleSelected: (String) -> Unit) {
 private fun SubnetIdleCard(isRangeMode: Boolean) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(32.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Icon(
                 Icons.Default.Calculate,
                 contentDescription = null,
                 modifier = Modifier.size(56.dp),
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.primary,
             )
             Text(
-                text = stringResource(
-                    if (isRangeMode) R.string.subnet_range_idle_title else R.string.subnet_idle_title
-                ),
+                text =
+                    stringResource(
+                        if (isRangeMode) R.string.subnet_range_idle_title else R.string.subnet_idle_title,
+                    ),
                 style = MaterialTheme.typography.titleMedium,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
             Text(
-                text = stringResource(
-                    if (isRangeMode) R.string.subnet_range_idle_body else R.string.subnet_idle_body
-                ),
+                text =
+                    stringResource(
+                        if (isRangeMode) R.string.subnet_range_idle_body else R.string.subnet_idle_body,
+                    ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
         }
     }
@@ -396,31 +423,32 @@ private fun SubnetIdleCard(isRangeMode: Boolean) {
 private fun SubnetErrorCard(message: String) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
-        )
+        colors =
+            CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+            ),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon(
                 Icons.Default.Warning,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(32.dp),
             )
             Text(
                 text = stringResource(R.string.subnet_error_title),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onErrorContainer
+                color = MaterialTheme.colorScheme.onErrorContainer,
             )
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onErrorContainer,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
         }
     }
@@ -468,37 +496,39 @@ private fun SubnetResultContent(
 private fun SubnetAlignmentWarning(info: SubnetInfo) {
     OutlinedCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.outlinedCardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
-        )
+        colors =
+            CardDefaults.outlinedCardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+            ),
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top
+            verticalAlignment = Alignment.Top,
         ) {
             Icon(
                 Icons.Default.Warning,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(20.dp),
             )
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = stringResource(R.string.subnet_alignment_warning_title),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onErrorContainer,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = stringResource(
-                        R.string.subnet_alignment_warning_body,
-                        info.inputIp,
-                        info.prefixLength,
-                        info.networkAddress
-                    ),
+                    text =
+                        stringResource(
+                            R.string.subnet_alignment_warning_body,
+                            info.inputIp,
+                            info.prefixLength,
+                            info.networkAddress,
+                        ),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer
+                    color = MaterialTheme.colorScheme.onErrorContainer,
                 )
             }
         }
@@ -513,17 +543,17 @@ private fun SubnetOverviewCard(info: SubnetInfo) {
         Column {
             // Gradient header
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.linearGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.primaryContainer,
-                                MaterialTheme.colorScheme.tertiaryContainer
-                            )
-                        )
-                    )
-                    .padding(16.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    MaterialTheme.colorScheme.tertiaryContainer,
+                                ),
+                            ),
+                        ).padding(16.dp),
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
@@ -531,16 +561,17 @@ private fun SubnetOverviewCard(info: SubnetInfo) {
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = FontFamily.Monospace,
                     )
                     Text(
-                        text = pluralStringResource(
-                            R.plurals.subnet_overview_hosts,
-                            subnetPluralQuantity(info.usableHosts),
-                            formatSubnetCount(info.usableHosts)
-                        ),
+                        text =
+                            pluralStringResource(
+                                R.plurals.subnet_overview_hosts,
+                                subnetPluralQuantity(info.usableHosts),
+                                formatSubnetCount(info.usableHosts),
+                            ),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
             }
@@ -551,26 +582,30 @@ private fun SubnetOverviewCard(info: SubnetInfo) {
                 SubnetInfoRow(
                     label = stringResource(R.string.subnet_network_address),
                     value = info.networkAddress,
-                    tooltip = stringResource(R.string.tooltip_network_address)
+                    tooltip = stringResource(R.string.tooltip_network_address),
                 )
-                SubnetInfoRow(
-                    label = stringResource(R.string.subnet_broadcast),
-                    value = info.broadcastAddress,
-                    tooltip = stringResource(R.string.tooltip_broadcast)
-                )
-                SubnetInfoRow(
-                    label = stringResource(R.string.subnet_first_host),
-                    value = info.firstHost,
-                    tooltip = stringResource(R.string.tooltip_first_host)
-                )
-                SubnetInfoRow(
-                    label = stringResource(R.string.subnet_last_host),
-                    value = info.lastHost,
-                    tooltip = stringResource(R.string.tooltip_last_host)
-                )
+                if (showsBroadcastRow(info.prefixLength)) {
+                    SubnetInfoRow(
+                        label = stringResource(R.string.subnet_broadcast),
+                        value = info.broadcastAddress,
+                        tooltip = stringResource(R.string.tooltip_broadcast),
+                    )
+                }
+                if (showsHostRange(info.prefixLength)) {
+                    SubnetInfoRow(
+                        label = stringResource(R.string.subnet_first_host),
+                        value = info.firstHost,
+                        tooltip = stringResource(R.string.tooltip_first_host),
+                    )
+                    SubnetInfoRow(
+                        label = stringResource(R.string.subnet_last_host),
+                        value = info.lastHost,
+                        tooltip = stringResource(R.string.tooltip_last_host),
+                    )
+                }
                 SubnetInfoRow(
                     label = stringResource(R.string.subnet_total_hosts),
-                    value = formatSubnetCount(info.totalHosts)
+                    value = formatSubnetCount(info.totalHosts),
                 )
             }
         }
@@ -588,11 +623,11 @@ private fun SubnetBinaryVisualizerCard(info: SubnetInfo) {
                     Icons.Default.Info,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.primary,
                 )
                 Text(
                     text = stringResource(R.string.subnet_binary_breakdown),
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
                 )
             }
 
@@ -600,11 +635,11 @@ private fun SubnetBinaryVisualizerCard(info: SubnetInfo) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 LegendItem(
                     color = MaterialTheme.colorScheme.primary,
-                    label = pluralStringResource(R.plurals.subnet_network_bits, info.prefixLength, info.prefixLength)
+                    label = pluralStringResource(R.plurals.subnet_network_bits, info.prefixLength, info.prefixLength),
                 )
                 LegendItem(
                     color = MaterialTheme.colorScheme.tertiary,
-                    label = pluralStringResource(R.plurals.subnet_host_bits, info.hostBits, info.hostBits)
+                    label = pluralStringResource(R.plurals.subnet_host_bits, info.hostBits, info.hostBits),
                 )
             }
 
@@ -612,21 +647,21 @@ private fun SubnetBinaryVisualizerCard(info: SubnetInfo) {
             BinaryBitsRow(
                 label = stringResource(R.string.subnet_binary_ip),
                 binaryDotted = info.binaryIpAddress,
-                prefixLength = info.prefixLength
+                prefixLength = info.prefixLength,
             )
 
             // Subnet mask binary row
             BinaryBitsRow(
                 label = stringResource(R.string.subnet_binary_mask),
                 binaryDotted = info.binaryMask,
-                prefixLength = info.prefixLength
+                prefixLength = info.prefixLength,
             )
 
             // Network address binary row
             BinaryBitsRow(
                 label = stringResource(R.string.subnet_binary_network),
                 binaryDotted = info.binaryNetworkAddress,
-                prefixLength = info.prefixLength
+                prefixLength = info.prefixLength,
             )
         }
     }
@@ -645,20 +680,28 @@ private fun binaryRowDescription(
 }
 
 @Composable
-private fun LegendItem(color: androidx.compose.ui.graphics.Color, label: String) {
+private fun LegendItem(
+    color: androidx.compose.ui.graphics.Color,
+    label: String,
+) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Box(
-            modifier = Modifier
-                .size(12.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(color)
+            modifier =
+                Modifier
+                    .size(12.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(color),
         )
         Text(text = label, style = MaterialTheme.typography.labelSmall)
     }
 }
 
 @Composable
-private fun BinaryBitsRow(label: String, binaryDotted: String, prefixLength: Int) {
+private fun BinaryBitsRow(
+    label: String,
+    binaryDotted: String,
+    prefixLength: Int,
+) {
     // Strip dots to get a flat 32-bit string, then re-add octet grouping with colors
     val bits = binaryDotted.replace(".", "")
     val resources = LocalContext.current.resources
@@ -666,12 +709,12 @@ private fun BinaryBitsRow(label: String, binaryDotted: String, prefixLength: Int
 
     Column(
         modifier = Modifier.clearAndSetSemantics { contentDescription = description },
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         BinaryBitCells(bits = bits, prefixLength = prefixLength)
     }
@@ -680,56 +723,85 @@ private fun BinaryBitsRow(label: String, binaryDotted: String, prefixLength: Int
 @Suppress("FunctionNaming", "ktlint:standard:function-naming") // Compose naming convention.
 @Composable
 private fun BinaryBitCells(bits: String, prefixLength: Int) {
+    val octets = bits.chunked(8)
+    // Four octets in one row need about 75 dp per octet, which is too tight on phones. Below the
+    // breakpoint the octets wrap to two rows of two, so each bit cell keeps a usable width.
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val octetsPerRow = if (maxWidth < BINARY_SINGLE_ROW_MIN_WIDTH) 2 else 4
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            octets.chunked(octetsPerRow).forEachIndexed { rowIdx, rowOctets ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    rowOctets.forEachIndexed { col, octet ->
+                        val octetIdx = rowIdx * octetsPerRow + col
+                        BinaryOctetCells(
+                            octet = octet,
+                            octetStart = octetIdx * 8,
+                            prefixLength = prefixLength,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (octetIdx < 3 && col < rowOctets.lastIndex) {
+                            Text(
+                                text = ".",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.align(Alignment.CenterVertically),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BinaryOctetCells(
+    octet: String,
+    octetStart: Int,
+    prefixLength: Int,
+    modifier: Modifier = Modifier,
+) {
     val networkColor = MaterialTheme.colorScheme.primary
     val hostColor = MaterialTheme.colorScheme.tertiary
     val networkBg = MaterialTheme.colorScheme.primaryContainer
     val hostBg = MaterialTheme.colorScheme.tertiaryContainer
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(3.dp)
-    ) {
-        bits.chunked(8).forEachIndexed { octetIdx, octet ->
-            val octetStart = octetIdx * 8
-            Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                octet.forEachIndexed { bitIdx, bit ->
-                    val absoluteBit = octetStart + bitIdx
-                    val isNetwork = absoluteBit < prefixLength
-                    val bg = if (isNetwork) networkBg else hostBg
-                    val fg = if (isNetwork) networkColor else hostColor
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(24.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(bg)
-                            .border(
-                                width = if (absoluteBit == prefixLength - 1 || absoluteBit == prefixLength) 1.dp else 0.dp,
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                                shape = RoundedCornerShape(2.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = bit.toString(),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = if (isNetwork) FontWeight.Bold else FontWeight.Normal
-                            ),
-                            color = fg
-                        )
-                    }
-                }
-            }
-            if (octetIdx < 3) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+        octet.forEachIndexed { bitIdx, bit ->
+            val absoluteBit = octetStart + bitIdx
+            val isNetwork = absoluteBit < prefixLength
+            val bg = if (isNetwork) networkBg else hostBg
+            val fg = if (isNetwork) networkColor else hostColor
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .height(24.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(bg)
+                        .border(
+                            width = if (absoluteBit == prefixLength - 1 || absoluteBit == prefixLength) 1.dp else 0.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(2.dp),
+                        ),
+                contentAlignment = Alignment.Center,
+            ) {
                 Text(
-                    text = ".",
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.align(Alignment.CenterVertically)
+                    text = bit.toString(),
+                    style =
+                        MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = if (isNetwork) FontWeight.Bold else FontWeight.Normal,
+                        ),
+                    color = fg,
                 )
             }
         }
     }
 }
+
+private val BINARY_SINGLE_ROW_MIN_WIDTH = 600.dp
 
 // ── Notations card ────────────────────────────────────────────────────────────
 
@@ -739,24 +811,24 @@ private fun SubnetNotationsCard(info: SubnetInfo) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
                 text = stringResource(R.string.subnet_notations_title),
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium,
             )
             HorizontalDivider()
             SubnetInfoRow(
                 label = stringResource(R.string.subnet_notation_mask),
                 value = info.subnetMask,
-                monospace = true
+                monospace = true,
             )
             SubnetInfoRow(
                 label = stringResource(R.string.subnet_notation_wildcard),
                 value = info.wildcardMask,
                 monospace = true,
-                tooltip = stringResource(R.string.tooltip_wildcard)
+                tooltip = stringResource(R.string.tooltip_wildcard),
             )
             SubnetInfoRow(
                 label = stringResource(R.string.subnet_notation_hex),
                 value = info.hexMask,
-                monospace = true
+                monospace = true,
             )
         }
     }
@@ -777,18 +849,18 @@ private fun SubnetPropertiesCard(info: SubnetInfo) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
                 text = stringResource(R.string.subnet_properties_title),
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium,
             )
             HorizontalDivider()
 
             // IP Class badge
             SubnetInfoRow(
                 label = stringResource(R.string.subnet_ip_class),
-                tooltip = stringResource(R.string.tooltip_ip_class)
+                tooltip = stringResource(R.string.tooltip_ip_class),
             ) {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
+                    color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     Text(
                         text = stringResource(R.string.subnet_class_label, info.ipClass),
@@ -796,7 +868,7 @@ private fun SubnetPropertiesCard(info: SubnetInfo) {
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.End
+                        textAlign = TextAlign.End,
                     )
                 }
             }
@@ -804,7 +876,7 @@ private fun SubnetPropertiesCard(info: SubnetInfo) {
             // Scope of the whole subnet (private, shared, public, mixed, ...)
             SubnetInfoRow(
                 label = stringResource(R.string.subnet_scope),
-                tooltip = stringResource(R.string.tooltip_scope)
+                tooltip = stringResource(R.string.tooltip_scope),
             ) {
                 val isPublic = info.scope == Ipv4Scope.PUBLIC
                 val scopeIcon = scopeIconFor(info.scope)
@@ -824,19 +896,19 @@ private fun SubnetPropertiesCard(info: SubnetInfo) {
                     Row(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Icon(
                             scopeIcon,
                             contentDescription = null,
                             modifier = Modifier.size(14.dp),
-                            tint = scopeColor
+                            tint = scopeColor,
                         )
                         Text(
                             text = stringResource(info.scope.labelRes()),
                             style = MaterialTheme.typography.labelLarge,
                             color = scopeColor,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
                         )
                     }
                 }
@@ -856,22 +928,22 @@ private fun SubnetPropertiesCard(info: SubnetInfo) {
 private fun SubnetInfoRow(
     label: String,
     tooltip: String? = null,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             modifier = Modifier.weight(0.5f),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (tooltip != null) {
                 val tooltipState = rememberTooltipState(isPersistent = true)
@@ -882,21 +954,21 @@ private fun SubnetInfoRow(
                         PlainTooltip {
                             Text(
                                 text = tooltip,
-                                style = MaterialTheme.typography.bodySmall
+                                style = MaterialTheme.typography.bodySmall,
                             )
                         }
                     },
-                    state = tooltipState
+                    state = tooltipState,
                 ) {
                     IconButton(
                         onClick = { tooltipScope.launch { tooltipState.show() } },
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(48.dp),
                     ) {
                         Icon(
                             Icons.Default.Info,
                             contentDescription = stringResource(R.string.subnet_explain_field, label),
                             modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = MaterialTheme.colorScheme.primary,
                         )
                     }
                 }
@@ -914,17 +986,19 @@ private fun SubnetInfoRow(
     label: String,
     value: String,
     monospace: Boolean = false,
-    tooltip: String? = null
+    tooltip: String? = null,
 ) {
     SubnetInfoRow(label = label, tooltip = tooltip) {
         Text(
             text = value,
-            style = if (monospace)
-                MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace)
-            else
-                MaterialTheme.typography.bodyMedium,
+            style =
+                if (monospace) {
+                    MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace)
+                } else {
+                    MaterialTheme.typography.bodyMedium
+                },
             textAlign = TextAlign.End,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
         )
     }
 }

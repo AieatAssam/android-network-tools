@@ -65,19 +65,19 @@ class SettingsViewModel @Inject constructor(
 
     fun setDefaultPingCount(value: Int) {
         viewModelScope.launch {
-            dataStore.edit { it[AppPreferenceKeys.DEFAULT_PING_COUNT] = value.coerceIn(1, 100) }
+            dataStore.edit { it[AppPreferenceKeys.DEFAULT_PING_COUNT] = SettingSteps.PING_COUNT.nearest(value) }
         }
     }
 
     fun setDefaultTimeoutMs(value: Int) {
         viewModelScope.launch {
-            dataStore.edit { it[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] = value.coerceIn(100, 30_000) }
+            dataStore.edit { it[AppPreferenceKeys.DEFAULT_TIMEOUT_MS] = SettingSteps.TIMEOUT_MS.nearest(value) }
         }
     }
 
     fun setDefaultConcurrency(value: Int) {
         viewModelScope.launch {
-            dataStore.edit { it[AppPreferenceKeys.DEFAULT_CONCURRENCY] = value.coerceIn(1, 500) }
+            dataStore.edit { it[AppPreferenceKeys.DEFAULT_CONCURRENCY] = SettingSteps.CONCURRENCY.nearest(value) }
         }
     }
 

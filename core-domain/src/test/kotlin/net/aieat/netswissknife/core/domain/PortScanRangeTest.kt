@@ -35,21 +35,4 @@ class PortScanRangeTest {
         assertEquals(PortScanRange.Problem.PORT_OUT_OF_RANGE, PortScanRange.problemOf(0, 80))
         assertEquals(PortScanRange.Problem.PORT_OUT_OF_RANGE, PortScanRange.problemOf(1, 65_536))
     }
-
-    @Test
-    fun `slider moving the end thumb past the cap stops at the cap`() {
-        // Start stays at 1 and the end thumb is dragged to 26 825.
-        assertEquals(1 to 10_000, PortScanRange.clampSliderChange(1, 1, 26_825))
-    }
-
-    @Test
-    fun `slider moving the start thumb far below the end stops at the cap`() {
-        // End stays at 20 000 and the start thumb is dragged down to 1.
-        assertEquals(10_001 to 20_000, PortScanRange.clampSliderChange(15_000, 1, 20_000))
-    }
-
-    @Test
-    fun `slider change inside the cap is passed through unchanged`() {
-        assertEquals(100 to 900, PortScanRange.clampSliderChange(1, 100, 900))
-    }
 }

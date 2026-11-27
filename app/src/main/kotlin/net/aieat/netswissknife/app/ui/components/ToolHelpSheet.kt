@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.dp
 data class HelpSection(
     val heading: String,
     val body: String,
-    val bullets: List<String> = emptyList()
+    val bullets: List<String> = emptyList(),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,7 +49,7 @@ fun ToolHelpSheet(
      *  before the regular sections. Omit for sheets with nothing to explain from
      *  scratch (both [conceptHeading] and [conceptBody] must be non-null to show). */
     conceptHeading: String? = null,
-    conceptBody: String? = null
+    conceptBody: String? = null,
 ) {
     // Skip the partially-expanded intermediate state: with it, the sheet can open tall
     // enough to cover only the concept callout, leaving the rest of the content (and on
@@ -59,23 +59,18 @@ fun ToolHelpSheet(
 
     AppModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 40.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 40.dp),
         ) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = "How to use",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(Modifier.height(16.dp))
             HorizontalDivider()
@@ -91,14 +86,14 @@ fun ToolHelpSheet(
                     text = section.heading,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.height(4.dp))
                 if (section.body.isNotBlank()) {
                     Text(
                         text = section.body,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 if (section.bullets.isNotEmpty()) {
@@ -116,13 +111,17 @@ fun ToolHelpSheet(
 }
 
 @Composable
-private fun ConceptCallout(heading: String, body: String) {
+private fun ConceptCallout(
+    heading: String,
+    body: String,
+) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+        colors =
+            CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+            ),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -130,21 +129,21 @@ private fun ConceptCallout(heading: String, body: String) {
                     imageVector = Icons.Default.Lightbulb,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.height(20.dp)
+                    modifier = Modifier.height(20.dp),
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = heading,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
             Spacer(Modifier.height(6.dp))
             Text(
                 text = body,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
         }
     }
@@ -157,12 +156,12 @@ private fun BulletLine(text: String) {
             text = "•",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.width(16.dp)
+            modifier = Modifier.width(16.dp),
         )
         Text(
             text = text,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

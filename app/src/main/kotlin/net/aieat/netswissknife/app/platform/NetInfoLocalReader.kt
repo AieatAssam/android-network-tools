@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import net.aieat.netswissknife.core.network.netinfo.InterfaceAddressFlags
 import net.aieat.netswissknife.core.network.netinfo.IpAddressClassifier
 import net.aieat.netswissknife.core.network.netinfo.LinkValueSentinels
 import net.aieat.netswissknife.core.network.netinfo.LocalAddress
@@ -31,6 +32,7 @@ import net.aieat.netswissknife.core.network.netinfo.NetworkTransport
 import net.aieat.netswissknife.core.network.netinfo.ProxySettings
 import net.aieat.netswissknife.core.network.netinfo.WifiLinkDetails
 import net.aieat.netswissknife.core.network.netinfo.WifiSsidPolicy
+import net.aieat.netswissknife.core.network.netinfo.preferredFirst
 import java.net.NetworkInterface
 
 /** Reads the device's active network. Implementations never throw; unreadable fields are null. */
@@ -106,7 +108,12 @@ class AndroidNetInfoReader(
             roaming = !capabilities.hasCapability(NET_CAPABILITY_NOT_ROAMING),
             wifi = if (transports.contains(NetworkTransport.WIFI)) wifiReader.read(capabilities) else null,
             interfaceName = interfaceName,
-            addresses = properties?.linkAddresses.orEmpty().mapNotNull(::localAddressOf),
+            addresses =
+                properties
+                    ?.linkAddresses
+                    .orEmpty()
+                    .mapNotNull(::localAddressOf)
+                    .preferredFirst(),
             gateways = gatewaysOf(properties),
             dnsServers = properties?.dnsServers.orEmpty().mapNotNull { it.hostAddress?.substringBefore('%') },
             mtuBytes = mtuOf(properties, interfaceName),
@@ -139,7 +146,7 @@ class AndroidNetInfoReader(
         val family = display?.let(IpAddressClassifier::familyOf)
         val scope = display?.let(IpAddressClassifier::scopeOf)
         return if (display != null && family != null && scope != null) {
-            LocalAddress(display, family, link.prefixLength, scope)
+            LocalAddress(display, family, link.prefixLength, scope, InterfaceAddressFlags.isDeprecated(link.flags))
         } else {
             null
         }

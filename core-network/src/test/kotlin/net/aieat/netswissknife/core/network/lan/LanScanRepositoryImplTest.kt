@@ -126,7 +126,7 @@ class LanScanRepositoryImplTest {
         val summary = updates.filterIsInstance<LanScanUpdate.ScanComplete>().single().summary
 
         assertEquals(6, summary.totalScanned)
-        assertEquals(6, startedProbes.get())
+        assertEquals(2 * 6, startedProbes.get()) // a first and a second echo per silent address
         assertEquals(sessionLimit, maximumActiveProbes.get())
     }
 
@@ -164,7 +164,7 @@ class LanScanRepositoryImplTest {
                     arpTableReader = emptyArpReader,
                     icmpProbe =
                         IcmpProbe { ip, _ ->
-                            probedIps += ip
+                            if (ip in probedIps) return@IcmpProbe null else probedIps += ip // second echo: no new host
                             val starts = icmpStarts.incrementAndGet()
                             if (starts <= finiteProbeBound) {
                                 resultPathFilled.countDown()

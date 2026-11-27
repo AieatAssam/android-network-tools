@@ -142,6 +142,8 @@ data class LocalAddress(
     val family: IpFamily,
     val prefixLength: Int,
     val scope: IpAddressScope,
+    /** The kernel keeps the address for existing connections but no longer picks it for new ones. */
+    val deprecated: Boolean = false,
 ) {
     /** Dotted mask for IPv4 only. IPv6 is described by its prefix length. */
     val subnetMask: String?

@@ -7,4 +7,6 @@ data class LanScanRequest(
     val gatewayIp: String? = null,
     val presencePorts: List<Int> = DEFAULT_PRESENCE_PORTS,
     val enableNameProbes: Boolean = true,
+    /** This device's own address, marked on its host row when the scan finds it. */
+    val localIp: String? = null,
 )

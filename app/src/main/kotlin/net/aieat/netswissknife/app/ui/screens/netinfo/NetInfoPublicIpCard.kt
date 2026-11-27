@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,6 +28,7 @@ import net.aieat.netswissknife.app.ui.theme.AppSpacing
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.netinfo.PublicAddressInfo
 import net.aieat.netswissknife.core.network.netinfo.PublicIpReport
+import net.aieat.netswissknife.core.network.netinfo.PublicNetworkDetails
 
 /** The public address is looked up only from [onCheck]. Nothing in this card starts a request by itself. */
 @Composable
@@ -58,7 +60,7 @@ private fun PublicIpIdle(onCheck: () -> Unit) {
         onClick = check,
         modifier = Modifier.fillMaxWidth().testTag(NetInfoPublicIpTestTags.CHECK),
     ) {
-        Icon(imageVector = Icons.Default.Refresh, contentDescription = null)
+        Icon(imageVector = Icons.Default.Language, contentDescription = null)
         Text(text = stringResource(R.string.netinfo_public_check))
     }
 }
@@ -102,18 +104,22 @@ private fun PublicIpResult(
         modifier = Modifier.fillMaxWidth().testTag(NetInfoPublicIpTestTags.RESULT),
         verticalArrangement = Arrangement.spacedBy(AppSpacing.s),
     ) {
+        val shared = PublicNetworkDetails.shared(report)
         PublicFamilyRows(
             label = stringResource(R.string.netinfo_public_ipv4),
             unavailable = stringResource(R.string.netinfo_public_ipv4_unavailable),
             result = report.ipv4,
+            showDetails = shared == null,
             onCopy = onCopy,
         )
         PublicFamilyRows(
             label = stringResource(R.string.netinfo_public_ipv6),
             unavailable = stringResource(R.string.netinfo_public_ipv6_unavailable),
             result = report.ipv6,
+            showDetails = shared == null,
             onCopy = onCopy,
         )
+        shared?.let { PublicDetailRows(it) }
     }
     OutlinedButton(
         onClick = hapticAction(onCheck),
@@ -129,21 +135,22 @@ private fun PublicFamilyRows(
     label: String,
     unavailable: String,
     result: NetworkResult<PublicAddressInfo>,
+    showDetails: Boolean,
     onCopy: (String) -> Unit,
 ) {
     when (result) {
         is NetworkResult.Success -> {
             val info = result.data
             NetInfoValueRow(label = label, value = info.address, onCopy = onCopy)
-            info.hostname?.let {
-                NetInfoFactRow(label = stringResource(R.string.netinfo_hostname), value = it)
-            }
-            locationText(info)?.let {
-                NetInfoFactRow(label = stringResource(R.string.netinfo_location), value = it)
-            }
-            info.geo?.asn?.let {
-                NetInfoFactRow(label = stringResource(R.string.netinfo_asn), value = it)
-            }
+            NetInfoFactRow(
+                label = stringResource(R.string.netinfo_hostname),
+                value =
+                    info.hostnameOr(
+                        noName = stringResource(R.string.netinfo_no_reverse_dns),
+                        lookupFailed = stringResource(R.string.netinfo_reverse_dns_failed),
+                    ),
+            )
+            if (showDetails) PublicDetailRows(PublicNetworkDetails.of(info))
         }
 
         is NetworkResult.Error -> {
@@ -152,9 +159,14 @@ private fun PublicFamilyRows(
     }
 }
 
-private fun locationText(info: PublicAddressInfo): String? {
-    val geo = info.geo ?: return null
-    return listOf(geo.city, geo.country).filter { it.isNotBlank() }.joinToString(", ").ifEmpty { null }
+@Composable
+private fun PublicDetailRows(details: PublicNetworkDetails) {
+    details.location?.let {
+        NetInfoFactRow(label = stringResource(R.string.netinfo_location), value = it)
+    }
+    details.asn?.let {
+        NetInfoFactRow(label = stringResource(R.string.netinfo_asn), value = it)
+    }
 }
 
 /** Refresh re-reads the network; Copy and Share work on the whole summary through the shared row. */

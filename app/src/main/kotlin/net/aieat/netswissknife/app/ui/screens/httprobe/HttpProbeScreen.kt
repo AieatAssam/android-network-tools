@@ -1,6 +1,5 @@
 package net.aieat.netswissknife.app.ui.screens.httprobe
 
-import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -19,8 +18,8 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -28,21 +27,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Http
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -55,9 +53,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.minimumInteractiveComponentSize
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Surface
@@ -65,10 +62,12 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -76,39 +75,46 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import android.content.ClipData
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.ClipEntry
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import net.aieat.netswissknife.app.ui.components.ResultActionsRow
-import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
-import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
-import net.aieat.netswissknife.app.ui.components.ToolRetryButton
-import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.components.HelpSection
 import net.aieat.netswissknife.app.ui.components.NetworkStatusBanner
 import net.aieat.netswissknife.app.ui.components.NetworkStatusScope
+import net.aieat.netswissknife.app.ui.components.RecentHostsRow
+import net.aieat.netswissknife.app.ui.components.ResultActionsRow
+import net.aieat.netswissknife.app.ui.components.ToolAnnouncementPhase
 import net.aieat.netswissknife.app.ui.components.ToolErrorCard
+import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
+import net.aieat.netswissknife.app.ui.components.ToolHeroHeader
+import net.aieat.netswissknife.app.ui.components.ToolRetryButton
+import net.aieat.netswissknife.app.ui.components.ToolStateAnnouncer
 import net.aieat.netswissknife.app.ui.components.ToolTextField
 import net.aieat.netswissknife.app.ui.components.hapticAction
+import net.aieat.netswissknife.app.ui.components.rememberCopyWithFeedback
+import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.ui.components.scrollEdgeFade
 import net.aieat.netswissknife.app.ui.components.scrollIntoViewOnFocus
 import net.aieat.netswissknife.app.ui.format.withSeparatorBreaks
-import net.aieat.netswissknife.app.ui.theme.AppMotion
-import net.aieat.netswissknife.app.R
+import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
+import net.aieat.netswissknife.app.ui.i18n.asString
+import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.theme.AccentBlueLight
 import net.aieat.netswissknife.app.ui.theme.AccentGreenLight
 import net.aieat.netswissknife.app.ui.theme.AccentGreyDeep
@@ -117,27 +123,21 @@ import net.aieat.netswissknife.app.ui.theme.AccentOrangeDeep
 import net.aieat.netswissknife.app.ui.theme.AccentOrangeLight
 import net.aieat.netswissknife.app.ui.theme.AccentRedDeep
 import net.aieat.netswissknife.app.ui.theme.AccentRedLight
+import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.StatusBlueDeep
 import net.aieat.netswissknife.app.ui.theme.StatusGoodDeep
 import net.aieat.netswissknife.app.ui.theme.StatusWarnDeep
-import net.aieat.netswissknife.app.ui.components.HelpSection
-import net.aieat.netswissknife.app.ui.components.RecentHostsRow
-import net.aieat.netswissknife.app.ui.components.ToolHelpSheet
-import net.aieat.netswissknife.app.ui.components.rememberDismissKeyboard
 import net.aieat.netswissknife.app.util.formatBytes
 import net.aieat.netswissknife.app.util.shareText
+import net.aieat.netswissknife.core.domain.validateHttpProbeUrlInfo
+import net.aieat.netswissknife.core.network.httprobe.CurlExporter
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
-import net.aieat.netswissknife.core.network.httprobe.CurlExporter
 import net.aieat.netswissknife.core.network.httprobe.JsonPrettyPrinter
 import net.aieat.netswissknife.core.network.httprobe.SecurityHeaderCheck
 import net.aieat.netswissknife.core.network.httprobe.SecurityRating
-import net.aieat.netswissknife.core.network.httprobe.engine.HttpTimings
 import net.aieat.netswissknife.core.network.httprobe.engine.HttpTimingBreakdown
-import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
-import net.aieat.netswissknife.app.ui.i18n.asString
-import net.aieat.netswissknife.core.domain.validateHttpProbeUrlInfo
-import net.aieat.netswissknife.app.ui.navigation.ToolSource
+import net.aieat.netswissknife.core.network.httprobe.engine.HttpTimings
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -164,13 +164,14 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
     val recentHosts by viewModel.recentHosts.collectAsStateWithLifecycle()
     val hasInvalidHandoff by viewModel.hasInvalidHandoff.collectAsStateWithLifecycle()
     val sourceContext by viewModel.sourceContextState.collectAsStateWithLifecycle()
-    val announcementPhase = when {
-        uiState.isLoading -> ToolAnnouncementPhase.RUNNING
-        uiState.isCanceled -> ToolAnnouncementPhase.CANCELED
-        uiState.error != null || uiState.blockedRedirectWarning != null -> ToolAnnouncementPhase.ERROR
-        uiState.result != null -> ToolAnnouncementPhase.FINISHED
-        else -> null
-    }
+    val announcementPhase =
+        when {
+            uiState.isLoading -> ToolAnnouncementPhase.RUNNING
+            uiState.isCanceled -> ToolAnnouncementPhase.CANCELED
+            uiState.error != null || uiState.blockedRedirectWarning != null -> ToolAnnouncementPhase.ERROR
+            uiState.result != null -> ToolAnnouncementPhase.FINISHED
+            else -> null
+        }
     ToolStateAnnouncer(stringResource(R.string.help_httprobe_title), announcementPhase)
     val context = LocalContext.current
     val sourceLabel =
@@ -180,8 +181,6 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
             else -> null
         }
     val sourceText: String? = sourceLabel
-    val clipboard = LocalClipboard.current
-    val clipboardScope = rememberCoroutineScope()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -190,19 +189,21 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
         animationSpec = AppMotion.enter(400),
-        label = "httprobe_entrance_alpha"
+        label = "httprobe_entrance_alpha",
     )
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(AppMotion.enter(400)) + slideInVertically(AppMotion.enter(400)) { it / 4 }
+        enter = fadeIn(AppMotion.enter(400)) + slideInVertically(AppMotion.enter(400)) { it / 4 },
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize().testTag(HttpProbeScreenTestTags.CONTENT_LIST),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                horizontal = 16.dp, vertical = 16.dp
-            )
+            contentPadding =
+                androidx.compose.foundation.layout.PaddingValues(
+                    horizontal = 16.dp,
+                    vertical = 16.dp,
+                ),
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -245,13 +246,9 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                 }
             }
 
-            if (uiState.url.trim().startsWith("http://", ignoreCase = true)) {
-                item {
-                    CleartextWarning(modifier = Modifier.testTag(HttpProbeScreenTestTags.CLEARTEXT_WARNING))
-                }
-            }
-
-            item {
+            // The input card keeps a stable key and the cleartext warning sits below it, so typing
+            // http:// never inserts an item above the field (which would recreate it and drop focus).
+            item(key = "http-probe-input") {
                 HttpProbeInputCard(
                     uiState = uiState,
                     recentHosts = recentHosts,
@@ -267,8 +264,14 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                     onSend = viewModel::send,
                     onCancel = viewModel::cancel,
                     onRemoveRecentHost = viewModel::removeRecentHost,
-                    onClearRecentHosts = viewModel::clearRecentHosts
+                    onClearRecentHosts = viewModel::clearRecentHosts,
                 )
+            }
+
+            if (uiState.url.trim().startsWith("http://", ignoreCase = true)) {
+                item(key = "http-probe-cleartext-warning") {
+                    CleartextWarning(modifier = Modifier.testTag(HttpProbeScreenTestTags.CLEARTEXT_WARNING))
+                }
             }
 
             uiState.pendingEntityReplayApproval?.let { approval ->
@@ -279,74 +282,105 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
                             viewModel.respondToEntityReplayApproval(
                                 approval.runId,
                                 approval.approvalId,
-                                approved = true
+                                approved = true,
                             )
                         },
                         onDeny = {
                             viewModel.respondToEntityReplayApproval(
                                 approval.runId,
                                 approval.approvalId,
-                                approved = false
+                                approved = false,
                             )
-                        }
+                        },
                     )
                 }
             }
 
             item {
-                val displayState: DisplayState = when {
-                    uiState.isLoading     -> DisplayState.Loading
-                    uiState.isCanceled    -> DisplayState.Canceled
-                    uiState.blockedRedirectWarning != null ->
-                        DisplayState.BlockedRedirect(requireNotNull(uiState.blockedRedirectWarning))
-                    uiState.error != null -> DisplayState.Error(
-                        ErrorTextMapper.map(uiState.errorInfo, uiState.error!!).asString(),
-                    )
-                    uiState.result != null -> DisplayState.Success(uiState.result!!)
-                    else                  -> DisplayState.Idle
-                }
+                val displayState: DisplayState =
+                    when {
+                        uiState.isLoading -> {
+                            DisplayState.Loading
+                        }
+
+                        uiState.isCanceled -> {
+                            DisplayState.Canceled
+                        }
+
+                        uiState.blockedRedirectWarning != null -> {
+                            DisplayState.BlockedRedirect(requireNotNull(uiState.blockedRedirectWarning))
+                        }
+
+                        uiState.error != null -> {
+                            DisplayState.Error(
+                                ErrorTextMapper.map(uiState.errorInfo, uiState.error!!).asString(),
+                            )
+                        }
+
+                        uiState.result != null -> {
+                            DisplayState.Success(uiState.result!!)
+                        }
+
+                        else -> {
+                            DisplayState.Idle
+                        }
+                    }
 
                 AnimatedContent(
                     targetState = displayState,
                     transitionSpec = { fadeIn(AppMotion.enter(300)) togetherWith fadeOut(AppMotion.exit(200)) },
-                    label = "httprobe_content_state"
+                    label = "httprobe_content_state",
                 ) { state ->
                     when (state) {
-                        is DisplayState.Idle    -> HttpProbeIdlePlaceholder()
-                        is DisplayState.Loading -> HttpProbeLoadingContent()
-                        is DisplayState.Canceled -> HttpProbeCanceledContent()
-                        is DisplayState.Error   -> HttpProbeErrorContent(state.message) { viewModel.send() }
-                        is DisplayState.BlockedRedirect -> HttpProbeBlockedRedirectContent(state.warning)
+                        is DisplayState.Idle -> {
+                            HttpProbeIdlePlaceholder()
+                        }
+
+                        is DisplayState.Loading -> {
+                            HttpProbeLoadingContent()
+                        }
+
+                        is DisplayState.Canceled -> {
+                            HttpProbeCanceledContent { viewModel.send() }
+                        }
+
+                        is DisplayState.Error -> {
+                            HttpProbeErrorContent(state.message) { viewModel.send() }
+                        }
+
+                        is DisplayState.BlockedRedirect -> {
+                            HttpProbeBlockedRedirectContent(state.warning)
+                        }
+
                         is DisplayState.Success -> {
-                            val curlCopiedMessage = stringResource(R.string.httprobe_curl_copied)
-                            val shareSubject = stringResource(
-                                R.string.share_subject_http,
-                                safeRedirectDisplayValue(state.result.request.url),
-                            )
-                            val shareSizeText = responseSizeText(
-                                state.result,
-                                stringResource(R.string.httprobe_response_size_at_least)
-                            )
+                            val copyWithFeedback = rememberCopyWithFeedback()
+                            val redirectText = redirectPlaceholders()
+                            val shareSubject =
+                                stringResource(
+                                    R.string.share_subject_http,
+                                    safeRedirectDisplayValue(state.result.request.url, redirectText),
+                                )
+                            val shareSizeText =
+                                responseSizeText(
+                                    state.result,
+                                    stringResource(R.string.httprobe_response_size_at_least),
+                                )
                             HttpProbeSuccessContent(
                                 result = state.result,
                                 selectedTab = uiState.selectedTab,
                                 prettyJson = uiState.prettyJson,
+                                resultFromSession = uiState.resultFromSession,
                                 onTabSelected = viewModel::onTabSelected,
                                 onPrettyJsonToggle = viewModel::onPrettyJsonToggle,
                                 onCopyCurl = {
-                                    viewModel.copyAsCurl()?.let { command ->
-                                        clipboardScope.launch {
-                                            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("cURL", command)))
-                                            Toast.makeText(context, curlCopiedMessage, Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
+                                    viewModel.copyAsCurl()?.let(copyWithFeedback)
                                 },
                                 onShare = {
                                     context.shareText(
-                                        text = buildHttpShareText(state.result, shareSizeText),
-                                        subject = shareSubject
+                                        text = buildHttpShareText(state.result, shareSizeText, redirectText),
+                                        subject = shareSubject,
                                     )
-                                }
+                                },
                             )
                         }
                     }
@@ -360,25 +394,26 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
             title = stringResource(R.string.help_httprobe_title),
             conceptHeading = stringResource(R.string.help_httprobe_concept_heading),
             conceptBody = stringResource(R.string.help_httprobe_concept_body),
-            sections = listOf(
-                HelpSection(stringResource(R.string.help_httprobe_what_heading), stringResource(R.string.help_httprobe_what_body)),
-                HelpSection(
-                    heading = stringResource(R.string.help_httprobe_params_heading),
-                    body = "",
-                    bullets = stringArrayResource(R.array.help_httprobe_params_bullets).toList()
+            sections =
+                listOf(
+                    HelpSection(stringResource(R.string.help_httprobe_what_heading), stringResource(R.string.help_httprobe_what_body)),
+                    HelpSection(
+                        heading = stringResource(R.string.help_httprobe_params_heading),
+                        body = "",
+                        bullets = stringArrayResource(R.array.help_httprobe_params_bullets).toList(),
+                    ),
+                    HelpSection(
+                        heading = stringResource(R.string.help_httprobe_results_heading),
+                        body = "",
+                        bullets = stringArrayResource(R.array.help_httprobe_results_bullets).toList(),
+                    ),
+                    HelpSection(
+                        heading = stringResource(R.string.help_httprobe_security_heading),
+                        body = "",
+                        bullets = stringArrayResource(R.array.help_httprobe_security_bullets).toList(),
+                    ),
                 ),
-                HelpSection(
-                    heading = stringResource(R.string.help_httprobe_results_heading),
-                    body = "",
-                    bullets = stringArrayResource(R.array.help_httprobe_results_bullets).toList()
-                ),
-                HelpSection(
-                    heading = stringResource(R.string.help_httprobe_security_heading),
-                    body = "",
-                    bullets = stringArrayResource(R.array.help_httprobe_security_bullets).toList()
-                )
-            ),
-            onDismiss = { showHelp = false }
+            onDismiss = { showHelp = false },
         )
     }
 }
@@ -387,27 +422,29 @@ fun HttpProbeScreen(viewModel: HttpProbeViewModel = hiltViewModel()) {
 private fun CrossOriginEntityReplayApprovalCard(
     approval: PendingEntityReplayApproval,
     onApprove: () -> Unit,
-    onDeny: () -> Unit
+    onDeny: () -> Unit,
 ) {
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
                 text = stringResource(R.string.httprobe_cross_origin_replay_title),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.error
+                color = MaterialTheme.colorScheme.error,
             )
-            Text(stringResource(
-                R.string.httprobe_cross_origin_replay_message,
-                approval.statusCode,
-                approval.method.name
-            ))
             Text(
-                text = safeRedirectDisplayValue(approval.destinationUrl),
+                stringResource(
+                    R.string.httprobe_cross_origin_replay_message,
+                    approval.statusCode,
+                    approval.method.name,
+                ),
+            )
+            Text(
+                text = safeRedirectDisplayValue(approval.destinationUrl, redirectPlaceholders()),
                 style = MaterialTheme.typography.bodyMedium,
-                fontFamily = FontFamily.Monospace
+                fontFamily = FontFamily.Monospace,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onApprove) {
@@ -425,11 +462,22 @@ private fun CrossOriginEntityReplayApprovalCard(
 
 private sealed class DisplayState {
     object Idle : DisplayState()
+
     object Loading : DisplayState()
+
     object Canceled : DisplayState()
-    data class Error(val message: String) : DisplayState()
-    data class BlockedRedirect(val warning: BlockedHttpRedirectWarning) : DisplayState()
-    data class Success(val result: HttpProbeResult) : DisplayState()
+
+    data class Error(
+        val message: String,
+    ) : DisplayState()
+
+    data class BlockedRedirect(
+        val warning: BlockedHttpRedirectWarning,
+    ) : DisplayState()
+
+    data class Success(
+        val result: HttpProbeResult,
+    ) : DisplayState()
 }
 
 @Composable
@@ -459,9 +507,12 @@ private fun HttpProbeBlockedRedirectContent(warning: BlockedHttpRedirectWarning)
 }
 
 @Composable
-private fun RedirectEvidenceLine(label: Int, value: String) {
+private fun RedirectEvidenceLine(
+    label: Int,
+    value: String,
+) {
     Text(
-        text = stringResource(label, safeRedirectDisplayValue(value)),
+        text = stringResource(label, safeRedirectDisplayValue(value, redirectPlaceholders())),
         style = MaterialTheme.typography.bodySmall,
         fontFamily = FontFamily.Monospace,
     )
@@ -475,7 +526,7 @@ private fun HttpProbeHeaderCard(onHelpClick: () -> Unit) {
         title = stringResource(R.string.httprobe_screen_title),
         subtitle = stringResource(R.string.httprobe_screen_subtitle),
         icon = Icons.Default.Http,
-        onHelpClick = onHelpClick
+        onHelpClick = onHelpClick,
     )
 }
 
@@ -498,7 +549,7 @@ private fun HttpProbeInputCard(
     onSend: () -> Unit,
     onCancel: () -> Unit,
     onRemoveRecentHost: (String) -> Unit,
-    onClearRecentHosts: () -> Unit
+    onClearRecentHosts: () -> Unit,
 ) {
     val dismissKeyboard = rememberDismissKeyboard()
     val url = uiState.url
@@ -509,7 +560,7 @@ private fun HttpProbeInputCard(
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             // URL field
             ToolTextField(
@@ -520,26 +571,32 @@ private fun HttpProbeInputCard(
                 placeholder = { Text(stringResource(R.string.httprobe_url_placeholder)) },
                 leadingIcon = { Icon(Icons.Default.Http, contentDescription = null) },
                 isError = isUrlInvalid,
-                supportingText = if (isUrlInvalid) {
-                    {
-                        Text(
-                            ErrorTextMapper.map(
-                                urlValidationError,
-                                stringResource(R.string.error_invalid_url),
-                            ).asString(),
-                        )
-                    }
-                } else null,
+                supportingText =
+                    if (isUrlInvalid) {
+                        {
+                            Text(
+                                ErrorTextMapper
+                                    .map(
+                                        urlValidationError,
+                                        stringResource(R.string.error_invalid_url),
+                                    ).asString(),
+                            )
+                        }
+                    } else {
+                        null
+                    },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Uri,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(onDone = {
-                    dismissKeyboard()
-                    onSend()
-                })
+                keyboardOptions =
+                    KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Done,
+                    ),
+                keyboardActions =
+                    KeyboardActions(onDone = {
+                        dismissKeyboard()
+                        onSend()
+                    }),
             )
 
             RecentHostsRow(
@@ -556,11 +613,11 @@ private fun HttpProbeInputCard(
             Text(
                 text = stringResource(R.string.httprobe_method_label),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 HttpMethod.values().forEach { method ->
                     val selected = uiState.method == method
@@ -569,10 +626,11 @@ private fun HttpProbeInputCard(
                         onClick = { onMethodChange(method) },
                         enabled = formEnabled,
                         label = { Text(method.name, style = MaterialTheme.typography.labelMedium) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                        colors =
+                            FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            ),
                     )
                 }
             }
@@ -580,24 +638,24 @@ private fun HttpProbeInputCard(
             // Custom headers toggle
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = stringResource(R.string.httprobe_custom_headers_label),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 if (uiState.customHeaders.isNotEmpty()) {
                     Surface(
                         shape = MaterialTheme.shapes.small,
-                        color = MaterialTheme.colorScheme.primaryContainer
+                        color = MaterialTheme.colorScheme.primaryContainer,
                     ) {
                         Text(
                             text = "${uiState.customHeaders.size}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         )
                     }
                     Spacer(Modifier.width(4.dp))
@@ -605,18 +663,18 @@ private fun HttpProbeInputCard(
                 IconButton(
                     onClick = onToggleHeaders,
                     enabled = formEnabled,
-                    modifier = Modifier.minimumInteractiveComponentSize()
+                    modifier = Modifier.minimumInteractiveComponentSize(),
                 ) {
                     Icon(
                         imageVector = if (uiState.headersExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = stringResource(if (uiState.headersExpanded) R.string.action_collapse else R.string.action_expand),
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(20.dp),
                     )
                 }
                 IconButton(
                     onClick = onAddHeader,
                     enabled = formEnabled,
-                    modifier = Modifier.minimumInteractiveComponentSize()
+                    modifier = Modifier.minimumInteractiveComponentSize(),
                 ) {
                     Icon(Icons.Default.Add, contentDescription = stringResource(R.string.httprobe_add_header), modifier = Modifier.size(20.dp))
                 }
@@ -625,14 +683,14 @@ private fun HttpProbeInputCard(
             AnimatedVisibility(
                 visible = uiState.headersExpanded && uiState.customHeaders.isNotEmpty(),
                 enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
+                exit = shrinkVertically() + fadeOut(),
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     uiState.customHeaders.forEachIndexed { index, header ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             OutlinedTextField(
                                 value = header.key,
@@ -641,7 +699,7 @@ private fun HttpProbeInputCard(
                                 label = { Text(stringResource(R.string.httprobe_header_key), style = MaterialTheme.typography.labelSmall) },
                                 singleLine = true,
                                 modifier = Modifier.weight(1f).scrollIntoViewOnFocus(),
-                                textStyle = MaterialTheme.typography.bodySmall
+                                textStyle = MaterialTheme.typography.bodySmall,
                             )
                             OutlinedTextField(
                                 value = header.value,
@@ -650,18 +708,18 @@ private fun HttpProbeInputCard(
                                 label = { Text(stringResource(R.string.httprobe_header_value), style = MaterialTheme.typography.labelSmall) },
                                 singleLine = true,
                                 modifier = Modifier.weight(1f).scrollIntoViewOnFocus(),
-                                textStyle = MaterialTheme.typography.bodySmall
+                                textStyle = MaterialTheme.typography.bodySmall,
                             )
                             IconButton(
                                 onClick = { onRemoveHeader(index) },
                                 enabled = formEnabled,
-                                modifier = Modifier.minimumInteractiveComponentSize()
+                                modifier = Modifier.minimumInteractiveComponentSize(),
                             ) {
                                 Icon(
                                     Icons.Default.Delete,
                                     contentDescription = stringResource(R.string.httprobe_remove_header),
                                     tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(18.dp),
                                 )
                             }
                         }
@@ -673,7 +731,7 @@ private fun HttpProbeInputCard(
             AnimatedVisibility(
                 visible = uiState.method.supportsBody,
                 enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
+                exit = shrinkVertically() + fadeOut(),
             ) {
                 ToolTextField(
                     value = uiState.body,
@@ -684,24 +742,25 @@ private fun HttpProbeInputCard(
                     leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
                     modifier = Modifier.fillMaxWidth().height(120.dp),
                     textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    maxLines = 6
+                    maxLines = 6,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
                 )
             }
 
             // Follow redirects toggle
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = stringResource(R.string.httprobe_follow_redirects_label),
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
                         text = stringResource(R.string.httprobe_follow_redirects_sub),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Switch(
@@ -717,23 +776,19 @@ private fun HttpProbeInputCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Button(
-                    onClick = hapticAction {
-                        dismissKeyboard()
-                        onSend()
-                    },
+                    onClick =
+                        hapticAction {
+                            dismissKeyboard()
+                            onSend()
+                        },
                     enabled = uiState.url.isNotBlank() && !uiState.isLoading && !isUrlInvalid,
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                        ),
                 ) {
                     if (uiState.isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.httprobe_sending))
                     } else {
                         Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -749,8 +804,11 @@ private fun HttpProbeInputCard(
                     ) {
                         Text(
                             stringResource(
-                                if (uiState.isCanceling) R.string.httprobe_stopping
-                                else R.string.httprobe_cancel_request,
+                                if (uiState.isCanceling) {
+                                    R.string.httprobe_stopping
+                                } else {
+                                    R.string.httprobe_cancel_request
+                                },
                             ),
                         )
                     }
@@ -768,34 +826,37 @@ private fun HttpProbeIdlePlaceholder() {
         Column(
             modifier = Modifier.padding(32.dp).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
                 text = stringResource(R.string.httprobe_idle_title),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = stringResource(R.string.httprobe_idle_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
         }
     }
 }
 
 @Composable
-private fun HttpProbeCanceledContent() {
+private fun HttpProbeCanceledContent(onRetry: () -> Unit) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.httprobe_request_canceled),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.httprobe_request_canceled),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ToolRetryButton(text = stringResource(R.string.httprobe_retry), onClick = onRetry)
+        }
     }
 }
 
@@ -806,17 +867,17 @@ private fun HttpProbeLoadingContent() {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier.fillMaxWidth().padding(48.dp),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.Center,
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 CircularProgressIndicator(modifier = Modifier.size(48.dp))
                 Text(
                     text = stringResource(R.string.httprobe_sending),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -826,7 +887,10 @@ private fun HttpProbeLoadingContent() {
 // ── Error ─────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun HttpProbeErrorContent(message: String, onRetry: () -> Unit) {
+private fun HttpProbeErrorContent(
+    message: String,
+    onRetry: () -> Unit,
+) {
     ToolErrorCard(
         title = stringResource(R.string.httprobe_error_title),
         message = message,
@@ -842,19 +906,21 @@ private fun HttpProbeSuccessContent(
     result: HttpProbeResult,
     selectedTab: Int,
     prettyJson: Boolean,
+    resultFromSession: Boolean,
     onTabSelected: (Int) -> Unit,
     onPrettyJsonToggle: () -> Unit,
     onCopyCurl: () -> Unit,
-    onShare: () -> Unit
+    onShare: () -> Unit,
 ) {
     val atLeastFormat = stringResource(R.string.httprobe_response_size_at_least)
+    val redirectText = redirectPlaceholders()
     // Copy sends the same summary as Share: status, headers and timings, never request headers or body.
     val summaryText =
-        remember(result, atLeastFormat) {
-            buildHttpShareText(result, responseSizeText(result, atLeastFormat))
+        remember(result, atLeastFormat, redirectText) {
+            buildHttpShareText(result, responseSizeText(result, atLeastFormat), redirectText)
         }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (CurlExporter.redirectFollowingSuppressed(result.request)) {
+        if (!resultFromSession && CurlExporter.redirectFollowingSuppressed(result.request)) {
             Text(
                 text = stringResource(R.string.httprobe_curl_redirect_safety),
                 style = MaterialTheme.typography.bodySmall,
@@ -866,12 +932,13 @@ private fun HttpProbeSuccessContent(
         StatusBannerCard(result)
 
         // Tabs
-        val tabs = listOf(
-            stringResource(R.string.httprobe_tab_overview),
-            stringResource(R.string.httprobe_tab_headers),
-            stringResource(R.string.httprobe_tab_body),
-            stringResource(R.string.httprobe_tab_security)
-        )
+        val tabs =
+            listOf(
+                stringResource(R.string.httprobe_tab_overview),
+                stringResource(R.string.httprobe_tab_headers),
+                stringResource(R.string.httprobe_tab_body),
+                stringResource(R.string.httprobe_tab_security),
+            )
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
             // The tab row scrolls on a narrow screen; the edge fade shows when tabs lie beyond either edge (V7B-02).
             val tabScrollState = rememberScrollState()
@@ -884,7 +951,7 @@ private fun HttpProbeSuccessContent(
                     ),
                 scrollState = tabScrollState,
                 edgePadding = 8.dp,
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
             ) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
@@ -894,9 +961,9 @@ private fun HttpProbeSuccessContent(
                             Text(
                                 title,
                                 style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1
+                                maxLines = 1,
                             )
-                        }
+                        },
                     )
                 }
             }
@@ -904,11 +971,11 @@ private fun HttpProbeSuccessContent(
             AnimatedContent(
                 targetState = selectedTab,
                 transitionSpec = { fadeIn(AppMotion.enter(200)) togetherWith fadeOut(AppMotion.exit(150)) },
-                label = "httprobe_tab_content"
+                label = "httprobe_tab_content",
             ) { tab ->
                 when (tab) {
                     0 -> OverviewTabContent(result)
-                    1 -> HeadersTabContent(result)
+                    1 -> HeadersTabContent(result, resultFromSession)
                     2 -> BodyTabContent(result, prettyJson, onPrettyJsonToggle)
                     3 -> SecurityTabContent(result.securityChecks)
                     else -> OverviewTabContent(result)
@@ -919,11 +986,13 @@ private fun HttpProbeSuccessContent(
             copyText = summaryText,
             onShare = onShare,
             extraActions = {
-                TextButton(
-                    onClick = onCopyCurl,
-                    modifier = Modifier.testTag(HttpProbeScreenTestTags.COPY_CURL_ACTION),
-                ) {
-                    Text(stringResource(R.string.httprobe_copy_curl))
+                if (!resultFromSession) {
+                    TextButton(
+                        onClick = onCopyCurl,
+                        modifier = Modifier.testTag(HttpProbeScreenTestTags.COPY_CURL_ACTION),
+                    ) {
+                        Text(stringResource(R.string.httprobe_copy_curl))
+                    }
                 }
             },
         )
@@ -941,11 +1010,12 @@ private fun StatusBannerCard(result: HttpProbeResult) {
                 drawRect(brush = Brush.horizontalGradient(statusGradient(result.statusCode)))
             }
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column {
                     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -953,21 +1023,21 @@ private fun StatusBannerCard(result: HttpProbeResult) {
                             text = result.statusCode.toString(),
                             style = MaterialTheme.typography.displaySmall,
                             fontWeight = FontWeight.ExtraBold,
-                            color = statusCodeColor(result.statusCode)
+                            color = statusCodeColor(result.statusCode),
                         )
                         Text(
                             text = result.statusMessage,
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(bottom = 4.dp)
+                            modifier = Modifier.padding(bottom = 4.dp),
                         )
                     }
                     Text(
-                        text = safeRedirectDisplayValue(result.finalUrl),
+                        text = displayUrl(result.finalUrl),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 Column(horizontalAlignment = Alignment.End) {
@@ -975,32 +1045,12 @@ private fun StatusBannerCard(result: HttpProbeResult) {
                         text = "${result.responseTimeMs} ms",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = timingColor(result.responseTimeMs)
+                        color = timingColor(result.responseTimeMs),
                     )
                     Text(
                         text = stringResource(R.string.httprobe_response_time_label),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            if (result.redirectChain.isNotEmpty()) {
-                HorizontalDivider()
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Info,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = pluralStringResource(R.plurals.httprobe_redirects_label, result.redirectChain.size, result.redirectChain.size),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -1014,24 +1064,24 @@ private fun StatusBannerCard(result: HttpProbeResult) {
 private fun OverviewTabContent(result: HttpProbeResult) {
     Column(
         modifier = Modifier.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         LabeledValue(stringResource(R.string.httprobe_protocol_label), result.protocol)
-        TimingBreakdown(result.timings)
+        TimingBreakdown(result.timings, hasRedirects = result.redirectHops.isNotEmpty())
         LabeledValue(
             stringResource(R.string.httprobe_response_size),
-            responseSizeText(result, stringResource(R.string.httprobe_response_size_at_least))
+            responseSizeText(result, stringResource(R.string.httprobe_response_size_at_least)),
         )
         LabeledValue(
             stringResource(R.string.httprobe_content_type),
-            httpHeaderValue(result.responseHeaders, "Content-Type") ?: "N/A"
+            httpHeaderValue(result.responseHeaders, "Content-Type") ?: "N/A",
         )
         if (result.redirectChain.isNotEmpty()) {
             HorizontalDivider()
             Text(
                 text = stringResource(R.string.httprobe_redirect_chain),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             val hops = result.redirectHops
             val sources = if (hops.isNotEmpty()) hops.map { it.url } else result.redirectChain
@@ -1039,13 +1089,13 @@ private fun OverviewTabContent(result: HttpProbeResult) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Surface(
                         shape = MaterialTheme.shapes.small,
-                        color = MaterialTheme.colorScheme.secondaryContainer
+                        color = MaterialTheme.colorScheme.secondaryContainer,
                     ) {
                         Text(
                             text = "${index + 1}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         )
                     }
                     if (hops.isNotEmpty()) {
@@ -1056,12 +1106,12 @@ private fun OverviewTabContent(result: HttpProbeResult) {
                         )
                     }
                     Text(
-                        text = safeRedirectDisplayValue(url),
+                        text = displayUrl(url),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f),
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -1070,15 +1120,19 @@ private fun OverviewTabContent(result: HttpProbeResult) {
 }
 
 @Composable
-private fun TimingBreakdown(timings: HttpTimings) {
+private fun TimingBreakdown(
+    timings: HttpTimings,
+    hasRedirects: Boolean,
+) {
     val breakdown = HttpTimingBreakdown.from(timings)
-    val segments = listOf(
-        Triple(R.string.httprobe_timing_dns, breakdown.dnsMs, MaterialTheme.colorScheme.primary),
-        Triple(R.string.httprobe_timing_connect, breakdown.connectMs, MaterialTheme.colorScheme.secondary),
-        Triple(R.string.httprobe_timing_tls, breakdown.tlsMs, MaterialTheme.colorScheme.tertiary),
-        Triple(R.string.httprobe_timing_server_wait, breakdown.serverWaitMs, StatusBlueDeep),
-        Triple(R.string.httprobe_timing_transfer, breakdown.transferMs, StatusGoodDeep),
-    ).filter { (_, value, _) -> value != null }
+    val segments =
+        listOf(
+            Triple(R.string.httprobe_timing_dns, breakdown.dnsMs, MaterialTheme.colorScheme.primary),
+            Triple(R.string.httprobe_timing_connect, breakdown.connectMs, MaterialTheme.colorScheme.secondary),
+            Triple(R.string.httprobe_timing_tls, breakdown.tlsMs, MaterialTheme.colorScheme.tertiary),
+            Triple(R.string.httprobe_timing_server_wait, breakdown.serverWaitMs, StatusBlueDeep),
+            Triple(R.string.httprobe_timing_transfer, breakdown.transferMs, StatusGoodDeep),
+        ).filter { (_, value, _) -> value != null }
     val total = segments.sumOf { (_, value, _) -> value!!.coerceAtLeast(0L) }
     val visibleSegments = if (total == 0L) emptyList() else segments.filter { (_, value, _) -> value!! > 0L }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1088,19 +1142,20 @@ private fun TimingBreakdown(timings: HttpTimings) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(12.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .testTag(HttpProbeScreenTestTags.TIMING_BAR),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .testTag(HttpProbeScreenTestTags.TIMING_BAR),
         ) {
             visibleSegments.forEach { (_, value, color) ->
                 Box(
                     Modifier
                         .weight(value!!.toFloat())
                         .fillMaxHeight()
-                        .background(color)
+                        .background(color),
                 )
             }
         }
@@ -1118,6 +1173,13 @@ private fun TimingBreakdown(timings: HttpTimings) {
             breakdown.ttfbTotalMs?.let { totalTtfb ->
                 LabeledValue(stringResource(R.string.httprobe_timing_ttfb), stringResource(R.string.httprobe_timing_value_ms, totalTtfb))
             }
+            if (hasRedirects) {
+                Text(
+                    text = stringResource(R.string.httprobe_timing_final_hop_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -1125,7 +1187,10 @@ private fun TimingBreakdown(timings: HttpTimings) {
 // ── Headers tab ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun HeadersTabContent(result: HttpProbeResult) {
+private fun HeadersTabContent(
+    result: HttpProbeResult,
+    resultFromSession: Boolean,
+) {
     var showRequest by remember { mutableStateOf(false) }
     var showResponse by remember { mutableStateOf(true) }
 
@@ -1134,16 +1199,22 @@ private fun HeadersTabContent(result: HttpProbeResult) {
         HeaderSection(
             title = stringResource(R.string.httprobe_request_headers),
             expanded = showRequest,
-            onToggle = { showRequest = !showRequest }
+            onToggle = { showRequest = !showRequest },
         ) {
-            if (result.request.headers.isEmpty()) {
+            if (resultFromSession) {
                 Text(
-                    text = stringResource(R.string.httprobe_no_custom_headers),
+                    text = stringResource(R.string.httprobe_request_details_not_kept),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else if (result.sentRequestHeaders.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.httprobe_no_headers),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                result.request.headers.forEach { (key, value) ->
+                result.sentRequestHeaders.forEach { (key, value) ->
                     HeaderRow(key, value)
                 }
             }
@@ -1153,14 +1224,14 @@ private fun HeadersTabContent(result: HttpProbeResult) {
         HeaderSection(
             title = stringResource(R.string.httprobe_response_headers),
             expanded = showResponse,
-            onToggle = { showResponse = !showResponse }
+            onToggle = { showResponse = !showResponse },
         ) {
-            val displayHeaders = visibleHttpResponseHeaders(result.responseHeaders)
+            val displayHeaders = httpResponseHeadersForDisplay(result.responseHeaders)
             if (displayHeaders.isEmpty()) {
                 Text(
                     text = stringResource(R.string.httprobe_no_headers),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
                 displayHeaders.entries.sortedBy { it.key }.forEach { (key, values) ->
@@ -1176,34 +1247,35 @@ private fun HeaderSection(
     title: String,
     expanded: Boolean,
     onToggle: () -> Unit,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = onToggle, modifier = Modifier.minimumInteractiveComponentSize()) {
                     Icon(
                         imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = stringResource(if (expanded) R.string.action_collapse else R.string.action_expand),
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
             AnimatedVisibility(visible = expanded) {
                 Column(
                     modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     content()
                 }
@@ -1213,123 +1285,186 @@ private fun HeaderSection(
 }
 
 @Composable
-private fun HeaderRow(key: String, value: String) {
+private fun HeaderRow(
+    key: String,
+    value: String,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.Top
+        verticalAlignment = Alignment.Top,
     ) {
         Text(
             text = key,
             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.weight(0.4f),
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(0.6f)
+            modifier = Modifier.weight(0.6f),
         )
     }
 }
 
 // ── Body tab ──────────────────────────────────────────────────────────────────
 
-@Composable
-private fun BodyTabContent(result: HttpProbeResult, prettyJson: Boolean, onPrettyJsonToggle: () -> Unit) {
-    val clipboard = LocalClipboard.current
-    val scope = rememberCoroutineScope()
+private data class JsonFormat(
+    val text: String?,
+)
 
+@Composable
+private fun BodyTabContent(
+    result: HttpProbeResult,
+    prettyJson: Boolean,
+    onPrettyJsonToggle: () -> Unit,
+) {
+    val copyWithFeedback = rememberCopyWithFeedback()
     val responseBody = result.responseBody
-    val formattedJson = remember(responseBody, result.responseBodyTruncated) {
-        if (result.responseBodyTruncated) null else responseBody?.let(JsonPrettyPrinter::prettyPrint)
+    val isJson = remember(result.responseHeaders) { isJsonResponse(result.responseHeaders) }
+    val preview = remember(responseBody) { previewBody(responseBody) }
+    val previewBytes =
+        remember(preview) {
+            preview.text
+                ?.toByteArray(Charsets.UTF_8)
+                ?.size
+                ?.toLong() ?: 0L
+        }
+    val jsonUnavailable = result.responseBodyTruncated || preview.truncated
+    // Pretty-printing runs off the composition thread; null means the check has not finished yet.
+    val formattedJson by produceState<JsonFormat?>(initialValue = null, responseBody, isJson, jsonUnavailable) {
+        value =
+            if (!isJson || jsonUnavailable || responseBody == null) {
+                JsonFormat(null)
+            } else {
+                JsonFormat(withContext(Dispatchers.Default) { JsonPrettyPrinter.prettyPrint(responseBody) })
+            }
     }
+    val shownBytes = if (result.responseBodyTruncated) result.responseBodyBytes else previewBytes
 
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.httprobe_response_body),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f)
-            )
-            if (!responseBody.isNullOrBlank()) {
-                TextButton(
-                    onClick = { scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("", responseBody))) } }
-                ) {
-                    Text(stringResource(R.string.httprobe_copy_body), style = MaterialTheme.typography.labelSmall)
-                }
-            }
-        }
+        BodyHeaderRow(responseBody = responseBody, onCopy = copyWithFeedback)
 
-        if (result.responseBodyTruncated) {
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.tertiaryContainer
-            ) {
-                Text(
-                    text = stringResource(R.string.httprobe_body_truncated, formatBytes(result.responseBodyBytes)),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
+        if (result.responseBodyTruncated || preview.truncated) {
+            BodyTruncatedNotice(shownBytes)
         }
 
         if (responseBody.isNullOrBlank()) {
             Text(
                 text = stringResource(R.string.httprobe_empty_body),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(stringResource(R.string.httprobe_pretty_json), style = MaterialTheme.typography.labelMedium)
-                Text(
-                    stringResource(
-                        when {
-                            result.responseBodyTruncated -> R.string.httprobe_json_incomplete
-                            formattedJson != null -> R.string.httprobe_json_valid
-                            else -> R.string.httprobe_json_invalid
-                        }
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = when {
-                        result.responseBodyTruncated -> MaterialTheme.colorScheme.onSurfaceVariant
-                        formattedJson != null -> StatusGoodDeep
-                        else -> StatusWarnDeep
-                    },
-                )
-                Switch(
-                    checked = prettyJson,
-                    onCheckedChange = { onPrettyJsonToggle() },
-                    enabled = formattedJson != null && !result.responseBodyTruncated,
-                    modifier = Modifier.testTag(HttpProbeScreenTestTags.PRETTY_JSON_SWITCH),
+            if (isJson) {
+                PrettyJsonRow(
+                    formattedJson = formattedJson,
+                    jsonUnavailable = jsonUnavailable,
+                    prettyJson = prettyJson,
+                    onPrettyJsonToggle = onPrettyJsonToggle,
                 )
             }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(MaterialTheme.shapes.small)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(12.dp)
-            ) {
-                Text(
-                    text = if (prettyJson) formattedJson ?: responseBody else responseBody,
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            BodyTextBox(text = (if (prettyJson) formattedJson?.text else null) ?: preview.text.orEmpty())
+        }
+    }
+}
+
+@Composable
+private fun BodyHeaderRow(
+    responseBody: String?,
+    onCopy: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.httprobe_response_body),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        if (!responseBody.isNullOrBlank()) {
+            TextButton(onClick = { onCopy(responseBody) }) {
+                Text(stringResource(R.string.httprobe_copy_body), style = MaterialTheme.typography.labelSmall)
             }
         }
+    }
+}
+
+@Composable
+private fun BodyTruncatedNotice(shownBytes: Long) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+    ) {
+        Text(
+            text = stringResource(R.string.httprobe_body_truncated, formatBytes(shownBytes)),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        )
+    }
+}
+
+/** The pretty-print switch with the JSON check's outcome; [formattedJson] is null while the check runs. */
+@Composable
+private fun PrettyJsonRow(
+    formattedJson: JsonFormat?,
+    jsonUnavailable: Boolean,
+    prettyJson: Boolean,
+    onPrettyJsonToggle: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(stringResource(R.string.httprobe_pretty_json), style = MaterialTheme.typography.labelMedium)
+        val validityLabel =
+            when {
+                jsonUnavailable -> R.string.httprobe_json_incomplete
+                formattedJson == null -> R.string.httprobe_json_checking
+                formattedJson.text != null -> R.string.httprobe_json_valid
+                else -> R.string.httprobe_json_invalid
+            }
+        Text(
+            stringResource(validityLabel),
+            style = MaterialTheme.typography.labelSmall,
+            color =
+                when {
+                    jsonUnavailable || formattedJson == null -> MaterialTheme.colorScheme.onSurfaceVariant
+                    formattedJson.text != null -> StatusGoodDeep
+                    else -> StatusWarnDeep
+                },
+        )
+        Switch(
+            checked = prettyJson,
+            onCheckedChange = { onPrettyJsonToggle() },
+            enabled = formattedJson?.text != null && !jsonUnavailable,
+            modifier = Modifier.testTag(HttpProbeScreenTestTags.PRETTY_JSON_SWITCH),
+        )
+    }
+}
+
+@Composable
+private fun BodyTextBox(text: String) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.small)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(12.dp),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -1342,11 +1477,17 @@ private fun SecurityTabContent(checks: List<SecurityHeaderCheck>) {
         val passCount = checks.count { it.rating == SecurityRating.PASS }
         val warnCount = checks.count { it.rating == SecurityRating.WARN }
         val failCount = checks.count { it.rating == SecurityRating.FAIL }
+        val infoCount = checks.count { it.rating == SecurityRating.INFO }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SecuritySummaryChip(count = passCount, label = stringResource(R.string.security_rating_pass), color = StatusGoodDeep)
             SecuritySummaryChip(count = warnCount, label = stringResource(R.string.security_rating_warn), color = StatusWarnDeep)
             SecuritySummaryChip(count = failCount, label = stringResource(R.string.security_rating_fail), color = MaterialTheme.colorScheme.error)
+            SecuritySummaryChip(
+                count = infoCount,
+                label = stringResource(R.string.security_rating_info),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         HorizontalDivider()
@@ -1358,17 +1499,21 @@ private fun SecurityTabContent(checks: List<SecurityHeaderCheck>) {
 }
 
 @Composable
-private fun SecuritySummaryChip(count: Int, label: String, color: Color) {
+private fun SecuritySummaryChip(
+    count: Int,
+    label: String,
+    color: Color,
+) {
     Surface(
         shape = MaterialTheme.shapes.small,
-        color = color.copy(alpha = 0.12f)
+        color = color.copy(alpha = 0.12f),
     ) {
         Text(
             text = "$count $label",
             style = MaterialTheme.typography.labelMedium,
             color = color,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
         )
     }
 }
@@ -1380,11 +1525,12 @@ private fun SecurityCheckRow(check: SecurityHeaderCheck) {
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 SecurityRatingIcon(check.rating, Modifier.size(18.dp))
 
@@ -1392,19 +1538,19 @@ private fun SecurityCheckRow(check: SecurityHeaderCheck) {
                     text = withSeparatorBreaks(check.headerName),
                     style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                     fontWeight = FontWeight.Medium,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
 
                 SecurityRatingBadge(check.rating)
 
                 IconButton(
                     onClick = { expanded = !expanded },
-                    modifier = Modifier.minimumInteractiveComponentSize()
+                    modifier = Modifier.minimumInteractiveComponentSize(),
                 ) {
                     Icon(
                         imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = stringResource(if (expanded) R.string.action_collapse else R.string.action_expand),
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(16.dp),
                     )
                 }
             }
@@ -1413,20 +1559,20 @@ private fun SecurityCheckRow(check: SecurityHeaderCheck) {
                 val checkValue = check.value
                 Column(
                     modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     if (checkValue != null) {
                         Text(
                             text = checkValue,
                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         HorizontalDivider()
                     }
                     Text(
                         text = securityDescription(check),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }
@@ -1435,31 +1581,51 @@ private fun SecurityCheckRow(check: SecurityHeaderCheck) {
 }
 
 @Composable
-private fun securityDescription(check: SecurityHeaderCheck): String = when (check.descriptionKey) {
-    "httprobe_sec_hsts_pass_strong" -> stringResource(R.string.httprobe_sec_hsts_pass_strong)
-    "httprobe_sec_hsts_short" -> stringResource(R.string.httprobe_sec_hsts_short)
-    "httprobe_sec_hsts_invalid" -> stringResource(R.string.httprobe_sec_hsts_invalid)
-    "httprobe_sec_hsts_ignored_http" -> stringResource(R.string.httprobe_sec_hsts_ignored_http)
-    "httprobe_sec_csp_unsafe_inline" -> stringResource(R.string.httprobe_sec_csp_unsafe_inline)
-    "httprobe_sec_csp_ambiguous" -> stringResource(R.string.httprobe_sec_csp_ambiguous)
-    "httprobe_sec_csp_report_only" -> stringResource(R.string.httprobe_sec_csp_report_only)
-    "httprobe_sec_xfo_via_csp" -> stringResource(R.string.httprobe_sec_xfo_via_csp)
-    "httprobe_sec_xss_protection_absent" -> stringResource(R.string.httprobe_sec_xss_protection_absent)
-    "httprobe_sec_xss_protection_deprecated" -> stringResource(R.string.httprobe_sec_xss_protection_deprecated)
-    "httprobe_sec_cookie_flags_complete" -> stringResource(R.string.httprobe_sec_cookie_flags_complete)
-    "httprobe_sec_cookie_missing_secure" -> stringResource(R.string.httprobe_sec_cookie_missing_secure)
-    "httprobe_sec_cookie_missing_httponly" -> stringResource(R.string.httprobe_sec_cookie_missing_httponly)
-    "httprobe_sec_cookie_missing_secure_httponly" -> stringResource(R.string.httprobe_sec_cookie_missing_secure_httponly)
-    "httprobe_sec_cookie_missing_samesite" -> stringResource(R.string.httprobe_sec_cookie_missing_samesite)
-    "httprobe_sec_cookie_samesite_none_requires_secure" -> stringResource(R.string.httprobe_sec_cookie_samesite_none_requires_secure)
-    "httprobe_sec_cookie_secure_from_http" -> stringResource(R.string.httprobe_sec_cookie_secure_from_http)
-    "httprobe_sec_cookie_secure_not_applicable" -> stringResource(R.string.httprobe_sec_cookie_secure_not_applicable)
-    "httprobe_sec_cookie_malformed" -> stringResource(R.string.httprobe_sec_cookie_malformed)
-    else -> check.description
+private fun redirectPlaceholders(): RedirectPlaceholders =
+    RedirectPlaceholders(
+        address = stringResource(R.string.httprobe_redirect_address_omitted),
+        path = stringResource(R.string.httprobe_path_omitted),
+        query = stringResource(R.string.httprobe_query_omitted),
+    )
+
+/** String resources for the security check description keys the analyser emits. */
+private val securityDescriptionRes: Map<String, Int> =
+    mapOf(
+        "httprobe_sec_hsts_pass_strong" to R.string.httprobe_sec_hsts_pass_strong,
+        "httprobe_sec_hsts_short" to R.string.httprobe_sec_hsts_short,
+        "httprobe_sec_hsts_invalid" to R.string.httprobe_sec_hsts_invalid,
+        "httprobe_sec_hsts_ignored_http" to R.string.httprobe_sec_hsts_ignored_http,
+        "httprobe_sec_csp_unsafe_inline" to R.string.httprobe_sec_csp_unsafe_inline,
+        "httprobe_sec_csp_ambiguous" to R.string.httprobe_sec_csp_ambiguous,
+        "httprobe_sec_csp_report_only" to R.string.httprobe_sec_csp_report_only,
+        "httprobe_sec_xfo_via_csp" to R.string.httprobe_sec_xfo_via_csp,
+        "httprobe_sec_xss_protection_absent" to R.string.httprobe_sec_xss_protection_absent,
+        "httprobe_sec_xss_protection_deprecated" to R.string.httprobe_sec_xss_protection_deprecated,
+        "httprobe_sec_document_header_not_applicable" to R.string.httprobe_sec_document_header_not_applicable,
+        "httprobe_sec_cookie_flags_complete" to R.string.httprobe_sec_cookie_flags_complete,
+        "httprobe_sec_cookie_missing_secure" to R.string.httprobe_sec_cookie_missing_secure,
+        "httprobe_sec_cookie_missing_httponly" to R.string.httprobe_sec_cookie_missing_httponly,
+        "httprobe_sec_cookie_missing_secure_httponly" to R.string.httprobe_sec_cookie_missing_secure_httponly,
+        "httprobe_sec_cookie_missing_samesite" to R.string.httprobe_sec_cookie_missing_samesite,
+        "httprobe_sec_cookie_samesite_none_requires_secure" to
+            R.string.httprobe_sec_cookie_samesite_none_requires_secure,
+        "httprobe_sec_cookie_secure_from_http" to R.string.httprobe_sec_cookie_secure_from_http,
+        "httprobe_sec_cookie_secure_not_applicable" to R.string.httprobe_sec_cookie_secure_not_applicable,
+        "httprobe_sec_cookie_malformed" to R.string.httprobe_sec_cookie_malformed,
+    )
+
+/** The localized description for [check], or the analyser's own text for a key without a resource. */
+@Composable
+private fun securityDescription(check: SecurityHeaderCheck): String {
+    val res = check.descriptionKey?.let(securityDescriptionRes::get)
+    return if (res != null) stringResource(res) else check.description
 }
 
 @Composable
-private fun SecurityRatingIcon(rating: SecurityRating, modifier: Modifier = Modifier) {
+private fun SecurityRatingIcon(
+    rating: SecurityRating,
+    modifier: Modifier = Modifier,
+) {
     when (rating) {
         SecurityRating.PASS -> Icon(Icons.Default.Check, null, modifier = modifier, tint = StatusGoodDeep)
         SecurityRating.WARN -> Icon(Icons.Default.Warning, null, modifier = modifier, tint = StatusWarnDeep)
@@ -1470,20 +1636,21 @@ private fun SecurityRatingIcon(rating: SecurityRating, modifier: Modifier = Modi
 
 @Composable
 private fun SecurityRatingBadge(rating: SecurityRating) {
-    val (bg, fg, label) = when (rating) {
-        SecurityRating.PASS -> Triple(StatusGoodDeep.copy(alpha = 0.12f), StatusGoodDeep, stringResource(R.string.security_rating_pass))
-        SecurityRating.WARN -> Triple(StatusWarnDeep.copy(alpha = 0.12f), StatusWarnDeep, stringResource(R.string.security_rating_warn))
-        SecurityRating.FAIL -> Triple(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.error, stringResource(R.string.security_rating_fail))
-        SecurityRating.INFO -> Triple(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant, stringResource(R.string.security_rating_info))
-    }
-    val badgeLabel = label.uppercase()
+    val (bg, fg, label) =
+        when (rating) {
+            SecurityRating.PASS -> Triple(StatusGoodDeep.copy(alpha = 0.12f), StatusGoodDeep, stringResource(R.string.security_rating_pass))
+            SecurityRating.WARN -> Triple(StatusWarnDeep.copy(alpha = 0.12f), StatusWarnDeep, stringResource(R.string.security_rating_warn))
+            SecurityRating.FAIL -> Triple(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.error, stringResource(R.string.security_rating_fail))
+            SecurityRating.INFO -> Triple(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant, stringResource(R.string.security_rating_info))
+        }
+    val badgeLabel = label
     Surface(shape = MaterialTheme.shapes.small, color = bg) {
         Text(
             text = badgeLabel,
             style = MaterialTheme.typography.labelSmall,
             color = fg,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
         )
     }
 }
@@ -1518,69 +1685,78 @@ private fun TimingLegendRow(
 }
 
 @Composable
-private fun LabeledValue(label: String, value: String) {
+private fun LabeledValue(
+    label: String,
+    value: String,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top
+        verticalAlignment = Alignment.Top,
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(0.4f).padding(end = 8.dp)
+            modifier = Modifier.weight(0.4f).padding(end = 8.dp),
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(0.6f),
             maxLines = 3,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
 @Composable
-private fun statusCodeColor(code: Int): Color = when (code) {
-    in 200..299 -> StatusGoodDeep
-    in 300..399 -> MaterialTheme.colorScheme.primary
-    in 400..499 -> StatusWarnDeep
-    in 500..599 -> MaterialTheme.colorScheme.error
-    else        -> MaterialTheme.colorScheme.onSurface
-}
+private fun statusCodeColor(code: Int): Color =
+    when (code) {
+        in 200..299 -> StatusGoodDeep
+        in 300..399 -> MaterialTheme.colorScheme.primary
+        in 400..499 -> StatusWarnDeep
+        in 500..599 -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurface
+    }
 
-private fun statusGradient(code: Int): List<Color> = when (code) {
-    in 200..299 -> listOf(StatusGoodDeep, AccentGreenLight)
-    in 300..399 -> listOf(StatusBlueDeep, AccentBlueLight)
-    in 400..499 -> listOf(AccentOrangeDeep, AccentOrangeLight)
-    in 500..599 -> listOf(AccentRedDeep, AccentRedLight)
-    else        -> listOf(AccentGreyDeep, AccentGreyLight)
-}
+private fun statusGradient(code: Int): List<Color> =
+    when (code) {
+        in 200..299 -> listOf(StatusGoodDeep, AccentGreenLight)
+        in 300..399 -> listOf(StatusBlueDeep, AccentBlueLight)
+        in 400..499 -> listOf(AccentOrangeDeep, AccentOrangeLight)
+        in 500..599 -> listOf(AccentRedDeep, AccentRedLight)
+        else -> listOf(AccentGreyDeep, AccentGreyLight)
+    }
 
 @Composable
-private fun timingColor(ms: Long): Color = when {
-    ms < 200  -> StatusGoodDeep
-    ms < 800  -> StatusWarnDeep
-    else      -> MaterialTheme.colorScheme.error
-}
+private fun timingColor(ms: Long): Color =
+    when {
+        ms < 200 -> StatusGoodDeep
+        ms < 800 -> StatusWarnDeep
+        else -> MaterialTheme.colorScheme.error
+    }
 
 /**
- * A bounded read never sees past the cap, so the buffered count is the true
- * total only when nothing was truncated. Once it was, fall back to the server's
- * Content-Length, and otherwise say "at least N" rather than presenting a
- * buffered prefix as if it were the whole body.
+ * A bounded read never sees past the cap, so the buffered count is the true total only when nothing
+ * was truncated. Once it was, the server's Content-Length is used only for an uncompressed body; a
+ * compressed body's Content-Length counts wire bytes, so the size is shown as "at least" instead.
  */
-private fun responseSizeText(result: HttpProbeResult, atLeastFormat: String): String {
-    val declared = result.declaredBodyBytes
-    return when {
-        // A complete read counted every byte, so it is exact. Content-Length is
-        // not: HttpURLConnection gunzips transparently, so on a compressed
-        // response the header describes the wire size, not what was decoded.
-        !result.responseBodyTruncated -> formatBytes(result.responseBodyBytes)
-        declared != null -> formatBytes(declared)
-        else -> atLeastFormat.format(formatBytes(result.responseBodyBytes))
+private fun responseSizeText(
+    result: HttpProbeResult,
+    atLeastFormat: String,
+): String =
+    when (
+        responseSizeKind(
+            truncated = result.responseBodyTruncated,
+            declaredBytes = result.declaredBodyBytes,
+            contentEncoded = hasContentEncoding(result.responseHeaders),
+        )
+    ) {
+        ResponseSizeKind.EXACT -> formatBytes(result.responseBodyBytes)
+        ResponseSizeKind.DECLARED -> formatBytes(result.declaredBodyBytes ?: result.responseBodyBytes)
+        ResponseSizeKind.AT_LEAST -> atLeastFormat.format(formatBytes(result.responseBodyBytes))
     }
-}
 
 /** Shown while the URL is plain http://, because the request and response are readable on the network. */
 @Composable

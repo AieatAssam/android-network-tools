@@ -1,5 +1,6 @@
 package net.aieat.netswissknife.core.domain
 
+import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.subnet.SubnetCalculatorRepository
 import net.aieat.netswissknife.core.network.subnet.SubnetInfo
@@ -16,6 +17,17 @@ class SubnetCalculatorUseCase(
      * error, or null when the entry calculates.
      */
     fun cidrInputError(params: String): NetworkResult.Error? = repository.calculate(params) as? NetworkResult.Error
+
+    /**
+     * Synchronous check of a range entry as the user types. Returns the typed error only when the
+     * minimum is above the maximum; other problems are reported when the range is calculated.
+     */
+    fun rangeOrderError(
+        minIp: String,
+        maxIp: String,
+    ): NetworkResult.Error? =
+        (repository.calculateRange(minIp, maxIp) as? NetworkResult.Error)
+            ?.takeIf { it.info?.code == ErrorCode.SUBNET_RANGE_INVERTED }
 
     suspend fun invokeRange(
         minIp: String,

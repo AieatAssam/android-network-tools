@@ -55,4 +55,9 @@ class DnsNameValidatorTest {
     fun `IPv6 literal is rejected for non-PTR lookups`() {
         assertEquals(HostProblem.INVALID, DnsNameValidator.problemOf("2001:db8::1", DnsRecordType.A))
     }
+
+    @Test
+    fun `a URL is reported as a URL, not as an invalid name`() {
+        assertEquals(HostProblem.URL_NOT_HOST, DnsNameValidator.problemOf("http://x.com", DnsRecordType.A))
+    }
 }

@@ -3,6 +3,7 @@ package net.aieat.netswissknife.core.network.netinfo
 import net.aieat.netswissknife.core.network.ErrorCode
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -36,11 +37,14 @@ class NetInfoSummaryFormatterTest {
             publicIpv4 = "Public IPv4",
             publicIpv6 = "Public IPv6",
             hostname = "Reverse DNS",
+            noReverseDns = "None found",
+            reverseDnsFailed = "Lookup failed",
             location = "Location",
             asn = "ASN",
             notChecked = "Not checked",
             notAvailable = "Not available",
             noActiveNetwork = "No active network",
+            deprecated = "deprecated",
             scopeName = { it.name.lowercase() },
             transportName = { it.name.lowercase() },
         )
@@ -131,6 +135,76 @@ class NetInfoSummaryFormatterTest {
         assertTrue(text.contains("Reverse DNS: host.example"))
         assertTrue(text.contains("ASN: AS64500"))
         assertTrue(text.contains("Public IPv6: Not available"))
+    }
+
+    @Test
+    fun `deprecated address is labelled so it is not mistaken for the one in use`() {
+        val temporary = LocalAddress("2001:db8::99", IpFamily.IPV6, 64, IpAddressScope.GLOBAL, deprecated = true)
+        val text = NetInfoSummaryFormatter.format(snapshot.copy(addresses = listOf(temporary)), null, labels)
+
+        assertTrue(text.contains("2001:db8::99/64 (global, deprecated)"))
+    }
+
+    @Test
+    fun `missing reverse DNS is stated rather than dropped`() {
+        val report = PublicIpReport(ipv4 = publicAddress("203.0.113.7", IpFamily.IPV4, geo = null), ipv6 = noRoute)
+
+        val text = NetInfoSummaryFormatter.format(snapshot, report, labels)
+
+        assertTrue(text.contains("Reverse DNS: None found"))
+    }
+
+    @Test
+    fun `a failed reverse DNS lookup is not reported as no name`() {
+        val info = PublicAddressInfo("203.0.113.7", IpFamily.IPV4, hostname = null, geo = null, reverseDnsFailed = true)
+        val report = PublicIpReport(ipv4 = NetworkResult.Success(info), ipv6 = noRoute)
+
+        val text = NetInfoSummaryFormatter.format(snapshot, report, labels)
+
+        assertTrue(text.contains("Reverse DNS: Lookup failed"))
+        assertFalse(text.contains("None found"))
+    }
+
+    @Test
+    fun `location and ASN shared by both public addresses are written once`() {
+        val geo = HopGeoLocation("203.0.113.7", "Country", "CC", "City", 0.0, 0.0, "ISP", "AS64500")
+        val report =
+            PublicIpReport(
+                ipv4 = publicAddress("203.0.113.7", IpFamily.IPV4, geo),
+                ipv6 = publicAddress("2001:db8::7", IpFamily.IPV6, geo.copy(ip = "2001:db8::7")),
+            )
+
+        val text = NetInfoSummaryFormatter.format(snapshot, report, labels)
+
+        assertEquals(1, Regex("ASN: AS64500").findAll(text).count())
+        assertEquals(1, Regex("Location: ").findAll(text).count())
+        assertTrue(text.indexOf("ASN: AS64500") > text.indexOf("Public IPv6: 2001:db8::7"))
+    }
+
+    @Test
+    fun `location and ASN that differ by family stay with each address`() {
+        val geo = HopGeoLocation("203.0.113.7", "Country", "CC", "City", 0.0, 0.0, "ISP", "AS64500")
+        val report =
+            PublicIpReport(
+                ipv4 = publicAddress("203.0.113.7", IpFamily.IPV4, geo),
+                ipv6 = publicAddress("2001:db8::7", IpFamily.IPV6, geo.copy(asn = "AS64511")),
+            )
+
+        val text = NetInfoSummaryFormatter.format(snapshot, report, labels)
+
+        assertTrue(text.contains("ASN: AS64500"))
+        assertTrue(text.contains("ASN: AS64511"))
+    }
+
+    private val noRoute = NetworkResult.error(ErrorCode.NETWORK_REQUEST_FAILED, "no route")
+
+    private fun publicAddress(
+        address: String,
+        family: IpFamily,
+        geo: HopGeoLocation?,
+    ): NetworkResult<PublicAddressInfo> {
+        val info = PublicAddressInfo(address = address, family = family, hostname = null, geo = geo)
+        return NetworkResult.Success(info)
     }
 
     @Test

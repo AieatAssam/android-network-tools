@@ -25,6 +25,7 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import me.impa.icmpenguin.trace.Response
+import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.data.AppPreferenceKeys
 import net.aieat.netswissknife.app.data.RecentHostsRepository
 import net.aieat.netswissknife.app.platform.LinkInfoProvider
@@ -32,11 +33,16 @@ import net.aieat.netswissknife.app.platform.NetworkStatus
 import net.aieat.netswissknife.app.platform.NetworkStatusProvider
 import net.aieat.netswissknife.app.platform.Transport
 import net.aieat.netswissknife.app.traceroute.IcmpEnginTracerouteRepositoryImpl
+import net.aieat.netswissknife.app.traceroute.TracerouteHostResolutionTimeoutException
 import net.aieat.netswissknife.app.traceroute.TracerouteHostResolver
 import net.aieat.netswissknife.app.traceroute.mapNativeHop
+import net.aieat.netswissknife.app.ui.i18n.ErrorTextMapper
+import net.aieat.netswissknife.app.ui.i18n.UiText
 import net.aieat.netswissknife.core.domain.TracerouteFlowResult
 import net.aieat.netswissknife.core.domain.TracerouteParams
 import net.aieat.netswissknife.core.domain.TracerouteUseCase
+import net.aieat.netswissknife.core.network.ErrorCode
+import net.aieat.netswissknife.core.network.ErrorInfo
 import net.aieat.netswissknife.core.network.operation.CancellationReason
 import net.aieat.netswissknife.core.network.operation.OperationBudget
 import net.aieat.netswissknife.core.network.operation.OperationRunner
@@ -46,6 +52,7 @@ import net.aieat.netswissknife.core.network.traceroute.HopGeoLocation
 import net.aieat.netswissknife.core.network.traceroute.HopResult
 import net.aieat.netswissknife.core.network.traceroute.HopStatus
 import net.aieat.netswissknife.core.network.traceroute.TracerouteOperation
+import net.aieat.netswissknife.core.network.traceroute.TracerouteResult
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -78,6 +85,8 @@ class TracerouteViewModelTest {
             status = HopStatus.SUCCESS,
             rtTimeMs = 2L,
         )
+
+    private fun errorMessage() = (viewModel.uiState.value as TracerouteUiState.Error).message
 
     @BeforeEach
     fun setUp() {
@@ -207,10 +216,7 @@ class TracerouteViewModelTest {
                 every { tracerouteUseCase(any(), any()) } returns flowOf()
                 viewModel.onHostChange("unreachable")
                 viewModel.startTrace()
-                assertEquals(
-                    TracerouteUiState.Error("No route found to unreachable"),
-                    viewModel.uiState.value,
-                )
+                assertEquals("No route found to unreachable", errorMessage())
             }
 
         @Test
@@ -221,7 +227,7 @@ class TracerouteViewModelTest {
 
                 viewModel.startTrace()
 
-                assertEquals(TracerouteUiState.Error("No network connection"), viewModel.uiState.value)
+                assertEquals("No network connection", errorMessage())
                 coVerify(exactly = 0) { recentHostsRepository.addRecent(any(), any()) }
                 io.mockk.verify(exactly = 0) { tracerouteUseCase(any(), any()) }
             }
@@ -293,10 +299,7 @@ class TracerouteViewModelTest {
 
                 viewModel.startTrace()
 
-                assertEquals(
-                    TracerouteUiState.Error("Local network permission denied"),
-                    viewModel.uiState.value,
-                )
+                assertEquals("Local network permission denied", errorMessage())
                 io.mockk.verify(exactly = 0) { tracerouteUseCase(any(), any()) }
             }
 
@@ -308,7 +311,7 @@ class TracerouteViewModelTest {
 
                 viewModel.startTrace()
 
-                assertEquals(TracerouteUiState.Error("No network connection"), viewModel.uiState.value)
+                assertEquals("No network connection", errorMessage())
                 io.mockk.verify(exactly = 0) { tracerouteUseCase(any(), any()) }
             }
 
@@ -335,10 +338,8 @@ class TracerouteViewModelTest {
                 viewModel.startTrace()
 
                 assertEquals(
-                    TracerouteUiState.Error(
-                        "Requested trace exceeds the 20-minute time limit; reduce max hops, probes per hop, or timeout",
-                    ),
-                    viewModel.uiState.value,
+                    "Requested trace exceeds the 20-minute time limit; reduce max hops, probes per hop, or timeout",
+                    errorMessage(),
                 )
                 io.mockk.verify(exactly = 0) { tracerouteUseCase(any(), any()) }
                 coVerify(exactly = 0) { recentHostsRepository.addRecent(any(), any()) }
@@ -365,7 +366,7 @@ class TracerouteViewModelTest {
 
                 viewModel.startTrace()
 
-                assertEquals(TracerouteUiState.Error("route socket closed"), viewModel.uiState.value)
+                assertEquals("route socket closed", errorMessage())
             }
 
         @Test
@@ -864,4 +865,338 @@ class TracerouteViewModelTest {
             viewModel.onStop()
             viewModel.uiState.first { it is TracerouteUiState.Canceled }
         }
+
+    @Nested
+    @DisplayName("view mode selection")
+    inner class ViewModeSelection {
+        private fun finishTrace() {
+            every { tracerouteUseCase(any(), any()) } returns flowOf(TracerouteFlowResult.Hop(stubHop))
+            viewModel.onHostChange("example.com")
+            viewModel.startTrace()
+        }
+
+        @Test
+        fun `a finished trace starts on Hop Details`() {
+            finishTrace()
+            val state = viewModel.uiState.value as TracerouteUiState.Finished
+            assertEquals(TracerouteViewMode.Visual, state.viewMode)
+        }
+
+        @Test
+        fun `the tabs are ordered Hop Details, Map, Raw Output`() {
+            assertEquals(
+                listOf(TracerouteViewMode.Visual, TracerouteViewMode.Map, TracerouteViewMode.Raw),
+                TracerouteViewMode.entries.toList(),
+            )
+        }
+
+        @Test
+        fun `each mode can be selected directly on a finished trace`() {
+            finishTrace()
+            TracerouteViewMode.entries.forEach { mode ->
+                viewModel.onSelectViewMode(mode)
+                assertEquals(mode, (viewModel.uiState.value as TracerouteUiState.Finished).viewMode)
+            }
+        }
+
+        @Test
+        fun `selecting the current mode keeps it`() {
+            finishTrace()
+            viewModel.onSelectViewMode(TracerouteViewMode.Map)
+            viewModel.onSelectViewMode(TracerouteViewMode.Map)
+            assertEquals(TracerouteViewMode.Map, (viewModel.uiState.value as TracerouteUiState.Finished).viewMode)
+        }
+
+        @Test
+        fun `a canceled trace can show its partial route on the map`() =
+            runTest {
+                every { tracerouteUseCase(any(), any()) } returns
+                    flow {
+                        emit(TracerouteFlowResult.Hop(stubHop))
+                        awaitCancellation()
+                    }
+                viewModel.onHostChange("example.com")
+                viewModel.startTrace()
+                viewModel.onStop()
+                viewModel.uiState.first { it is TracerouteUiState.Canceled }
+
+                viewModel.onSelectViewMode(TracerouteViewMode.Map)
+
+                val state = viewModel.uiState.value as TracerouteUiState.Canceled
+                assertEquals(TracerouteViewMode.Map, state.viewMode)
+                assertEquals(listOf(stubHop), state.result.hops)
+            }
+
+        @Test
+        fun `selecting a mode without a result changes nothing`() {
+            viewModel.onSelectViewMode(TracerouteViewMode.Map)
+            assertEquals(TracerouteUiState.Idle, viewModel.uiState.value)
+        }
+    }
+
+    @Nested
+    @DisplayName("hop rows")
+    inner class HopRows {
+        private fun hop(
+            number: Int,
+            probes: List<Long?> = listOf(5L),
+            destination: Boolean = false,
+        ) = HopResult(
+            hopNumber = number,
+            ip = "192.0.2.$number",
+            hostname = null,
+            rtTimeMs = probes.firstOrNull { it != null },
+            status = HopStatus.SUCCESS,
+            probeRttsMs = probes,
+            destinationReached = destination,
+        )
+
+        private fun finish(vararg events: TracerouteFlowResult): TracerouteResult {
+            every { tracerouteUseCase(any(), any()) } returns flowOf(*events)
+            viewModel.onHostChange("example.com")
+            viewModel.startTrace()
+            return (viewModel.uiState.value as TracerouteUiState.Finished).result
+        }
+
+        @Test
+        fun `a hop reported once per probe is one row with every probe`() {
+            val result =
+                finish(
+                    TracerouteFlowResult.Hop(hop(1, listOf(5L))),
+                    TracerouteFlowResult.Hop(hop(1, listOf(5L, null))),
+                    TracerouteFlowResult.Hop(hop(1, listOf(5L, null, 6L))),
+                )
+
+            assertEquals(listOf(listOf(5L, null, 6L)), result.hops.map { it.probeRttsMs })
+        }
+
+        @Test
+        fun `a location found for a hop survives its later probe reports`() {
+            val geo = HopGeoLocation("192.0.2.1", "France", "FR", "Paris", 48.85, 2.35)
+
+            val result =
+                finish(
+                    TracerouteFlowResult.Hop(hop(1, listOf(5L))),
+                    TracerouteFlowResult.HopEnriched(1, "edge.example", geo),
+                    TracerouteFlowResult.Hop(hop(1, listOf(5L, 6L))),
+                )
+
+            assertEquals(geo, result.hops.single().geoLocation)
+            assertEquals("edge.example", result.hops.single().hostname)
+        }
+
+        @Test
+        fun `every TTL up to the destination has a row, and the hop count is the destination's TTL`() {
+            val result =
+                finish(
+                    TracerouteFlowResult.Hop(hop(1)),
+                    TracerouteFlowResult.Hop(hop(2)),
+                    TracerouteFlowResult.Hop(hop(4, destination = true)),
+                )
+
+            assertEquals(listOf(1, 2, 3, 4), result.hops.map { it.hopNumber })
+            assertEquals(null, result.hops[2].ip)
+            assertTrue(result.reachedDestination)
+        }
+
+        @Test
+        fun `hops past the first TTL the destination answered are not shown`() {
+            val result =
+                finish(
+                    TracerouteFlowResult.Hop(hop(1)),
+                    TracerouteFlowResult.Hop(hop(3, destination = true)),
+                    TracerouteFlowResult.Hop(hop(2, destination = true)),
+                )
+
+            assertEquals(listOf(1, 2), result.hops.map { it.hopNumber })
+        }
+
+        @Test
+        fun `the running trace keeps its raw output up to date`() =
+            runTest {
+                val events = Channel<TracerouteFlowResult>(Channel.UNLIMITED)
+                every { tracerouteUseCase(any(), any()) } returns events.receiveAsFlow()
+                viewModel.onHostChange("example.com")
+                viewModel.startTrace()
+
+                events.send(TracerouteFlowResult.Hop(hop(1, listOf(5L, null, 7L))))
+
+                val running = viewModel.uiState.value as TracerouteUiState.Running
+                val lines = running.rawOutput.lines().map { it.trim() }
+                assertTrue("1  192.0.2.1 5 ms * 7 ms" in lines, running.rawOutput)
+                events.close()
+            }
+    }
+
+    @Nested
+    @DisplayName("live view")
+    inner class LiveView {
+        @Test
+        fun `the view picked while running is kept when the trace finishes`() =
+            runTest {
+                val events = Channel<TracerouteFlowResult>(Channel.UNLIMITED)
+                every { tracerouteUseCase(any(), any()) } returns events.receiveAsFlow()
+                viewModel.onHostChange("example.com")
+                viewModel.startTrace()
+                val running = viewModel.uiState.value as TracerouteUiState.Running
+
+                viewModel.onSelectViewMode(TracerouteViewMode.Map)
+                events.send(TracerouteFlowResult.Hop(stubHop))
+                events.close()
+
+                val finished = viewModel.uiState.value as TracerouteUiState.Finished
+                assertEquals(TracerouteViewMode.Map, finished.viewMode)
+                assertEquals(running.traceId, finished.traceId)
+            }
+
+        @Test
+        fun `the next trace opens in the view picked last`() {
+            every { tracerouteUseCase(any(), any()) } returns flowOf(TracerouteFlowResult.Hop(stubHop))
+            viewModel.onHostChange("example.com")
+            viewModel.startTrace()
+            val first = viewModel.uiState.value as TracerouteUiState.Finished
+            viewModel.onSelectViewMode(TracerouteViewMode.Raw)
+
+            viewModel.startTrace()
+
+            val second = viewModel.uiState.value as TracerouteUiState.Finished
+            assertEquals(TracerouteViewMode.Raw, second.viewMode)
+            assertTrue(second.traceId != first.traceId)
+        }
+    }
+
+    @Nested
+    @DisplayName("form defaults and steps")
+    inner class FormDefaults {
+        @Test
+        fun `three probes per hop are sent by default`() {
+            assertEquals(3, viewModel.probesPerHop.value)
+        }
+
+        @Test
+        fun `the timeout lands on half-second steps`() {
+            viewModel.onTimeoutChange(3_275)
+            assertEquals(3_500, viewModel.timeoutMs.value)
+            viewModel.onTimeoutChange(3_200)
+            assertEquals(3_000, viewModel.timeoutMs.value)
+        }
+
+        @Test
+        fun `slider scales stop on whole hops and half seconds`() {
+            assertEquals(58, SliderScale.MAX_HOPS.steps)
+            assertEquals(18, SliderScale.TIMEOUT_MS.steps)
+            assertEquals(3_500, SliderScale.TIMEOUT_MS.snap(3_275f))
+            assertEquals(13, SliderScale.MAX_HOPS.snap(12.6f))
+            assertEquals(64, SliderScale.MAX_HOPS.snap(70f))
+            assertEquals(3, SliderScale.PROBES.steps)
+        }
+
+        @Test
+        fun `every timeout the slider can report snaps to a half second the view model keeps`() {
+            // Material's Slider reports floats between stops while dragging (QA saw 3.3 s on the time chip).
+            (500..10_000 step 25).forEach { raw ->
+                val snapped = SliderScale.TIMEOUT_MS.snap(raw.toFloat())
+                assertEquals(0, snapped % 500, "snap($raw)")
+                viewModel.onTimeoutChange(snapped)
+                assertEquals(snapped, viewModel.timeoutMs.value, "onTimeoutChange($snapped)")
+            }
+            assertEquals(3_500, SliderScale.TIMEOUT_MS.snap(3_300f))
+        }
+
+        @Test
+        fun `packet size moves between presets, and the 56 B default is one of them`() {
+            val scale = SliderScale.PACKET_SIZE
+            assertEquals(56, scale.valueAt(scale.positionOf(56)))
+            assertEquals(8, scale.steps)
+            assertEquals(0f..9f, scale.positions)
+            assertEquals(28, scale.valueAt(-1f))
+            assertEquals(1472, scale.valueAt(12f))
+            assertEquals(576, scale.valueAt(6.4f))
+            scale.presets.forEach { assertTrue(it in scale.range, "$it") }
+        }
+
+        @Test
+        fun `a packet size off the presets rests on the nearest one`() {
+            val scale = SliderScale.PACKET_SIZE
+            assertEquals(2f, scale.positionOf(70))
+            assertEquals(1f, scale.positionOf(60))
+            assertEquals(0f, scale.positionOf(0))
+        }
+
+        @Test
+        fun `a scale without presets keeps its own values as positions`() {
+            assertEquals(5f..64f, SliderScale.MAX_HOPS.positions)
+            assertEquals(13f, SliderScale.MAX_HOPS.positionOf(13))
+            assertEquals(13, SliderScale.MAX_HOPS.valueAt(12.6f))
+        }
+    }
+
+    @Nested
+    @DisplayName("error copy")
+    inner class ErrorCopy {
+        private fun errorAfterStart(): TracerouteUiState.Error {
+            viewModel.onHostChange("example.com")
+            viewModel.startTrace()
+            return viewModel.uiState.value as TracerouteUiState.Error
+        }
+
+        @Test
+        fun `no network is explained with its own copy`() {
+            networkStatus.value = NetworkStatus(hasInternet = false, hasLocalNetwork = false)
+
+            assertEquals(UiText.Res(R.string.traceroute_error_no_route), errorAfterStart().text)
+        }
+
+        @Test
+        fun `an unexpected failure shows generic copy, not the exception text`() {
+            every { tracerouteUseCase(any(), any()) } throws IllegalStateException("route socket closed")
+
+            assertEquals(UiText.Res(R.string.traceroute_error_generic), errorAfterStart().text)
+        }
+
+        @Test
+        fun `a host with no address names the host`() {
+            every { tracerouteUseCase(any(), any()) } returns flow { throw java.net.UnknownHostException("x") }
+
+            assertEquals(
+                UiText.Res(R.string.traceroute_error_host_not_found, listOf("example.com")),
+                errorAfterStart().text,
+            )
+        }
+
+        @Test
+        fun `a slow host lookup is reported as such`() {
+            every { tracerouteUseCase(any(), any()) } returns
+                flow { throw TracerouteHostResolutionTimeoutException() }
+
+            assertEquals(
+                UiText.Res(R.string.traceroute_error_lookup_timeout, listOf("example.com")),
+                errorAfterStart().text,
+            )
+        }
+
+        @Test
+        fun `a trace with no hops names the host`() {
+            every { tracerouteUseCase(any(), any()) } returns flowOf()
+
+            val expected = UiText.Res(R.string.traceroute_error_no_hops, listOf("example.com"))
+            assertEquals(expected, errorAfterStart().text)
+        }
+
+        @Test
+        fun `a too-long request has its own copy`() {
+            viewModel.onMaxHopsChange(64)
+            viewModel.onTimeoutChange(20_000)
+
+            assertEquals(UiText.Res(R.string.traceroute_error_too_long), errorAfterStart().text)
+        }
+
+        @Test
+        fun `a validation error uses the shared error copy`() {
+            val info = ErrorInfo(ErrorCode.HOST_BLANK, developerMessage = "Host must not be empty")
+            every { tracerouteUseCase(any(), any()) } returns flowOf(TracerouteFlowResult.ValidationError(info))
+
+            assertEquals(ErrorTextMapper.map(info, "Host must not be empty"), errorAfterStart().text)
+        }
+    }
 }

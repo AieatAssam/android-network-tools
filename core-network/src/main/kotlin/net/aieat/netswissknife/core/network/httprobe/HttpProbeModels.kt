@@ -68,6 +68,8 @@ data class HttpProbeResult(
     val timings: HttpTimings = HttpTimings(totalMs = responseTimeMs),
     val protocol: String = "unknown",
     val redirectHops: List<RedirectHop> = emptyList(),
+    /** Request headers of the final request as sent, including headers the engine added itself. */
+    val sentRequestHeaders: List<Pair<String, String>> = emptyList(),
 )
 
 /** Structured evidence for a redirect refused before the destination is opened. */

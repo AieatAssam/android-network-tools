@@ -10,6 +10,7 @@ package net.aieat.netswissknife.core.domain
  * @param concurrency Concurrent host probes (1–500). Default 50.
  * @param gatewayIp   Active network gateway, if known; values outside [subnet] are ignored.
  * @param enableNameProbes Whether NetBIOS/mDNS probes may establish presence. Default true.
+ * @param localIp     This device's address, if known; values outside [subnet] are ignored.
  */
 data class LanScanParams(
     val subnet: String,
@@ -17,4 +18,5 @@ data class LanScanParams(
     val concurrency: Int = 50,
     val gatewayIp: String? = null,
     val enableNameProbes: Boolean = true,
+    val localIp: String? = null,
 )

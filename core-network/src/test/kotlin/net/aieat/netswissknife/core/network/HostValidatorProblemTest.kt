@@ -21,6 +21,12 @@ class HostValidatorProblemTest {
     }
 
     @Test
+    fun `a URL with a scheme is reported as a URL, not as an IPv6 address`() {
+        assertEquals(HostProblem.URL_NOT_HOST, HostValidator.problemOf("http://x"))
+        assertEquals(HostProblem.URL_NOT_HOST, HostValidator.problemOf("https://example.com/path"))
+    }
+
+    @Test
     fun `embedded whitespace is reported as whitespace`() {
         assertEquals(HostProblem.CONTAINS_WHITESPACE, HostValidator.problemOf("bad host!!"))
     }

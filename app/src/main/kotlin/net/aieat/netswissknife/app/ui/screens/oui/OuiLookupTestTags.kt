@@ -7,4 +7,5 @@ object OuiLookupTestTags {
     const val RESULTS = "oui_results"
     const val LOWERCASE = "oui_lowercase"
     const val RESULT_ACTIONS = "oui_result_actions"
+    const val EDIT_INPUT = "oui_edit_input"
 }

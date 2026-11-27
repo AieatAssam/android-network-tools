@@ -12,15 +12,18 @@ import net.aieat.netswissknife.core.network.wol.WolMagicPacket
 /**
  * Saved Wake-on-LAN devices and the add, edit, use and delete actions on them.
  *
- * [currentMac] reads the MAC field and [fillMac] writes a device's MAC back into it, so the send
- * form stays the one owner of the MAC that is sent. Split from WakeOnLanViewModel to keep that
- * class focused on the send flow.
+ * [currentMac], [currentBroadcast] and [currentPort] read the send form, and [fillDevice] writes a
+ * device's MAC, broadcast address and port back into it, so the send form stays the one owner of
+ * what is sent. Split from WakeOnLanViewModel to keep that class focused on the send flow.
  */
 class WolSavedDeviceEditor(
     private val store: WolSavedDeviceStore,
     private val scope: CoroutineScope,
     private val currentMac: () -> String,
-    private val fillMac: (String) -> Unit,
+    private val currentBroadcast: () -> String,
+    /** Null while the port field holds nothing valid; such a device cannot be saved. */
+    private val currentPort: () -> Int?,
+    private val fillDevice: (WolSavedDevice) -> Unit,
     /** Name typed before the tool was left, restored by the ViewModel from the session memory. */
     initialDeviceName: String = "",
 ) {
@@ -42,9 +45,10 @@ class WolSavedDeviceEditor(
     private val _saveConflict = MutableStateFlow(false)
     val saveConflict: StateFlow<Boolean> = _saveConflict.asStateFlow()
 
-    /** Editing the MAC field clears a previous duplicate-MAC refusal. */
+    /** Editing the MAC field clears a previous duplicate-MAC refusal and the notice about the old MAC. */
     fun clearSaveConflict() {
         _saveConflict.value = false
+        _saveNotice.value = null
     }
 
     fun onDeviceNameChange(value: String) {
@@ -52,21 +56,27 @@ class WolSavedDeviceEditor(
         _saveNotice.value = null
     }
 
-    /** Saves the current MAC under the entered name, or updates the saved device being edited. */
+    /**
+     * Saves the current target under the entered name, or updates the saved device being edited.
+     * Nothing is saved while the MAC, broadcast address or port is invalid.
+     */
     fun saveDevice() {
-        val canonical = WolMagicPacket.canonicalMacOrNull(currentMac()) ?: return
+        val canonical = WolMagicPacket.canonicalMacOrNull(currentMac())
+        val broadcast = currentBroadcast()
+        val port = currentPort()
+        if (canonical == null || port == null || WolMagicPacket.broadcastProblem(broadcast) != null) return
         val name = _deviceName.value
         val original = _editingMac.value
         if (original != null) {
             _saveNotice.value = null
-            val outcome = WolSavedDevices.edit(savedDevices.value, original, canonical, name)
+            val outcome = WolSavedDevices.edit(savedDevices.value, original, canonical, name, broadcast, port)
             if (outcome is WolSaveOutcome.Duplicate) {
                 _saveConflict.value = true
                 return
             }
             scope.launch {
                 store.update { list ->
-                    when (val result = WolSavedDevices.edit(list, original, canonical, name)) {
+                    when (val result = WolSavedDevices.edit(list, original, canonical, name, broadcast, port)) {
                         is WolSaveOutcome.Saved -> result.devices
                         WolSaveOutcome.Duplicate -> list
                     }
@@ -76,7 +86,7 @@ class WolSavedDeviceEditor(
         } else {
             _saveNotice.value = WolSavedDevices.saveNotice(savedDevices.value, canonical, name)
             scope.launch {
-                store.update { list -> WolSavedDevices.upsert(list, canonical, name) }
+                store.update { list -> WolSavedDevices.upsert(list, canonical, name, broadcast, port) }
             }
         }
         _saveConflict.value = false
@@ -87,22 +97,23 @@ class WolSavedDeviceEditor(
         scope.launch {
             store.update { list -> WolSavedDevices.remove(list, mac) }
         }
+        _saveNotice.value = null
         if (_editingMac.value == mac) cancelEdit()
     }
 
-    /** Fills the MAC and name from a saved device. Does not send. */
+    /** Fills the form with a saved device's MAC, broadcast address, port and name. Does not send. */
     fun useDevice(device: WolSavedDevice) {
         _saveNotice.value = null
         _editingMac.value = null
         _deviceName.value = device.name
-        fillMac(device.mac)
+        fillDevice(device)
     }
 
     fun startEditDevice(device: WolSavedDevice) {
         _saveNotice.value = null
         _editingMac.value = device.mac
         _deviceName.value = device.name
-        fillMac(device.mac)
+        fillDevice(device)
     }
 
     fun cancelEdit() {

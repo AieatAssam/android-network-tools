@@ -1,10 +1,13 @@
 package net.aieat.netswissknife.app.ui.screens.httprobe
 
-import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -15,9 +18,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -27,18 +30,18 @@ import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import net.aieat.netswissknife.app.R
 import net.aieat.netswissknife.app.platform.NetworkStatus
-import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
+import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.network.httprobe.HttpMethod
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeRequest
 import net.aieat.netswissknife.core.network.httprobe.HttpProbeResult
 import net.aieat.netswissknife.core.network.httprobe.HttpSecurityAnalyzer
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 
 /**
  * Covers the Security tab rendering the Cross-Origin-Opener-Policy and
@@ -75,8 +78,12 @@ class HttpProbeScreenTest {
         // if the underlying screen has its own infinite (e.g. refresh-spin) animation.
         composeRule.mainClock.autoAdvance = true
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodes(androidx.compose.ui.test.isRoot())
-                .fetchSemanticsNodes().size > 1
+            composeRule
+                .onAllNodes(
+                    androidx.compose.ui.test
+                        .isRoot(),
+                ).fetchSemanticsNodes()
+                .size > 1
         }
         composeRule.mainClock.autoAdvance = false
 
@@ -106,9 +113,10 @@ class HttpProbeScreenTest {
 
     @Test
     fun loadingState_showsCancelAction() {
-        val viewModel = fakeViewModel(
-            HttpProbeUiState(url = "https://example.com", isLoading = true),
-        )
+        val viewModel =
+            fakeViewModel(
+                HttpProbeUiState(url = "https://example.com", isLoading = true),
+            )
         composeRule.setContent {
             NetSwissKnifeTheme {
                 HttpProbeScreen(viewModel = viewModel)
@@ -127,25 +135,32 @@ class HttpProbeScreenTest {
 
     @Test
     fun blockedRedirectWarning_showsStatusAndRedactedEvidence() {
-        val warning = BlockedHttpRedirectWarning(
-            sourceUrl = "https://alice:source-secret@source.example/start?source-token=private#frag",
-            destinationUrl = "http://bob:destination-secret@target.example/reset?redirect-token=private#frag",
-            statusCode = 302,
-            location = "//bob:destination-secret@target.example/reset?redirect-token=private#frag",
-        )
-        val approval = PendingEntityReplayApproval(
-            runId = "run",
-            approvalId = "approval",
-            destinationUrl = "http://bob:destination-secret@target.example/reset?consent-token=private#frag",
-            method = HttpMethod.POST,
-            statusCode = 307,
-        )
+        val warning =
+            BlockedHttpRedirectWarning(
+                sourceUrl = "https://alice:source-secret@source.example/start?source-token=private#frag",
+                destinationUrl = "http://bob:destination-secret@target.example/reset?redirect-token=private#frag",
+                statusCode = 302,
+                location = "//bob:destination-secret@target.example/reset?redirect-token=private#frag",
+            )
+        val approval =
+            PendingEntityReplayApproval(
+                runId = "run",
+                approvalId = "approval",
+                destinationUrl = "http://bob:destination-secret@target.example/reset?consent-token=private#frag",
+                method = HttpMethod.POST,
+                statusCode = 307,
+            )
         composeRule.setContent {
             NetSwissKnifeTheme {
-                HttpProbeScreen(viewModel = fakeViewModel(HttpProbeUiState(
-                    blockedRedirectWarning = warning,
-                    pendingEntityReplayApproval = approval,
-                )))
+                HttpProbeScreen(
+                    viewModel =
+                        fakeViewModel(
+                            HttpProbeUiState(
+                                blockedRedirectWarning = warning,
+                                pendingEntityReplayApproval = approval,
+                            ),
+                        ),
+                )
             }
         }
 
@@ -153,23 +168,43 @@ class HttpProbeScreenTest {
         composeRule
             .onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
             .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
-        composeRule.onNodeWithTag(HttpProbeScreenTestTags.BLOCKED_REDIRECT_WARNING)
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.BLOCKED_REDIRECT_WARNING)
             .performScrollTo()
             .assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.httprobe_blocked_redirect_title))
-            .performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.httprobe_blocked_redirect_message, 302))
-            .performScrollTo().assertIsDisplayed()
-        composeRule.onAllNodesWithText("https://source.example/[path omitted]", substring = true)
-            .onFirst().performScrollTo().assertIsDisplayed()
-        composeRule.onAllNodesWithText("http://target.example/[path omitted]", substring = true)
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_blocked_redirect_title))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_blocked_redirect_message, 302))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onAllNodesWithText("https://source.example/[path omitted]", substring = true)
+            .onFirst()
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onAllNodesWithText("http://target.example/[path omitted]", substring = true)
             .assertCountEquals(2)
-        composeRule.onAllNodesWithText("//target.example/[path omitted]", substring = true)
-            .onFirst().performScrollTo().assertIsDisplayed()
-        composeRule.onAllNodesWithText("http://target.example/[path omitted]", substring = true)
-            .onFirst().performScrollTo().assertIsDisplayed()
+        composeRule
+            .onAllNodesWithText("//target.example/[path omitted]", substring = true)
+            .onFirst()
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onAllNodesWithText("http://target.example/[path omitted]", substring = true)
+            .onFirst()
+            .performScrollTo()
+            .assertIsDisplayed()
         listOf(
-            "source-secret", "destination-secret", "source-token", "redirect-token", "consent-token", "frag"
+            "source-secret",
+            "destination-secret",
+            "source-token",
+            "redirect-token",
+            "consent-token",
+            "frag",
         ).forEach { secret ->
             composeRule.onAllNodesWithText(secret, substring = true).assertCountEquals(0)
         }
@@ -179,24 +214,26 @@ class HttpProbeScreenTest {
     fun successfulResult_redactsOverviewUrlsAndShareSecrets() {
         val sourceUrl = "https://alice:source-secret@source.example/start?source-token=private#source-fragment"
         val finalUrl = "https://bob:destination-secret@target.example/final?final-token=private#final-fragment"
-        val result = HttpProbeResult(
-            request = HttpProbeRequest(url = sourceUrl),
-            statusCode = 200,
-            statusMessage = "OK",
-            responseTimeMs = 42,
-            responseHeaders = mapOf(
-                "Content-Type" to listOf("application/json"),
-                "Location" to listOf("https://next.example/path?location-token=private"),
-                "Set-Cookie" to listOf("sid=cookie-secret; Secure"),
-                "Authorization" to listOf("Bearer auth-secret"),
-                "Proxy-Authorization" to listOf("Basic proxy-secret"),
-            ),
-            responseBody = "{}",
-            responseBodyBytes = 2,
-            finalUrl = finalUrl,
-            redirectChain = listOf(sourceUrl),
-            securityChecks = emptyList(),
-        )
+        val result =
+            HttpProbeResult(
+                request = HttpProbeRequest(url = sourceUrl),
+                statusCode = 200,
+                statusMessage = "OK",
+                responseTimeMs = 42,
+                responseHeaders =
+                    mapOf(
+                        "Content-Type" to listOf("application/json"),
+                        "Location" to listOf("https://next.example/path?location-token=private"),
+                        "Set-Cookie" to listOf("sid=cookie-secret; Secure"),
+                        "Authorization" to listOf("Bearer auth-secret"),
+                        "Proxy-Authorization" to listOf("Basic proxy-secret"),
+                    ),
+                responseBody = "{}",
+                responseBodyBytes = 2,
+                finalUrl = finalUrl,
+                redirectChain = listOf(sourceUrl),
+                securityChecks = emptyList(),
+            )
         val shareText = buildHttpShareText(result, "2 B")
 
         assertTrue(shareText.contains("https://source.example/[path omitted]"))
@@ -211,11 +248,15 @@ class HttpProbeScreenTest {
             NetSwissKnifeTheme { HttpProbeScreen(viewModel = fakeViewModel(HttpProbeUiState(result = result, selectedTab = 0))) }
         }
         composeRule.mainClock.advanceTimeBy(2_000L)
-        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
             .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
-        composeRule.onAllNodesWithText("https://target.example/[path omitted]")
-            .onFirst().performScrollTo().assertIsDisplayed()
-        listOf("source-secret", "destination-secret", "source-token", "final-token", "cookie-secret", "auth-secret").forEach {
+        composeRule
+            .onAllNodesWithText("https://target.example/final?final-token=private")
+            .onFirst()
+            .performScrollTo()
+            .assertIsDisplayed()
+        listOf("source-secret", "destination-secret", "final-fragment", "cookie-secret", "auth-secret").forEach {
             composeRule.onAllNodesWithText(it, substring = true).assertCountEquals(0)
         }
     }
@@ -225,18 +266,19 @@ class HttpProbeScreenTest {
         composeRule.setContent {
             NetSwissKnifeTheme {
                 HttpProbeScreen(
-                    viewModel = fakeViewModel(
-                        HttpProbeUiState(
-                            url = "https://example.com",
-                            method = HttpMethod.POST,
-                            customHeaders = listOf(HeaderEntry("X-Test", "value")),
-                            body = "body",
-                            headersExpanded = true,
-                            isLoading = true,
-                            isCanceling = true,
+                    viewModel =
+                        fakeViewModel(
+                            HttpProbeUiState(
+                                url = "https://example.com",
+                                method = HttpMethod.POST,
+                                customHeaders = listOf(HeaderEntry("X-Test", "value")),
+                                body = "body",
+                                headersExpanded = true,
+                                isLoading = true,
+                                isCanceling = true,
+                            ),
+                            recentHostValues = listOf("https://recent.example"),
                         ),
-                        recentHostValues = listOf("https://recent.example"),
-                    ),
                 )
             }
         }
@@ -245,25 +287,32 @@ class HttpProbeScreenTest {
         composeRule
             .onNodeWithText(context.getString(R.string.httprobe_stopping))
             .assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.httprobe_url_label))
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_url_label))
             .assertIsNotEnabled()
-        composeRule.onNodeWithText("POST")
+        composeRule
+            .onNodeWithText("POST")
             .assertIsNotEnabled()
-        composeRule.onNodeWithText(context.getString(R.string.httprobe_header_key))
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_header_key))
             .assertIsNotEnabled()
-        composeRule.onNodeWithText(context.getString(R.string.httprobe_header_value))
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_header_value))
             .assertIsNotEnabled()
-        composeRule.onNodeWithText(context.getString(R.string.httprobe_body_label))
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_body_label))
             .assertIsNotEnabled()
-        composeRule.onNodeWithText("https://recent.example")
+        composeRule
+            .onNodeWithText("https://recent.example")
             .assertIsNotEnabled()
     }
 
     @Test
     fun canceledState_showsRequestCanceledMessage() {
-        val viewModel = fakeViewModel(
-            HttpProbeUiState(url = "https://example.com", isCanceled = true),
-        )
+        val viewModel =
+            fakeViewModel(
+                HttpProbeUiState(url = "https://example.com", isCanceled = true),
+            )
         composeRule.setContent {
             NetSwissKnifeTheme {
                 HttpProbeScreen(viewModel = viewModel)
@@ -287,18 +336,19 @@ class HttpProbeScreenTest {
 
     @Test
     fun changedInputAfterSuccess_hidesOldResponseAndReturnsToIdlePanel() {
-        val result = HttpProbeResult(
-            request = HttpProbeRequest(url = "https://example.com"),
-            statusCode = 200,
-            statusMessage = "OK",
-            responseTimeMs = 42,
-            responseHeaders = emptyMap(),
-            responseBody = "",
-            responseBodyBytes = 0,
-            finalUrl = "https://example.com",
-            redirectChain = emptyList(),
-            securityChecks = emptyList(),
-        )
+        val result =
+            HttpProbeResult(
+                request = HttpProbeRequest(url = "https://example.com"),
+                statusCode = 200,
+                statusMessage = "OK",
+                responseTimeMs = 42,
+                responseHeaders = emptyMap(),
+                responseBody = "",
+                responseBodyBytes = 0,
+                finalUrl = "https://example.com",
+                redirectChain = emptyList(),
+                securityChecks = emptyList(),
+            )
         val state = MutableStateFlow(HttpProbeUiState(url = "https://example.com", result = result))
         val viewModel = fakeViewModel(state.value)
         every { viewModel.uiState } returns state
@@ -307,19 +357,22 @@ class HttpProbeScreenTest {
             NetSwissKnifeTheme { HttpProbeScreen(viewModel = viewModel) }
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
-        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
             .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
         composeRule.onNodeWithText("200").assertIsDisplayed()
 
-        state.value = state.value.copy(
-            url = "https://edited.example",
-            result = null,
-            selectedTab = 0,
-        )
+        state.value =
+            state.value.copy(
+                url = "https://edited.example",
+                result = null,
+                selectedTab = 0,
+            )
         composeRule.mainClock.advanceTimeBy(1_000L)
 
         composeRule.onNodeWithText("200").assertDoesNotExist()
-        composeRule.onNodeWithText(context.getString(R.string.httprobe_idle_title))
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_idle_title))
             .performScrollTo()
             .assertIsDisplayed()
     }
@@ -327,15 +380,17 @@ class HttpProbeScreenTest {
     @Test
     fun mdnsHandoff_showsEditablePrefillAndSourceWithoutSending() {
         val viewModel = mockk<HttpProbeViewModel>(relaxed = true)
-        every { viewModel.uiState } returns MutableStateFlow(
-            HttpProbeUiState(url = "http://printer.local:8080/"),
-        )
+        every { viewModel.uiState } returns
+            MutableStateFlow(
+                HttpProbeUiState(url = "http://printer.local:8080/"),
+            )
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContextState } returns MutableStateFlow(ToolSource.MDNS)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
-        every { viewModel.networkStatus } returns MutableStateFlow(
-            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
-        )
+        every { viewModel.networkStatus } returns
+            MutableStateFlow(
+                NetworkStatus(hasInternet = true, hasLocalNetwork = true),
+            )
 
         composeRule.setContent {
             NetSwissKnifeTheme {
@@ -344,7 +399,8 @@ class HttpProbeScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
 
-        composeRule.onNodeWithTag(HttpProbeScreenTestTags.SOURCE_CONTEXT)
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.SOURCE_CONTEXT)
             .assertIsDisplayed()
         val urlField = composeRule.onNodeWithText("http://printer.local:8080/")
         urlField.performScrollTo().assert(hasSetTextAction())
@@ -357,15 +413,17 @@ class HttpProbeScreenTest {
     @Test
     fun lanHandoff_showsEditablePrefillAndSourceWithoutSending() {
         val viewModel = mockk<HttpProbeViewModel>(relaxed = true)
-        every { viewModel.uiState } returns MutableStateFlow(
-            HttpProbeUiState(url = "http://192.0.2.8:8080/"),
-        )
+        every { viewModel.uiState } returns
+            MutableStateFlow(
+                HttpProbeUiState(url = "http://192.0.2.8:8080/"),
+            )
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContextState } returns MutableStateFlow(ToolSource.LAN)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
-        every { viewModel.networkStatus } returns MutableStateFlow(
-            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
-        )
+        every { viewModel.networkStatus } returns
+            MutableStateFlow(
+                NetworkStatus(hasInternet = true, hasLocalNetwork = true),
+            )
 
         composeRule.setContent { NetSwissKnifeTheme { HttpProbeScreen(viewModel = viewModel) } }
         composeRule.mainClock.advanceTimeBy(1_000L)
@@ -385,9 +443,10 @@ class HttpProbeScreenTest {
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContextState } returns sourceContext
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
-        every { viewModel.networkStatus } returns MutableStateFlow(
-            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
-        )
+        every { viewModel.networkStatus } returns
+            MutableStateFlow(
+                NetworkStatus(hasInternet = true, hasLocalNetwork = true),
+            )
         every { viewModel.clearPrefill() } answers {
             uiState.value = uiState.value.copy(url = "")
             sourceContext.value = null
@@ -400,7 +459,8 @@ class HttpProbeScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
 
-        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CLEAR_PREFILL_ACTION)
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.CLEAR_PREFILL_ACTION)
             .performScrollTo()
             .performClick()
 
@@ -421,9 +481,11 @@ class HttpProbeScreenTest {
         }
         composeRule.mainClock.advanceTimeBy(1_000L)
 
-        composeRule.onNodeWithTag(HttpProbeScreenTestTags.INVALID_HANDOFF)
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.INVALID_HANDOFF)
             .assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.httprobe_url_label))
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_url_label))
             .performScrollTo()
             .assert(hasSetTextAction())
         verify(exactly = 0) { viewModel.send() }
@@ -440,9 +502,13 @@ class HttpProbeScreenTest {
 
         composeRule.mainClock.advanceTimeBy(1_000L)
         composeRule.onNodeWithTag(HttpProbeScreenTestTags.CLEARTEXT_WARNING).assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.httprobe_send_button))
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_send_button))
             .performScrollTo()
-            .assert(androidx.compose.ui.test.isEnabled())
+            .assert(
+                androidx.compose.ui.test
+                    .isEnabled(),
+            )
     }
 
     @Test
@@ -459,7 +525,8 @@ class HttpProbeScreenTest {
             .onNodeWithText(context.getString(R.string.err_url_scheme_unsupported))
             .performScrollTo()
             .assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.httprobe_send_button))
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_send_button))
             .performScrollTo()
             .assertIsNotEnabled()
         verify(exactly = 0) { viewModel.send() }
@@ -479,7 +546,8 @@ class HttpProbeScreenTest {
             .onNodeWithText(context.getString(R.string.err_url_invalid))
             .performScrollTo()
             .assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.httprobe_send_button))
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_send_button))
             .performScrollTo()
             .assertIsNotEnabled()
         verify(exactly = 0) { viewModel.send() }
@@ -487,18 +555,19 @@ class HttpProbeScreenTest {
 
     @Test
     fun tabClick_notifiesViewModelOfSelection() {
-        val result = HttpProbeResult(
-            request = HttpProbeRequest(url = "https://example.com"),
-            statusCode = 200,
-            statusMessage = "OK",
-            responseTimeMs = 42,
-            responseHeaders = emptyMap(),
-            responseBody = "",
-            responseBodyBytes = 0,
-            finalUrl = "https://example.com",
-            redirectChain = emptyList(),
-            securityChecks = emptyList()
-        )
+        val result =
+            HttpProbeResult(
+                request = HttpProbeRequest(url = "https://example.com"),
+                statusCode = 200,
+                statusMessage = "OK",
+                responseTimeMs = 42,
+                responseHeaders = emptyMap(),
+                responseBody = "",
+                responseBodyBytes = 0,
+                finalUrl = "https://example.com",
+                redirectChain = emptyList(),
+                securityChecks = emptyList(),
+            )
         val viewModel = fakeViewModel(HttpProbeUiState(result = result, selectedTab = 0))
         composeRule.setContent {
             NetSwissKnifeTheme {
@@ -519,18 +588,19 @@ class HttpProbeScreenTest {
 
     @Test
     fun overviewTab_showsMethodAndFinalUrl() {
-        val result = HttpProbeResult(
-            request = HttpProbeRequest(url = "https://example.com"),
-            statusCode = 200,
-            statusMessage = "OK",
-            responseTimeMs = 42,
-            responseHeaders = emptyMap(),
-            responseBody = "",
-            responseBodyBytes = 0,
-            finalUrl = "https://example.com/final",
-            redirectChain = emptyList(),
-            securityChecks = emptyList()
-        )
+        val result =
+            HttpProbeResult(
+                request = HttpProbeRequest(url = "https://example.com"),
+                statusCode = 200,
+                statusMessage = "OK",
+                responseTimeMs = 42,
+                responseHeaders = emptyMap(),
+                responseBody = "",
+                responseBodyBytes = 0,
+                finalUrl = "https://example.com/final",
+                redirectChain = emptyList(),
+                securityChecks = emptyList(),
+            )
         val viewModel = fakeViewModel(HttpProbeUiState(result = result, selectedTab = 0))
         composeRule.setContent {
             NetSwissKnifeTheme {
@@ -551,99 +621,148 @@ class HttpProbeScreenTest {
             .onFirst()
             .performScrollTo()
             .assertIsDisplayed()
-        composeRule.onNodeWithTag(HttpProbeScreenTestTags.TIMING_BAR)
-            .performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithTag(HttpProbeScreenTestTags.COPY_CURL_ACTION)
-            .performScrollTo().assertIsDisplayed().performClick()
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.TIMING_BAR)
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.COPY_CURL_ACTION)
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
         verify { viewModel.copyAsCurl() }
     }
 
     @Test
     fun bodyTab_showsJsonValidityAndPrettyToggle() {
-        val result = HttpProbeResult(
-            request = HttpProbeRequest(url = "https://example.com"),
-            statusCode = 200,
-            statusMessage = "OK",
-            responseTimeMs = 42,
-            responseHeaders = mapOf("Content-Type" to listOf("application/json")),
-            responseBody = "{\"ok\":true}",
-            responseBodyBytes = 11,
-            finalUrl = "https://example.com",
-            redirectChain = emptyList(),
-            securityChecks = emptyList(),
-        )
+        val result =
+            HttpProbeResult(
+                request = HttpProbeRequest(url = "https://example.com"),
+                statusCode = 200,
+                statusMessage = "OK",
+                responseTimeMs = 42,
+                responseHeaders = mapOf("Content-Type" to listOf("application/json")),
+                responseBody = "{\"ok\":true}",
+                responseBodyBytes = 11,
+                finalUrl = "https://example.com",
+                redirectChain = emptyList(),
+                securityChecks = emptyList(),
+            )
         val viewModel = fakeViewModel(HttpProbeUiState(result = result, selectedTab = 2))
         composeRule.setContent {
             NetSwissKnifeTheme { HttpProbeScreen(viewModel = viewModel) }
         }
         composeRule.mainClock.advanceTimeBy(2_000L)
-        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
             .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
-        composeRule.onNodeWithTag(HttpProbeScreenTestTags.PRETTY_JSON_SWITCH)
-            .performScrollTo().assertIsDisplayed().performClick()
-        composeRule.onNodeWithText(context.getString(R.string.httprobe_json_valid))
-            .performScrollTo().assertIsDisplayed()
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.PRETTY_JSON_SWITCH)
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_json_valid))
+            .performScrollTo()
+            .assertIsDisplayed()
         verify { viewModel.onPrettyJsonToggle() }
     }
 
     @Test
     fun bodyTab_doesNotCallTruncatedJsonInvalid() {
-        val result = HttpProbeResult(
-            request = HttpProbeRequest(url = "https://example.com"),
-            statusCode = 200,
-            statusMessage = "OK",
-            responseTimeMs = 42,
-            responseHeaders = mapOf("Content-Type" to listOf("application/json")),
-            responseBody = "{\"ok\":",
-            responseBodyBytes = 7,
-            responseBodyTruncated = true,
-            finalUrl = "https://example.com",
-            redirectChain = emptyList(),
-            securityChecks = emptyList(),
-        )
+        val result =
+            HttpProbeResult(
+                request = HttpProbeRequest(url = "https://example.com"),
+                statusCode = 200,
+                statusMessage = "OK",
+                responseTimeMs = 42,
+                responseHeaders = mapOf("Content-Type" to listOf("application/json")),
+                responseBody = "{\"ok\":",
+                responseBodyBytes = 7,
+                responseBodyTruncated = true,
+                finalUrl = "https://example.com",
+                redirectChain = emptyList(),
+                securityChecks = emptyList(),
+            )
         composeRule.setContent {
             NetSwissKnifeTheme {
                 HttpProbeScreen(viewModel = fakeViewModel(HttpProbeUiState(result = result, selectedTab = 2)))
             }
         }
         composeRule.mainClock.advanceTimeBy(2_000L)
-        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
             .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
-        composeRule.onNodeWithText(context.getString(R.string.httprobe_json_incomplete))
-            .performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.httprobe_json_invalid))
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_json_incomplete))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(context.getString(R.string.httprobe_json_invalid))
             .assertDoesNotExist()
     }
 
     @Test
     fun copyCurl_disclosesWhenHeaderForwardingSuppressesRedirects() {
-        val request = HttpProbeRequest(
-            url = "https://example.com/start",
-            headers = listOf("Authorization" to "Bearer test"),
-            followRedirects = true,
-        )
-        val result = HttpProbeResult(
-            request = request,
-            statusCode = 302,
-            statusMessage = "Found",
-            responseTimeMs = 42,
-            responseHeaders = emptyMap(),
-            responseBody = "",
-            responseBodyBytes = 0,
-            finalUrl = request.url,
-            redirectChain = emptyList(),
-            securityChecks = emptyList(),
-        )
+        val request =
+            HttpProbeRequest(
+                url = "https://example.com/start",
+                headers = listOf("Authorization" to "Bearer test"),
+                followRedirects = true,
+            )
+        val result =
+            HttpProbeResult(
+                request = request,
+                statusCode = 302,
+                statusMessage = "Found",
+                responseTimeMs = 42,
+                responseHeaders = emptyMap(),
+                responseBody = "",
+                responseBodyBytes = 0,
+                finalUrl = request.url,
+                redirectChain = emptyList(),
+                securityChecks = emptyList(),
+            )
         composeRule.setContent {
             NetSwissKnifeTheme {
                 HttpProbeScreen(viewModel = fakeViewModel(HttpProbeUiState(result = result)))
             }
         }
         composeRule.mainClock.advanceTimeBy(2_000L)
-        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.CONTENT_LIST)
             .performScrollToIndex(HttpProbeScreenTestTags.RESULT_PANEL_INDEX)
-        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CURL_REDIRECT_NOTICE)
-            .performScrollTo().assertIsDisplayed()
+        composeRule
+            .onNodeWithTag(HttpProbeScreenTestTags.CURL_REDIRECT_NOTICE)
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun typingPlainHttpUrl_keepsFocusAndFullTextInUrlField() {
+        val uiState = MutableStateFlow(HttpProbeUiState())
+        val viewModel = fakeViewModel(HttpProbeUiState())
+        every { viewModel.uiState } returns uiState
+        every { viewModel.onUrlChange(any()) } answers {
+            uiState.value = uiState.value.copy(url = firstArg())
+        }
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                HttpProbeScreen(viewModel = viewModel)
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(1_000L)
+        val urlField = composeRule.onNode(hasSetTextAction())
+        urlField.performClick()
+        urlField.performTextInput("http://")
+        // The cleartext warning appears once the scheme is typed; it must not take focus from the field.
+        urlField.assert(SemanticsMatcher.expectValue(SemanticsProperties.Focused, true))
+        composeRule.onNodeWithTag(HttpProbeScreenTestTags.CLEARTEXT_WARNING).assertIsDisplayed()
+        urlField.performTextInput("example.com")
+        urlField.assert(SemanticsMatcher.expectValue(SemanticsProperties.Focused, true))
+        urlField.assert(hasText("http://example.com"))
+        assertTrue(uiState.value.url == "http://example.com")
     }
 
     private fun fakeViewModel(
@@ -655,34 +774,37 @@ class HttpProbeScreenTest {
         every { viewModel.recentHosts } returns MutableStateFlow(recentHostValues)
         every { viewModel.sourceContextState } returns MutableStateFlow(null)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
-        every { viewModel.networkStatus } returns MutableStateFlow(
-            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
-        )
+        every { viewModel.networkStatus } returns
+            MutableStateFlow(
+                NetworkStatus(hasInternet = true, hasLocalNetwork = true),
+            )
         return viewModel
     }
 
     @Test
     fun securityTab_showsCoopAndCoepChecks() {
-        val result = HttpProbeResult(
-            request = HttpProbeRequest(url = "https://example.com"),
-            statusCode = 200,
-            statusMessage = "OK",
-            responseTimeMs = 42,
-            responseHeaders = emptyMap(),
-            responseBody = "",
-            responseBodyBytes = 0,
-            finalUrl = "https://example.com",
-            redirectChain = emptyList(),
-            securityChecks = HttpSecurityAnalyzer.analyze(emptyMap(), isHttps = true)
-        )
+        val result =
+            HttpProbeResult(
+                request = HttpProbeRequest(url = "https://example.com"),
+                statusCode = 200,
+                statusMessage = "OK",
+                responseTimeMs = 42,
+                responseHeaders = emptyMap(),
+                responseBody = "",
+                responseBodyBytes = 0,
+                finalUrl = "https://example.com",
+                redirectChain = emptyList(),
+                securityChecks = HttpSecurityAnalyzer.analyze(emptyMap(), isHttps = true),
+            )
         val viewModel = mockk<HttpProbeViewModel>(relaxed = true)
         every { viewModel.uiState } returns MutableStateFlow(HttpProbeUiState(result = result, selectedTab = 3))
         every { viewModel.recentHosts } returns MutableStateFlow(emptyList())
         every { viewModel.sourceContextState } returns MutableStateFlow(null)
         every { viewModel.hasInvalidHandoff } returns MutableStateFlow(false)
-        every { viewModel.networkStatus } returns MutableStateFlow(
-            NetworkStatus(hasInternet = true, hasLocalNetwork = true)
-        )
+        every { viewModel.networkStatus } returns
+            MutableStateFlow(
+                NetworkStatus(hasInternet = true, hasLocalNetwork = true),
+            )
 
         composeRule.setContent {
             NetSwissKnifeTheme {

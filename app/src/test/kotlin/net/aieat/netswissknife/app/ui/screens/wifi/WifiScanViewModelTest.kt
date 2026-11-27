@@ -582,6 +582,24 @@ class WifiScanViewModelTest {
             }
 
         @Test
+        fun `first scan shows every band until one is chosen`() =
+            runWifiTest {
+                coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns
+                    stubResult(
+                        stubAp(band = WifiBand.BAND_2_4GHZ),
+                        stubAp(band = WifiBand.BAND_5GHZ, bssid = "11:22:33:44:55:66"),
+                    )
+                viewModel.startScan()
+                runCurrent()
+                awaitSuccess()
+
+                val state = viewModel.uiState.value as WifiScanUiState.Success
+                assertNull(state.bandFilter)
+                assertEquals(2, state.filteredAccessPoints.size)
+                viewModel.stopAutoRefresh()
+            }
+
+        @Test
         fun `setSortOrder updates Success state`() =
             runWifiTest {
                 coEvery { wifiScanUseCase(trigger = true, operationSession = any()) } returns stubResult(stubAp())

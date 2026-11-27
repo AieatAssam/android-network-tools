@@ -33,11 +33,14 @@ data class NetInfoSummaryLabels(
     val publicIpv4: String,
     val publicIpv6: String,
     val hostname: String,
+    val noReverseDns: String,
+    val reverseDnsFailed: String,
     val location: String,
     val asn: String,
     val notChecked: String,
     val notAvailable: String,
     val noActiveNetwork: String,
+    val deprecated: String,
     val scopeName: (IpAddressScope) -> String,
     val transportName: (NetworkTransport) -> String,
 )
@@ -113,28 +116,38 @@ object NetInfoSummaryFormatter {
             return
         }
         appendLine(labels.publicIp)
-        appendPublicFamily(labels.publicIpv4, report.ipv4, labels)
-        appendPublicFamily(labels.publicIpv6, report.ipv6, labels)
+        val shared = PublicNetworkDetails.shared(report)
+        appendPublicFamily(labels.publicIpv4, report.ipv4, labels, withDetails = shared == null)
+        appendPublicFamily(labels.publicIpv6, report.ipv6, labels, withDetails = shared == null)
+        shared?.let { appendDetails(it, labels) }
     }
 
     private fun StringBuilder.appendPublicFamily(
         label: String,
         result: NetworkResult<PublicAddressInfo>,
         labels: NetInfoSummaryLabels,
+        withDetails: Boolean,
     ) {
         when (result) {
             is NetworkResult.Success -> {
                 val info = result.data
                 line(label, info.address)
-                info.hostname?.let { line(labels.hostname, it) }
-                NetInfoSummaryValues.locationText(info)?.let { line(labels.location, it) }
-                info.geo?.asn?.let { line(labels.asn, it) }
+                line(labels.hostname, info.hostnameOr(labels.noReverseDns, labels.reverseDnsFailed))
+                if (withDetails) appendDetails(PublicNetworkDetails.of(info), labels)
             }
 
             is NetworkResult.Error -> {
                 line(label, labels.notAvailable)
             }
         }
+    }
+
+    private fun StringBuilder.appendDetails(
+        details: PublicNetworkDetails,
+        labels: NetInfoSummaryLabels,
+    ) {
+        details.location?.let { line(labels.location, it) }
+        details.asn?.let { line(labels.asn, it) }
     }
 
     private fun StringBuilder.line(

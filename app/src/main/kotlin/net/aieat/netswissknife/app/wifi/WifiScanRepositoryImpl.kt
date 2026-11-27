@@ -97,9 +97,12 @@ class WifiScanRepositoryImpl(
                 val connectedInfo = activeConnection?.let { buildConnectionInfo(it.wifiInfo, it.linkProperties) }
 
                 val accessPoints =
-                    rawResults
-                        .map { sr -> mapScanResult(sr, connectedBssid) }
-                        .sortedByDescending { it.rssi }
+                    keepOnePerBssid(
+                        rawResults.map { sr -> mapScanResult(sr, connectedBssid) },
+                        bssid = { it.bssid },
+                        isNamed = { it.ssid.isNotBlank() },
+                        rssi = { it.rssi },
+                    ).sortedByDescending { it.rssi }
 
                 val channels = WifiChannelAnalyzer.analyze(accessPoints)
                 val cacheReadElapsedRealtimeMs = SystemClock.elapsedRealtime()
@@ -208,12 +211,13 @@ class WifiScanRepositoryImpl(
                 linkProperties?.linkAddresses.orEmpty().mapNotNull { it.address.hostAddress },
             )
         val gateway =
-            linkProperties
-                ?.routes
-                ?.firstOrNull { it.isDefaultRoute && it.gateway?.isAnyLocalAddress == false }
-                ?.gateway
-                ?.hostAddress
-                ?.substringBefore('%')
+            WifiConnectionInfoMapper.selectGateway(
+                linkProperties
+                    ?.routes
+                    .orEmpty()
+                    .filter { it.isDefaultRoute && it.gateway?.isAnyLocalAddress == false }
+                    .mapNotNull { it.gateway?.hostAddress?.substringBefore('%') },
+            )
         val dnsServers =
             linkProperties
                 ?.dnsServers

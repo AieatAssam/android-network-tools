@@ -9,20 +9,20 @@ class WhoisLabelsTest {
     @Test
     @DisplayName("RDAP statuses with spaces, as served by rdap.verisign.com, get labels")
     fun `RDAP spaced statuses get human labels`() {
-        assertEquals("Delete Locked", whoisStatusLabel("client delete prohibited"))
-        assertEquals("Transfer Locked", whoisStatusLabel("client transfer prohibited"))
-        assertEquals("Update Locked", whoisStatusLabel("client update prohibited"))
+        assertEquals("Delete locked", whoisStatusLabel("client delete prohibited"))
+        assertEquals("Transfer locked", whoisStatusLabel("client transfer prohibited"))
+        assertEquals("Update locked", whoisStatusLabel("client update prohibited"))
     }
 
     @Test
     @DisplayName("WHOIS EPP codes with the trailing ICANN URL get labels")
     fun `EPP camel case statuses get human labels`() {
         assertEquals(
-            "Delete Locked",
+            "Delete locked",
             whoisStatusLabel("clientDeleteProhibited https://icann.org/epp#clientDeleteProhibited"),
         )
-        assertEquals("Transfer Locked", whoisStatusLabel("clientTransferProhibited"))
-        assertEquals("Server Transfer Locked", whoisStatusLabel("serverTransferProhibited"))
+        assertEquals("Transfer locked", whoisStatusLabel("clientTransferProhibited"))
+        assertEquals("Server transfer locked", whoisStatusLabel("serverTransferProhibited"))
     }
 
     @Test

@@ -12,6 +12,15 @@ import androidx.datastore.preferences.preferencesDataStore
 
 val Context.appPreferences: DataStore<Preferences> by preferencesDataStore(name = "app_prefs")
 
+/** Values a screen uses when a preference has never been saved. */
+object AppPreferenceDefaults {
+    /** Ping count the Settings screen shows for an unsaved default. */
+    const val PING_COUNT = 10
+
+    /** Timeout the Settings screen shows for an unsaved default. */
+    const val TIMEOUT_MS = 2_000
+}
+
 object AppPreferenceKeys {
     // ── Onboarding ────────────────────────────────────────────────────────────
 
@@ -49,6 +58,9 @@ object AppPreferenceKeys {
 
     /** LAN host result ordering. */
     val LAN_HOST_SORT_ORDER = stringPreferencesKey("lan_host_sort_order")
+
+    /** LAN device list filter. */
+    val LAN_HOST_FILTER = stringPreferencesKey("lan_host_filter")
 
     // ── Recent hosts (ordered pipe-delimited lists, max 5 entries each) ───────
     val RECENT_PING_HOSTS = stringPreferencesKey("recent_ping_hosts")

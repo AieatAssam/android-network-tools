@@ -1,6 +1,6 @@
 # Privacy Policy - Net Swiss Knife
 
-**Effective date:** 2026-10-02
+**Effective date:** 2026-11-24
 
 ---
 
@@ -32,7 +32,7 @@ Settings and recent targets are excluded from Android cloud backup and device tr
 
 ## External Services
 
-The app has no Net Swiss Knife account, analytics, or diagnostic-result server. It sends requests to the destinations required by the tool you choose; those destinations may receive your public IP address and ordinary connection metadata such as request time. Settings includes a link to the [public GitHub repository](https://github.com/AieatAssam/android-network-tools) and a Cloudflare attribution link; those sites are opened only if you tap the links.
+The app has no Net Swiss Knife account, analytics, or diagnostic-result server. It sends requests to the destinations required by the tool you choose; those destinations may receive your public IP address and ordinary connection metadata such as request time. Settings includes a link to the [public GitHub repository](https://github.com/AieatAssam/android-network-tools) and attribution links for the data services the app uses (Cloudflare, ipify, the IP geolocation services, and the WHOIS/RDAP registries); those sites are opened only if you tap the links.
 
 ### DNS, local-network tools, and Wi-Fi Scanner
 
@@ -69,7 +69,7 @@ Cloudflare may receive the network and request metadata normally associated with
 
 ### Traceroute geolocation
 
-- **What is sent:** Traceroute IPv4 hop addresses that pass the app's local filter may be sent to `ipinfo.io` to retrieve approximate country, city, ISP, and ASN data for display. This can include special-purpose addresses that the filter does not recognize.
+- **What is sent:** Traceroute IPv4 hop addresses that pass the app's local filter may be sent to `ipinfo.io`, falling back to `ipwho.is` and `ipapi.co`, to retrieve approximate country, city, ISP, and ASN data for display. This can include special-purpose addresses that the filter does not recognize.
 - **What is filtered:** The current precheck skips RFC 1918 private, loopback, link-local, 0/8, and 240/4 IPv4 ranges. IPv6 hops are not sent for geolocation by the current implementation.
 - **Caching:** Results are cached in memory to reduce repeated requests.
 - **Scope:** This only occurs when you explicitly run the Traceroute tool.
@@ -109,7 +109,7 @@ We do not sell your data. When you use a tool, the target and request details ar
 - Synthetic measurement traffic and ordinary HTTPS request metadata are sent to Cloudflare only when you run Speed Test.
 - DNS queries are sent to the resolver selected in DNS Lookup. RDAP/WHOIS queries are sent to IANA, `rdap.org`, registries, and any WHOIS referral servers needed to answer the query.
 - Public IP check requests go to `api4.ipify.org` and `api6.ipify.org` only when you tap Check public IP in Network Info. The geolocation services described in that section receive the resulting public address.
-- Target and request details are sent to the destinations selected or entered for network tools. IPv4 addresses found on a traceroute path that pass the app's local filter may be sent to `ipinfo.io` when you run Traceroute.
+- Target and request details are sent to the destinations selected or entered for network tools. IPv4 addresses found on a traceroute path that pass the app's local filter may be sent to `ipinfo.io`, falling back to `ipwho.is` and `ipapi.co`, when you run Traceroute.
 - Crash and stability reports may be collected by the Google Play platform as described above.
 
 ---

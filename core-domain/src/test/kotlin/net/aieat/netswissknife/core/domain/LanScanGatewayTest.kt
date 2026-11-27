@@ -57,4 +57,17 @@ class LanScanGatewayTest {
 
         verify { repository.scan(any<LanScanRequest>(), session) }
     }
+
+    @Test
+    fun `this device's address inside the subnet is forwarded and outside it is dropped`() =
+        runTest {
+            val repository = mockk<LanScanRepository>()
+            every { repository.scan(any<LanScanRequest>()) } returns emptyFlow()
+
+            LanScanUseCase(repository)(LanScanParams("192.168.1.0/24", localIp = " 192.168.1.20 ")).collect {}
+            LanScanUseCase(repository)(LanScanParams("192.168.1.0/24", localIp = "10.0.0.5")).collect {}
+
+            verify { repository.scan(match { it.localIp == "192.168.1.20" }) }
+            verify { repository.scan(match { it.localIp == null }) }
+        }
 }

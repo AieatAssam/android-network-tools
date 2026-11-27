@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
@@ -27,6 +28,7 @@ import androidx.compose.ui.test.swipeUp
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -57,6 +59,8 @@ import net.aieat.netswissknife.app.ui.navigation.ToolMacAddress
 import net.aieat.netswissknife.app.ui.navigation.ToolPort
 import net.aieat.netswissknife.app.ui.navigation.ToolSource
 import net.aieat.netswissknife.app.ui.navigation.navigateFromToolHandoff
+import net.aieat.netswissknife.app.ui.navigation.navigateToTool
+import net.aieat.netswissknife.app.ui.navigation.navigationRouteIdentity
 import net.aieat.netswissknife.app.ui.screens.PortsScreen
 import net.aieat.netswissknife.app.ui.screens.PortsScreenTestTags
 import net.aieat.netswissknife.app.ui.screens.lan.LanNavEvent
@@ -67,6 +71,7 @@ import net.aieat.netswissknife.app.ui.theme.NetSwissKnifeTheme
 import net.aieat.netswissknife.core.domain.PortScanUseCase
 import net.aieat.netswissknife.core.network.lan.LanHost
 import net.aieat.netswissknife.core.network.lan.LanScanSummary
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Rule
 import org.junit.Test
@@ -151,6 +156,52 @@ class ToolHandoffNavigationTest {
 
         composeRule.onNodeWithText("LAN result screen").assertIsDisplayed()
         composeRule.onNodeWithText("LAN scan starts: 1").assertIsDisplayed()
+    }
+
+    @Test
+    fun productionNavHost_choosingSourceToolAfterHandoffShowsSourceToolNotHandoff() {
+        val host = requireNotNull(ToolHost.parse("192.0.2.8"))
+        val destination =
+            NavRoutes.Ports.createRoute(
+                ToolIntent(ToolDestination.HostTarget(HostTool.PORTS, host), ToolSource.LAN),
+            )
+        lateinit var navController: NavHostController
+
+        composeRule.setContent {
+            NetSwissKnifeTheme {
+                navController = rememberNavController()
+                AppNavHostWithContentOverrides(
+                    navController = navController,
+                    contentOverrides =
+                        AppNavHostContentOverrides(
+                            lan = { controller ->
+                                Button(onClick = { controller.navigateFromToolHandoff(destination) }) {
+                                    Text("Open ports for host")
+                                }
+                            },
+                            ports = { Text("Ports handoff screen") },
+                        ),
+                )
+            }
+        }
+
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.runOnIdle { navController.navigateToTool(NavRoutes.Lan.route) }
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.onNodeWithText("Open ports for host").performClick()
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.onNodeWithText("Ports handoff screen").assertIsDisplayed()
+
+        composeRule.runOnIdle { navController.navigateToTool(NavRoutes.Home.route) }
+        composeRule.mainClock.advanceTimeBy(2_000L)
+        composeRule.runOnIdle { navController.navigateToTool(NavRoutes.Lan.route) }
+        composeRule.mainClock.advanceTimeBy(2_000L)
+
+        composeRule.onNodeWithText("Open ports for host").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Ports handoff screen").assertCountEquals(0)
+        composeRule.runOnIdle {
+            assertEquals(NavRoutes.Lan.route, navigationRouteIdentity(navController.currentDestination?.route))
+        }
     }
 
     @Test

@@ -40,9 +40,8 @@ import net.aieat.netswissknife.app.ui.theme.AppMotion
 /**
  * Select a tool as a top-level destination.
  *
- * Settings is intentionally not part of this root-level tool stack. Popping
- * back to Home before selecting a tool prevents Settings from remaining above
- * a tool in the back stack, while save/restore keeps each tool's own state.
+ * Popping back to Home first keeps Settings from staying above a tool, save/restore keeps each
+ * tool's own state, and a handoff restored on top of the tool is popped so the tool itself shows.
  */
 fun NavHostController.navigateToTool(route: String) {
     navigate(route) {
@@ -50,6 +49,7 @@ fun NavHostController.navigateToTool(route: String) {
         launchSingleTop = true
         restoreState = true
     }
+    popToRequestedTool(route)
 }
 
 /** Push a child tool from the current result screen so Back returns to that result. */

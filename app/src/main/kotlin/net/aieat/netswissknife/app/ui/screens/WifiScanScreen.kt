@@ -6,11 +6,13 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.Resources
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -54,10 +56,12 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SignalWifiOff
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Badge
@@ -147,7 +151,11 @@ import net.aieat.netswissknife.app.ui.screens.wifi.WifiScanFreshnessStatus
 import net.aieat.netswissknife.app.ui.screens.wifi.WifiScanUiState
 import net.aieat.netswissknife.app.ui.screens.wifi.WifiScanViewModel
 import net.aieat.netswissknife.app.ui.screens.wifi.placeSpectrumLabels
+import net.aieat.netswissknife.app.ui.screens.wifi.signalLevelLabelRes
+import net.aieat.netswissknife.app.ui.screens.wifi.spectrumBandChoices
+import net.aieat.netswissknife.app.ui.screens.wifi.spectrumBandCounts
 import net.aieat.netswissknife.app.ui.screens.wifi.spectrumLabelCandidates
+import net.aieat.netswissknife.app.ui.screens.wifi.spectrumPlotBand
 import net.aieat.netswissknife.app.ui.screens.wifi.wifiNetworksMatching
 import net.aieat.netswissknife.app.ui.theme.AppMotion
 import net.aieat.netswissknife.app.ui.theme.AppShapes
@@ -158,9 +166,12 @@ import net.aieat.netswissknife.app.ui.theme.StatusGood
 import net.aieat.netswissknife.app.ui.theme.StatusOk
 import net.aieat.netswissknife.app.ui.theme.StatusWarn
 import net.aieat.netswissknife.app.util.shareText
+import net.aieat.netswissknife.core.network.wifi.SignalLevel
 import net.aieat.netswissknife.core.network.wifi.WifiAccessPoint
 import net.aieat.netswissknife.core.network.wifi.WifiBand
 import net.aieat.netswissknife.core.network.wifi.WifiNetwork
+import net.aieat.netswissknife.core.network.wifi.WifiScanRefreshStatus
+import net.aieat.netswissknife.core.network.wifi.WifiScanResult
 import net.aieat.netswissknife.core.network.wifi.WifiSecurity
 import kotlin.math.roundToInt
 
@@ -192,7 +203,11 @@ object WifiScreenTestTags {
     const val UNKNOWN_SECURITY_ICON = "wifi_unknown_security_icon"
     const val UNKNOWN_SECURITY_LABEL = "wifi_unknown_security_label"
     const val AP_DETAIL_CONTENT = "wifi_ap_detail_content"
-    const val NETWORKS_START_INDEX = 7
+    const val SPECTRUM_TOGGLE = "wifi_spectrum_toggle"
+    const val SPECTRUM_BAND_LABEL = "wifi_spectrum_band_label"
+
+    /** The results header (hero, status, search, bands, spectrum, sort, count) is one item, so networks follow it. */
+    const val NETWORKS_START_INDEX = 1
 }
 
 /** Permissions needed by WifiManager scan APIs for the given platform SDK. */
@@ -372,7 +387,7 @@ fun WifiScanScreen(viewModel: WifiScanViewModel = hiltViewModel()) {
 
                     is WifiScanUiState.Error -> {
                         WifiErrorScreen(
-                            message = state.message,
+                            bodyRes = state.bodyRes,
                             onRetry = {
                                 viewModel.onRetry()
                                 permissionLauncher.launch(requiredPermissions)
@@ -464,13 +479,13 @@ fun WifiScanScreen(viewModel: WifiScanViewModel = hiltViewModel()) {
 }
 
 @Composable private fun WifiErrorScreen(
-    message: String,
+    @StringRes bodyRes: Int,
     onRetry: () -> Unit,
 ) {
     WifiStatusCard(
         icon = { Icon(Icons.Default.WifiOff, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.error) },
         title = stringResource(R.string.wifi_error_title),
-        body = message,
+        body = stringResource(bodyRes),
         action = { ToolRetryButton(text = stringResource(R.string.wifi_retry), onClick = onRetry) },
     )
 }
@@ -522,7 +537,14 @@ fun WifiScanScreen(viewModel: WifiScanViewModel = hiltViewModel()) {
 
 @Composable private fun WifiCancelledScreen(onRetry: () -> Unit) {
     WifiStatusCard(
-        icon = { Icon(Icons.Default.WifiOff, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        icon = {
+            Icon(
+                Icons.Default.Stop,
+                null,
+                Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
         title = stringResource(R.string.wifi_scan_cancelled_title),
         body = stringResource(R.string.wifi_scan_cancelled_body),
         action = { ToolRetryButton(text = stringResource(R.string.wifi_retry), onClick = onRetry) },
@@ -531,7 +553,14 @@ fun WifiScanScreen(viewModel: WifiScanViewModel = hiltViewModel()) {
 
 @Composable private fun WifiPausedScreen(onRetry: () -> Unit) {
     WifiStatusCard(
-        icon = { Icon(Icons.Default.WifiOff, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        icon = {
+            Icon(
+                Icons.Default.Pause,
+                null,
+                Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
         title = stringResource(R.string.wifi_scan_paused_title),
         body = stringResource(R.string.wifi_scan_paused_body),
         action = { ToolRetryButton(text = stringResource(R.string.wifi_retry), onClick = onRetry) },
@@ -540,27 +569,172 @@ fun WifiScanScreen(viewModel: WifiScanViewModel = hiltViewModel()) {
 
 // ── Success screen ────────────────────────────────────────────────────────────
 
-internal fun buildWifiShareText(result: net.aieat.netswissknife.core.network.wifi.WifiScanResult): String =
+/** Localised pieces of the Wi-Fi share and copy text. Resolved only when the user taps Share or Copy. */
+internal data class WifiShareLabels(
+    val accessPoints: (Int) -> String,
+    val freshness: (fresh: Boolean) -> String,
+    val sampleAge: (ageMs: Long?) -> String,
+    val refreshStatus: (WifiScanRefreshStatus) -> String,
+    val sampleTime: (timestampMs: Long) -> String,
+    val wifiDisabled: String,
+    val locationDisabled: String,
+    val rssi: (dbm: Int) -> String,
+    val bandChannel: (band: WifiBand, channel: Int) -> String,
+)
+
+internal fun wifiShareLabels(resources: Resources): WifiShareLabels =
+    WifiShareLabels(
+        accessPoints = { count -> resources.getQuantityString(R.plurals.wifi_share_access_points, count, count) },
+        freshness = { fresh ->
+            resources.getString(
+                R.string.wifi_share_freshness,
+                resources.getString(if (fresh) R.string.wifi_share_fresh else R.string.wifi_share_cached),
+            )
+        },
+        sampleAge = { ageMs ->
+            resources.getString(
+                R.string.wifi_share_sample_age,
+                ageMs?.let { resources.getString(R.string.wifi_share_age_ms, it) }
+                    ?: resources.getString(R.string.wifi_share_unknown),
+            )
+        },
+        refreshStatus = { status ->
+            resources.getString(R.string.wifi_share_refresh_status, resources.getString(refreshStatusRes(status)))
+        },
+        sampleTime = { timestampMs ->
+            resources.getString(
+                R.string.wifi_share_sample_time,
+                java.text.DateFormat
+                    .getDateTimeInstance()
+                    .format(java.util.Date(timestampMs)),
+            )
+        },
+        wifiDisabled = resources.getString(R.string.wifi_share_wifi_disabled),
+        locationDisabled = resources.getString(R.string.wifi_share_location_disabled),
+        rssi = { dbm -> resources.getString(R.string.wifi_rssi_dbm, dbm) },
+        bandChannel = { band, channel ->
+            resources.getString(R.string.wifi_band_channel_value, band.ghzLabel, channel)
+        },
+    )
+
+@StringRes
+private fun refreshStatusRes(status: WifiScanRefreshStatus): Int =
+    when (status) {
+        WifiScanRefreshStatus.NOT_REQUESTED -> R.string.wifi_share_status_not_requested
+        WifiScanRefreshStatus.UPDATED -> R.string.wifi_share_status_updated
+        WifiScanRefreshStatus.NOT_UPDATED -> R.string.wifi_scan_not_updated
+        WifiScanRefreshStatus.TIMED_OUT -> R.string.wifi_scan_timed_out
+        WifiScanRefreshStatus.REJECTED -> R.string.wifi_scan_rejected
+        WifiScanRefreshStatus.FAILED -> R.string.wifi_scan_failed_cached
+        WifiScanRefreshStatus.PERMISSION_DENIED -> R.string.wifi_scan_permission_denied_cached
+    }
+
+internal fun buildWifiShareText(
+    result: WifiScanResult,
+    labels: WifiShareLabels,
+): String =
     buildString {
-        appendLine("Wi-Fi scan: ${result.accessPoints.size} access points")
-        appendLine("Freshness: ${if (result.isFresh) "fresh" else "cached or stale"}")
-        appendLine("Sample age: ${result.scanAgeMs?.let { "$it ms" } ?: "unknown"}")
-        appendLine("Refresh status: ${result.refreshStatus}")
-        if (result.scanTimestampMs > 0) appendLine("Sample time: ${java.util.Date(result.scanTimestampMs)}")
-        if (!result.isWifiEnabled) appendLine("Wi-Fi is disabled; retained cached results.")
-        if (!result.locationEnabled) appendLine("Location Services are disabled; retained cached results.")
+        appendLine(labels.accessPoints(result.accessPoints.size))
+        appendLine(labels.freshness(result.isFresh))
+        appendLine(labels.sampleAge(result.scanAgeMs))
+        appendLine(labels.refreshStatus(result.refreshStatus))
+        if (result.scanTimestampMs > 0) appendLine(labels.sampleTime(result.scanTimestampMs))
+        if (!result.isWifiEnabled) appendLine(labels.wifiDisabled)
+        if (!result.locationEnabled) appendLine(labels.locationDisabled)
         result.accessPoints.sortedBy { it.displaySsid.lowercase() }.forEach { ap ->
             appendLine(
                 listOf(
                     ap.displaySsid,
                     ap.bssid,
-                    "${ap.rssi} dBm",
-                    "${ap.band.displayName} ch ${ap.channel}",
-                    ap.security,
+                    labels.rssi(ap.rssi),
+                    labels.bandChannel(ap.band, ap.channel),
+                    ap.security.displayName,
                 ).joinToString(" · "),
             )
         }
     }
+
+@Composable
+private fun wifiApCountText(
+    shownApCount: Int,
+    totalApCount: Int,
+): String =
+    if (shownApCount == totalApCount) {
+        pluralStringResource(R.plurals.wifi_aps_count, totalApCount, totalApCount)
+    } else {
+        pluralStringResource(R.plurals.wifi_aps_of_total, totalApCount, shownApCount, totalApCount)
+    }
+
+/** Copy and Share actions for the whole scan result. */
+@Composable
+private fun WifiShareActionsRow(result: WifiScanResult) {
+    val context = LocalContext.current
+    val copiedMessage = stringResource(R.string.lan_copied)
+    val shareSubject = stringResource(R.string.wifi_screen_title)
+    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+        TextButton(onClick = {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val text = buildWifiShareText(result, wifiShareLabels(context.resources))
+            clipboard.setPrimaryClip(ClipData.newPlainText("Wi-Fi scan", text))
+            Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
+        }) { Text(stringResource(R.string.action_copy)) }
+        TextButton(onClick = {
+            context.shareText(
+                buildWifiShareText(result, wifiShareLabels(context.resources)),
+                shareSubject,
+            )
+        }) { Text(stringResource(R.string.action_share)) }
+    }
+}
+
+/** The best 2.4 GHz channel, shown only while the 2.4 GHz band is selected and a best channel is known. */
+@Composable
+private fun WifiBestChannelSection(state: WifiScanUiState.Success) {
+    if (state.bandFilter == WifiBand.BAND_2_4GHZ) {
+        val bestCh = state.result.bestChannel24GHz
+        if (bestCh != null) {
+            WifiBestChannelCallout(channel = bestCh)
+        }
+    }
+}
+
+/** The show/hide toggle for the channel spectrum and, when expanded, the spectrum card. */
+@Composable
+private fun WifiSpectrumSection(
+    band: WifiBand,
+    aps: List<WifiAccessPoint>,
+    colorNetworks: List<WifiNetwork>,
+    bandChoices: List<Pair<WifiBand, Int>>,
+    onChooseBand: (WifiBand) -> Unit,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    TextButton(
+        onClick = onToggle,
+        modifier = Modifier.testTag(WifiScreenTestTags.SPECTRUM_TOGGLE),
+    ) {
+        Icon(
+            if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            stringResource(
+                if (expanded) R.string.wifi_spectrum_hide else R.string.wifi_spectrum_show,
+            ),
+        )
+    }
+    if (expanded) {
+        WifiSpectrumCard(
+            band = band,
+            aps = aps,
+            colorNetworks = colorNetworks,
+            bandChoices = bandChoices,
+            onChooseBand = onChooseBand,
+        )
+    }
+}
 
 @Composable private fun WifiSuccessScreen(
     state: WifiScanUiState.Success,
@@ -576,13 +750,28 @@ internal fun buildWifiShareText(result: net.aieat.netswissknife.core.network.wif
     onToggleNetworkExpanded: (String) -> Unit,
 ) {
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    var spectrumExpanded by rememberSaveable { mutableStateOf(false) }
+    // The band the spectrum plots while the band tab is All; a band tab decides it otherwise.
+    var spectrumChoice by rememberSaveable { mutableStateOf<WifiBand?>(null) }
     val networks = wifiNetworksMatching(state.filteredNetworks, searchQuery)
     // The spectrum shows the same access points as the list, so search narrows both.
     val visibleBssids = networks.flatMap { network -> network.accessPoints.map { it.bssid } }.toSet()
-    val exportText = buildWifiShareText(state.result)
-    val context = LocalContext.current
-    val copiedMessage = stringResource(R.string.lan_copied)
-    val shareSubject = stringResource(R.string.wifi_screen_title)
+    val shownApCount = state.filteredAccessPoints.count { it.bssid in visibleBssids }
+    val totalApCount = state.result.accessPoints.size
+    val apCountText = wifiApCountText(shownApCount, totalApCount)
+    val spectrumBandCounts = spectrumBandCounts(state.filteredAccessPoints.filter { it.bssid in visibleBssids })
+    val spectrumBand =
+        spectrumPlotBand(
+            state.bandFilter,
+            spectrumChoice,
+            state.result.connectedNetwork?.band,
+            state.result.detectedBands,
+            spectrumBandCounts,
+        )
+    val spectrumAps = state.filteredAccessPoints.filter { it.bssid in visibleBssids && it.band == spectrumBand }
+    // With the All tab the chart plots one band at a time, so it offers the others; a band tab already chose one.
+    val spectrumBandChoices = spectrumBandChoices(state.bandFilter, spectrumBandCounts)
+    val spectrumAvailable = spectrumBand != null && bandFreqRange(spectrumBand) != null && spectrumAps.isNotEmpty()
     var showHelp by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -593,94 +782,95 @@ internal fun buildWifiShareText(result: net.aieat.netswissknife.core.network.wif
                 .testTag(WifiScreenTestTags.CONTENT_LIST),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { Spacer(Modifier.height(4.dp)) }
-
+        // The results header is a single item so the network list always starts at NETWORKS_START_INDEX.
         item {
-            WifiHeader(
-                result = state.result,
-                autoRefresh = autoRefresh,
-                onScan = onScan,
-                onHelpClick = { showHelp = true },
-            )
-        }
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Spacer(Modifier.height(4.dp))
 
-        item { WifiScanFreshnessStatus(state.result, onRequestPermission) }
-
-        item {
-            ToolTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                label = { Text(stringResource(R.string.wifi_search_label)) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                TextButton(enabled = exportText.isNotBlank(), onClick = {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText("Wi-Fi scan", exportText))
-                    Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
-                }) { Text(stringResource(R.string.action_copy)) }
-                TextButton(enabled = exportText.isNotBlank(), onClick = {
-                    context.shareText(exportText, shareSubject)
-                }) { Text(stringResource(R.string.action_share)) }
-            }
-        }
-
-        state.result.connectedNetwork?.let { connectionInfo ->
-            item { WifiConnectedNetworkCard(connectionInfo) }
-        }
-
-        // Band tabs — always one tab per detected band
-        if (state.result.detectedBands.size > 1) {
-            item {
-                WifiBandTabRow(
-                    detectedBands = state.result.detectedBands,
-                    selected = state.bandFilter,
-                    onSelect = { onBandFilter(it) },
+                WifiHeader(
+                    result = state.result,
+                    apCountText = apCountText,
+                    autoRefresh = autoRefresh,
+                    onScan = onScan,
+                    onHelpClick = { showHelp = true },
                 )
-            }
-        }
 
-        // Best-channel callout (2.4 GHz only)
-        if (state.bandFilter == WifiBand.BAND_2_4GHZ) {
-            val bestCh = state.result.bestChannel24GHz
-            if (bestCh != null) {
-                item { WifiBestChannelCallout(channel = bestCh) }
-            }
-        }
-
-        // Spectrum analyser
-        item { WifiSpectrumCard(state = state, visibleBssids = visibleBssids) }
-
-        // Sort row
-        item {
-            WifiSortRow(
-                current = state.sortOrder,
-                refreshIntervalMs = refreshIntervalMs,
-                onSelect = onSortOrder,
-                onRefreshInterval = onRefreshInterval,
-            )
-        }
-
-        // Network count
-        item {
-            Text(
-                pluralStringResource(R.plurals.wifi_networks_count, networks.size, networks.size),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
-
-        if (networks.isEmpty() && searchQuery.isNotBlank()) {
-            item {
-                OutlinedCard(Modifier.fillMaxWidth()) {
+                WifiScanFreshnessStatus(state.result, onRequestPermission)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        stringResource(R.string.wifi_search_no_match, searchQuery.trim()),
-                        style = MaterialTheme.typography.bodyMedium,
+                        stringResource(R.string.wifi_refresh_interval_label),
+                        style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp),
                     )
+                    WifiRefreshIntervalPicker(
+                        selectedIntervalMs = refreshIntervalMs,
+                        onSelected = onRefreshInterval,
+                    )
+                }
+
+                ToolTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text(stringResource(R.string.wifi_search_label)) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                // Band tabs and the spectrum toggle sit directly under the search box so they are reachable
+                // at phone width without scrolling past the connected card. All first, then one tab per band seen.
+                if (state.result.detectedBands.isNotEmpty()) {
+                    WifiBandTabRow(
+                        detectedBands = state.result.detectedBands,
+                        selected = state.bandFilter,
+                        onSelect = { onBandFilter(it) },
+                    )
+                }
+
+                if (spectrumBand != null && spectrumAvailable) {
+                    WifiSpectrumSection(
+                        band = spectrumBand,
+                        aps = spectrumAps,
+                        colorNetworks = state.filteredNetworks,
+                        bandChoices = spectrumBandChoices,
+                        onChooseBand = { spectrumChoice = it },
+                        expanded = spectrumExpanded,
+                        onToggle = { spectrumExpanded = !spectrumExpanded },
+                    )
+                }
+
+                // Best-channel callout (2.4 GHz only)
+                WifiBestChannelSection(state)
+
+                WifiShareActionsRow(state.result)
+
+                state.result.connectedNetwork?.let { connectionInfo ->
+                    WifiConnectedNetworkCard(connectionInfo)
+                }
+
+                WifiSortRow(
+                    current = state.sortOrder,
+                    onSelect = onSortOrder,
+                )
+
+                Text(
+                    pluralStringResource(R.plurals.wifi_networks_count, networks.size, networks.size),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+
+                if (networks.isEmpty() && searchQuery.isNotBlank()) {
+                    OutlinedCard(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(
+                                stringResource(R.string.wifi_search_no_match, searchQuery.trim()),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            TextButton(onClick = { searchQuery = "" }) {
+                                Text(stringResource(R.string.wifi_search_clear))
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -696,6 +886,7 @@ internal fun buildWifiShareText(result: net.aieat.netswissknife.core.network.wif
             Box(Modifier.fillMaxWidth().animateItem()) {
                 WifiNetworkCard(
                     network = network,
+                    showBand = state.bandFilter == null,
                     expanded = networkId in expandedNetworks,
                     onToggleExpanded = { onToggleNetworkExpanded(networkId) },
                     onSelectAp = onSelectAp,
@@ -709,7 +900,6 @@ internal fun buildWifiShareText(result: net.aieat.netswissknife.core.network.wif
     if (state.selectedAp != null) {
         WifiApDetailSheet(
             ap = state.selectedAp,
-            connectedInfo = state.result.connectedNetwork,
             onDismiss = { onSelectAp(null) },
         )
     }
@@ -742,6 +932,7 @@ internal fun buildWifiShareText(result: net.aieat.netswissknife.core.network.wif
 
 @Composable private fun WifiHeader(
     result: net.aieat.netswissknife.core.network.wifi.WifiScanResult,
+    apCountText: String,
     autoRefresh: Boolean,
     onScan: () -> Unit,
     onHelpClick: () -> Unit,
@@ -797,7 +988,7 @@ internal fun buildWifiShareText(result: net.aieat.netswissknife.core.network.wif
                 // Network count is in the list header and the time is in the Updated line, so the hero
                 // states only the access-point count (PHA-20).
                 Text(
-                    stringResource(R.string.wifi_aps_count, result.accessPoints.size),
+                    apCountText,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
                 )
@@ -835,17 +1026,23 @@ internal fun buildWifiShareText(result: net.aieat.netswissknife.core.network.wif
 @Composable private fun WifiBandTabRow(
     detectedBands: List<WifiBand>,
     selected: WifiBand?,
-    onSelect: (WifiBand) -> Unit,
+    onSelect: (WifiBand?) -> Unit,
 ) {
     if (detectedBands.isEmpty()) return
-    val selectedIndex = detectedBands.indexOf(selected).coerceAtLeast(0)
+    val allLabel = stringResource(R.string.wifi_band_all)
+    val selectedIndex = if (selected == null) 0 else detectedBands.indexOf(selected) + 1
     PrimaryTabRow(
         selectedTabIndex = selectedIndex,
         modifier = Modifier.clip(RoundedCornerShape(12.dp)),
     ) {
+        Tab(
+            selected = selectedIndex == 0,
+            onClick = { onSelect(null) },
+            text = { Text(allLabel) },
+        )
         detectedBands.forEachIndexed { index, band ->
             Tab(
-                selected = index == selectedIndex,
+                selected = index + 1 == selectedIndex,
                 onClick = { onSelect(band) },
                 text = { Text("${band.ghzLabel} GHz") },
             )
@@ -918,19 +1115,20 @@ private fun spectrumCenterFrequency(ap: WifiAccessPoint): Float {
 }
 
 @Composable private fun WifiSpectrumCard(
-    state: WifiScanUiState.Success,
-    visibleBssids: Set<String>,
+    band: WifiBand,
+    aps: List<WifiAccessPoint>,
+    colorNetworks: List<WifiNetwork>,
+    bandChoices: List<Pair<WifiBand, Int>>,
+    onChooseBand: (WifiBand) -> Unit,
 ) {
-    val band = state.bandFilter ?: WifiBand.BAND_2_4GHZ
     val range = bandFreqRange(band) ?: return
-    val aps = state.filteredAccessPoints.filter { it.bssid in visibleBssids }
     if (aps.isEmpty()) return
 
     // Build bssid→color map from grouped networks so same SSID = same color
     val apColors =
-        remember(state.filteredNetworks) {
+        remember(colorNetworks) {
             buildMap<String, Color> {
-                state.filteredNetworks.forEach { network ->
+                colorNetworks.forEach { network ->
                     val color = networkColor(network.colorIndex)
                     network.accessPoints.forEach { ap -> put(ap.bssid, color) }
                 }
@@ -954,10 +1152,18 @@ private fun spectrumCenterFrequency(ap: WifiAccessPoint): Float {
         )
 
     val channelLabels = remember(band) { bandChannelLabels(band) }
+    val axisUnit = stringResource(R.string.wifi_spectrum_axis_unit)
 
     ElevatedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text(stringResource(R.string.wifi_spectrum_title), style = MaterialTheme.typography.titleMedium)
+            Text(
+                pluralStringResource(R.plurals.wifi_spectrum_band_label, aps.size, band.displayName, aps.size),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag(WifiScreenTestTags.SPECTRUM_BAND_LABEL),
+            )
+            if (bandChoices.isNotEmpty()) SpectrumBandChoice(band, bandChoices, onChooseBand)
             Spacer(Modifier.height(8.dp))
 
             Canvas(
@@ -968,8 +1174,10 @@ private fun spectrumCenterFrequency(ap: WifiAccessPoint): Float {
             ) {
                 val leftPad = 36.dp.toPx()
                 val bottomPad = 20.dp.toPx()
+                // Room above the plot for the axis unit, so it never sits on the top gridline label.
+                val topPad = 14.dp.toPx()
                 val chartW = size.width - leftPad
-                val chartH = size.height - bottomPad
+                val chartH = size.height - bottomPad - topPad
 
                 val rssiMin = -100f
                 val rssiMax = -30f
@@ -978,9 +1186,9 @@ private fun spectrumCenterFrequency(ap: WifiAccessPoint): Float {
 
                 fun freqToX(f: Float) = chartX(leftPad + (f - range.min) / (range.max - range.min) * chartW)
 
-                fun rssiToY(r: Float) = chartH - ((r - rssiMin) / (rssiMax - rssiMin)) * chartH
+                fun rssiToY(r: Float) = topPad + chartH - ((r - rssiMin) / (rssiMax - rssiMin)) * chartH
 
-                val bottomY = chartH
+                val bottomY = topPad + chartH
                 val leftAxisX = chartX(leftPad)
                 val rightAxisX = chartX(size.width)
                 val plotBounds = wifiSpectrumPlotBounds(size.width, leftPad, isRtl)
@@ -1004,6 +1212,14 @@ private fun spectrumCenterFrequency(ap: WifiAccessPoint): Float {
                     val labelX = if (isRtl) leftAxisX + 4.dp.toPx() else leftAxisX - 4.dp.toPx() - label.size.width
                     drawText(label, topLeft = Offset(labelX, y - label.size.height / 2f))
                 }
+
+                val unitLabel =
+                    textMeasurer.measure(
+                        text = axisUnit,
+                        style = TextStyle(color = labelColor, fontSize = 9.sp, textAlign = TextAlign.End),
+                    )
+                val unitX = if (isRtl) leftAxisX + 4.dp.toPx() else leftAxisX - 4.dp.toPx() - unitLabel.size.width
+                drawText(unitLabel, topLeft = Offset(unitX, 0f))
 
                 // Baseline
                 drawLine(gridColor, Offset(plotMinX, bottomY), Offset(plotMaxX, bottomY), strokeWidth = 1f)
@@ -1102,40 +1318,50 @@ private fun spectrumCenterFrequency(ap: WifiAccessPoint): Float {
     }
 }
 
+/** Which band the spectrum plots while the band tab is All, each with the access points it would plot. */
+@Composable
+private fun SpectrumBandChoice(
+    selected: WifiBand,
+    choices: List<Pair<WifiBand, Int>>,
+    onChoose: (WifiBand) -> Unit,
+) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        choices.forEach { (band, count) ->
+            FilterChip(
+                selected = band == selected,
+                onClick = { onChoose(band) },
+                label = { Text(stringResource(R.string.wifi_spectrum_band_choice, band.displayName, count)) },
+            )
+        }
+    }
+}
+
 // ── Sort row ──────────────────────────────────────────────────────────────────
 
 @Composable
 private fun WifiSortRow(
     current: ApSortOrder,
-    refreshIntervalMs: Long?,
     onSelect: (ApSortOrder) -> Unit,
-    onRefreshInterval: (Long?) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                stringResource(R.string.wifi_sort_label),
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.align(Alignment.CenterVertically),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            ApSortOrder.values().forEach { order ->
-                FilterChip(
-                    selected = current == order,
-                    onClick = { onSelect(order) },
-                    label = { Text(order.label, style = MaterialTheme.typography.labelSmall) },
-                )
-            }
-        }
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(
-            stringResource(R.string.wifi_refresh_interval_label),
+            stringResource(R.string.wifi_sort_label),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        WifiRefreshIntervalPicker(
-            selectedIntervalMs = refreshIntervalMs,
-            onSelected = onRefreshInterval,
-        )
+        ApSortOrder.entries.forEach { order ->
+            FilterChip(
+                selected = current == order,
+                onClick = { onSelect(order) },
+                label = { Text(stringResource(order.labelRes), style = MaterialTheme.typography.labelSmall) },
+            )
+        }
     }
 }
 
@@ -1143,6 +1369,7 @@ private fun WifiSortRow(
 
 @Composable private fun WifiNetworkCard(
     network: WifiNetwork,
+    showBand: Boolean,
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
     onSelectAp: (WifiAccessPoint?) -> Unit,
@@ -1172,7 +1399,7 @@ private fun WifiSortRow(
                 )
                 Spacer(Modifier.width(12.dp))
 
-                SignalBarsIcon(quality = network.signalQualityPercent, level = network.signalLevel)
+                SignalBarsIcon(level = network.signalLevel)
                 Spacer(Modifier.width(12.dp))
 
                 Column(Modifier.weight(1f)) {
@@ -1193,9 +1420,12 @@ private fun WifiSortRow(
                     }
                     Spacer(Modifier.height(4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        network.sortedBands.forEach { band -> ApBadge("${band.ghzLabel} GHz") }
+                        if (showBand) {
+                            network.sortedBands.forEach { band -> ApBadge("${band.ghzLabel} GHz") }
+                        }
                         if (network.bssidCount > 1) {
-                            ApBadge(stringResource(R.string.wifi_aps_count, network.bssidCount))
+                            val count = network.bssidCount
+                            ApBadge(pluralStringResource(R.plurals.wifi_aps_count, count, count))
                         }
                         ApBadge(network.security.displayName)
                     }
@@ -1211,9 +1441,9 @@ private fun WifiSortRow(
                         color = levelColor,
                     )
                     Text(
-                        stringResource(R.string.wifi_signal_quality_pct, network.signalQualityPercent),
+                        stringResource(signalLevelLabelRes(network.signalLevel)),
                         style = MaterialTheme.typography.labelSmall,
-                        color = levelColor.copy(alpha = 0.7f),
+                        color = levelColor,
                     )
                     Spacer(Modifier.height(4.dp))
                     Icon(
@@ -1242,7 +1472,7 @@ private fun WifiSortRow(
                                     .padding(horizontal = 20.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            SignalBarsIcon(quality = ap.signalQualityPercent, level = ap.signalLevel)
+                            SignalBarsIcon(level = ap.signalLevel)
                             Spacer(Modifier.width(10.dp))
 
                             Column(Modifier.weight(1f)) {
@@ -1253,8 +1483,8 @@ private fun WifiSortRow(
                                     maxLines = 1,
                                 )
                                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    ApBadge("${ap.band.ghzLabel} GHz")
-                                    ApBadge("Ch ${ap.channel}")
+                                    if (showBand) ApBadge("${ap.band.ghzLabel} GHz")
+                                    ApBadge(stringResource(R.string.wifi_channel_badge, ap.channel))
                                     ApBadge("${ap.channelWidthMhz} MHz")
                                     if (ap.vendor.isNotBlank()) ApBadge(ap.vendor)
                                 }
@@ -1268,9 +1498,9 @@ private fun WifiSortRow(
                                     color = c,
                                 )
                                 Text(
-                                    stringResource(R.string.wifi_signal_quality_pct, ap.signalQualityPercent),
+                                    stringResource(signalLevelLabelRes(ap.signalLevel)),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = c.copy(alpha = 0.7f),
+                                    color = c,
                                 )
                             }
 
@@ -1305,17 +1535,15 @@ private fun WifiSortRow(
     }
 }
 
-@Composable private fun SignalBarsIcon(
-    quality: Int,
-    level: net.aieat.netswissknife.core.network.wifi.SignalLevel,
-) {
+@Composable private fun SignalBarsIcon(level: SignalLevel) {
     val color = signalLevelColor(level)
     val bars =
-        when {
-            quality >= 75 -> 4
-            quality >= 50 -> 3
-            quality >= 25 -> 2
-            else -> 1
+        when (level) {
+            SignalLevel.EXCELLENT -> 4
+            SignalLevel.GOOD -> 3
+            SignalLevel.FAIR -> 2
+            SignalLevel.WEAK -> 1
+            SignalLevel.POOR -> 0
         }
     Row(
         modifier = Modifier.width(24.dp).height(24.dp),
@@ -1349,7 +1577,6 @@ private fun signalLevelColor(level: net.aieat.netswissknife.core.network.wifi.Si
 @Composable
 private fun WifiApDetailSheet(
     ap: WifiAccessPoint,
-    connectedInfo: net.aieat.netswissknife.core.network.wifi.WifiConnectionInfo?,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -1366,7 +1593,7 @@ private fun WifiApDetailSheet(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SignalBarsIcon(ap.signalQualityPercent, ap.signalLevel)
+                SignalBarsIcon(ap.signalLevel)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(ap.displaySsid, style = MaterialTheme.typography.titleMedium)
@@ -1385,11 +1612,9 @@ private fun WifiApDetailSheet(
                         color = levelColor,
                     )
                     Text(
-                        ap.signalLevel.name
-                            .lowercase()
-                            .replaceFirstChar { it.uppercase() },
+                        stringResource(signalLevelLabelRes(ap.signalLevel)),
                         style = MaterialTheme.typography.labelSmall,
-                        color = levelColor.copy(alpha = 0.7f),
+                        color = levelColor,
                     )
                 }
             }
@@ -1412,8 +1637,6 @@ private fun WifiApDetailSheet(
                 }
             }
 
-            SignalArcGauge(quality = ap.signalQualityPercent, level = ap.signalLevel)
-
             HorizontalDivider()
 
             DetailSectionHeader(stringResource(R.string.wifi_network_info_header))
@@ -1423,8 +1646,18 @@ private fun WifiApDetailSheet(
             DetailRow(stringResource(R.string.wifi_detail_standard), "${ap.standard.generationLabel}  (${ap.standard.protocolName})")
             DetailRow(stringResource(R.string.wifi_detail_max_speed), maxRateText(ap))
             if (ap.vendor.isNotBlank()) DetailRow(stringResource(R.string.wifi_detail_vendor), ap.vendor)
-            if (ap.centerFrequency0 != 0) DetailRow("Center Freq 0", "${ap.centerFrequency0} MHz")
-            if (ap.centerFrequency1 != 0) DetailRow("Center Freq 1", "${ap.centerFrequency1} MHz (80+80)")
+            if (ap.centerFrequency0 != 0) {
+                DetailRow(
+                    stringResource(R.string.wifi_detail_center_freq_0),
+                    stringResource(R.string.wifi_center_freq_value, ap.centerFrequency0),
+                )
+            }
+            if (ap.centerFrequency1 != 0) {
+                DetailRow(
+                    stringResource(R.string.wifi_detail_center_freq_1),
+                    stringResource(R.string.wifi_center_freq_80_80_value, ap.centerFrequency1),
+                )
+            }
 
             HorizontalDivider()
 
@@ -1441,32 +1674,6 @@ private fun WifiApDetailSheet(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                 ) { tokens.forEach { token -> ApBadge(token) } }
-            }
-
-            if (ap.isConnected && connectedInfo != null) {
-                HorizontalDivider()
-                DetailSectionHeader(stringResource(R.string.wifi_live_connection_header))
-                DetailRow(stringResource(R.string.wifi_detail_ip), connectedInfo.ipAddress.ifBlank { "N/A" })
-                if (connectedInfo.ipv6Addresses.isNotEmpty()) {
-                    DetailRow(stringResource(R.string.wifi_detail_ipv6), connectedInfo.ipv6Addresses.joinToString("\n"))
-                }
-                connectedInfo.gateway?.let {
-                    DetailRow(stringResource(R.string.wifi_detail_gateway), it)
-                }
-                if (connectedInfo.dnsServers.isNotEmpty()) {
-                    DetailRow(stringResource(R.string.wifi_detail_dns), connectedInfo.dnsServers.joinToString("\n"))
-                }
-                DetailRow(stringResource(R.string.wifi_detail_link_speed), "${connectedInfo.linkSpeedMbps} Mbps")
-                if (connectedInfo.txLinkSpeedMbps >= 0) {
-                    DetailRow(stringResource(R.string.wifi_detail_tx_speed), "${connectedInfo.txLinkSpeedMbps} Mbps ↑")
-                }
-                if (connectedInfo.rxLinkSpeedMbps >= 0) {
-                    DetailRow(stringResource(R.string.wifi_detail_rx_speed), "${connectedInfo.rxLinkSpeedMbps} Mbps ↓")
-                }
-                DetailRow(
-                    stringResource(R.string.wifi_detail_signal),
-                    "${connectedInfo.rssi} dBm  (${connectedInfo.signalQualityPercent}%)",
-                )
             }
         }
     }
@@ -1512,110 +1719,16 @@ internal fun WifiSecurityIndicator(security: WifiSecurity) {
     }
 }
 
-// ── Signal arc gauge ──────────────────────────────────────────────────────────
-
-@Composable private fun SignalArcGauge(
-    quality: Int,
-    level: net.aieat.netswissknife.core.network.wifi.SignalLevel,
-) {
-    val fillColor = signalLevelColor(level)
-    val trackColor = MaterialTheme.colorScheme.surfaceVariant
-    val qualityTextColor = MaterialTheme.colorScheme.onSurface
-    val labelTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val textMeasurer = rememberTextMeasurer()
-    val gaugeLabel = stringResource(R.string.wifi_signal_quality)
-    val levelLabel =
-        stringResource(
-            when (level) {
-                net.aieat.netswissknife.core.network.wifi.SignalLevel.EXCELLENT -> R.string.wifi_signal_level_excellent
-                net.aieat.netswissknife.core.network.wifi.SignalLevel.GOOD -> R.string.wifi_signal_level_good
-                net.aieat.netswissknife.core.network.wifi.SignalLevel.FAIR -> R.string.wifi_signal_level_fair
-                net.aieat.netswissknife.core.network.wifi.SignalLevel.WEAK -> R.string.wifi_signal_level_weak
-                net.aieat.netswissknife.core.network.wifi.SignalLevel.POOR -> R.string.wifi_signal_level_poor
-            },
-        )
-    val gaugeDescription = stringResource(R.string.wifi_signal_gauge_a11y, quality, levelLabel)
-
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(120.dp)
-            .semantics { contentDescription = gaugeDescription },
-        contentAlignment = Alignment.Center,
-    ) {
-        Canvas(Modifier.size(200.dp, 100.dp)) {
-            val strokeWidth = 18f
-            val radius = size.width / 2f - strokeWidth / 2f
-            val cx = size.width / 2f
-            val cy = size.height
-            val arcTopLeft = Offset(cx - radius, cy - radius)
-            val arcSize = Size(radius * 2, radius * 2)
-
-            drawArc(
-                trackColor,
-                180f,
-                180f,
-                useCenter = false,
-                topLeft = arcTopLeft,
-                size = arcSize,
-                style = Stroke(strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round),
-            )
-            drawArc(
-                fillColor,
-                180f,
-                180f * (quality / 100f),
-                useCenter = false,
-                topLeft = arcTopLeft,
-                size = arcSize,
-                style = Stroke(strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round),
-            )
-
-            val qualityText =
-                textMeasurer.measure(
-                    text = "$quality%",
-                    style =
-                        TextStyle(
-                            color = qualityTextColor,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                        ),
-                )
-            drawText(
-                qualityText,
-                topLeft = Offset(cx - qualityText.size.width / 2f, cy - radius / 2.5f - qualityText.size.height / 2f),
-            )
-            val labelText =
-                textMeasurer.measure(
-                    text = gaugeLabel,
-                    style =
-                        TextStyle(
-                            color = labelTextColor,
-                            fontSize = 11.sp,
-                            textAlign = TextAlign.Center,
-                        ),
-                )
-            drawText(
-                labelText,
-                topLeft =
-                    Offset(
-                        cx - labelText.size.width / 2f,
-                        cy - radius / 2.5f + qualityText.size.height / 2f,
-                    ),
-            )
-        }
-    }
-}
-
 // ── Detail section helpers ────────────────────────────────────────────────────
 
 @Composable private fun maxRateText(ap: WifiAccessPoint): String {
     val ceiling = ap.standard.phyRateCeiling(ap.channelWidthMhz)
     val width = ceiling.widthMhz
-    return if (width != null) {
-        stringResource(R.string.wifi_max_rate_at_width, ceiling.label, width)
-    } else {
-        stringResource(R.string.wifi_max_rate_ceiling, ceiling.label)
+    val streams = ceiling.streams
+    return when {
+        width == null -> stringResource(R.string.wifi_max_rate_ceiling, ceiling.label)
+        streams == null -> stringResource(R.string.wifi_max_rate_at_width, ceiling.label, width)
+        else -> stringResource(R.string.wifi_max_rate_at_width_streams, ceiling.label, width, streams)
     }
 }
 

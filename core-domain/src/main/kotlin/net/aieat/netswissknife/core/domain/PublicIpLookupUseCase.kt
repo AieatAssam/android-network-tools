@@ -3,6 +3,8 @@ package net.aieat.netswissknife.core.domain
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import net.aieat.netswissknife.core.network.NetworkResult
 import net.aieat.netswissknife.core.network.netinfo.IpFamily
 import net.aieat.netswissknife.core.network.netinfo.NetworkInfoOperation
@@ -41,14 +43,30 @@ class PublicIpLookupUseCase(
         family: IpFamily,
     ): PublicAddressInfo =
         coroutineScope {
-            val hostname = async { optional { reverseLookup(address) } }
+            val hostname = async { reverseLookup(address) }
             val geo = async { optional { geoIp.lookup(address) } }
-            PublicAddressInfo(address = address, family = family, hostname = hostname.await(), geo = geo.await())
+            val name = hostname.await()
+            PublicAddressInfo(
+                address = address,
+                family = family,
+                hostname = name.getOrNull(),
+                geo = geo.await(),
+                reverseDnsFailed = name.isFailure,
+            )
         }
 
-    private suspend fun reverseLookup(address: String): String? {
-        val session = NetworkInfoOperation.newSession()
-        return OperationRunner.run(session) { reverseDns.lookup(address, session) }
+    /**
+     * The reverse DNS name, null when the address has none, or a failure when the lookup failed or timed out.
+     * A cancellation of this lookup alone is a failure; cancelling the whole check still propagates.
+     */
+    private suspend fun reverseLookup(address: String): Result<String?> {
+        val result =
+            runCatching {
+                val session = NetworkInfoOperation.newSession()
+                OperationRunner.run(session) { reverseDns.lookup(address, session) }
+            }
+        if (result.isFailure) currentCoroutineContext().ensureActive()
+        return result
     }
 
     /** Runs an optional enrichment; any failure yields null, but cancellation still propagates. */

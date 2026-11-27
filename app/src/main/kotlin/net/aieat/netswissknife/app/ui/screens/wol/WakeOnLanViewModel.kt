@@ -38,8 +38,17 @@ import javax.inject.Inject
 
 sealed interface WolUiState {
     data object Idle : WolUiState
+
     data object Sending : WolUiState
-    data class Success(val report: WolSendReport) : WolUiState
+
+    data class Success(
+        val report: WolSendReport,
+        /** Name of the saved device this send went to, or null for a typed target. */
+        val deviceName: String? = null,
+        /** How many packets have been sent successfully in this session, including this one. */
+        val sendNumber: Int = 1,
+    ) : WolUiState
+
     data class Error(
         val message: String,
         /** Typed failure, rendered through ErrorTextMapper so the text is localized. */
@@ -61,252 +70,314 @@ internal data class WolSessionSnapshot(
     val finished: WolUiState?,
 )
 
+private fun NetworkResult.Error.toWolErrorState(): WolUiState.Error =
+    WolUiState.Error(
+        message = message,
+        info = info,
+        networkErrorKind = cause.toNetworkErrorKind(),
+    )
+
 @HiltViewModel
-class WakeOnLanViewModel @Inject constructor(
-    private val wakeOnLan: WakeOnLanUseCase,
-    networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
-    private val savedDeviceStore: WolSavedDeviceStore = InMemoryWolSavedDeviceStore(),
-    // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
-    @param:SuppressLint("VisibleForTests")
-    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
-    private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
-) : ViewModel() {
+class WakeOnLanViewModel
+    @Inject
+    constructor(
+        private val wakeOnLan: WakeOnLanUseCase,
+        networkStatusProvider: NetworkStatusProvider = NoOpNetworkStatusProvider,
+        private val savedDeviceStore: WolSavedDeviceStore = InMemoryWolSavedDeviceStore(),
+        // Hilt supplies the owner-backed handle at runtime; this empty default supports direct unit tests.
+        @param:SuppressLint("VisibleForTests")
+        private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+        private val sessionMemory: ToolSessionMemory = ToolSessionMemory(),
+    ) : ViewModel() {
+        // A route or intent handoff wins over the snapshot kept when the tool was left.
+        private val restoredSession: WolSessionSnapshot? = sessionMemory.get<WolSessionSnapshot>(WOL_SESSION_KEY)
 
-    // A route or intent handoff wins over the snapshot kept when the tool was left.
-    private val restoredSession: WolSessionSnapshot? = sessionMemory.get<WolSessionSnapshot>(WOL_SESSION_KEY)
+        private val routeMac = savedStateHandle.get<String>("mac")?.let(ToolMacAddress::parse)
+        private val rawIntentArgument = savedStateHandle.get<String>("intent")
+        private val typedIntent = rawIntentArgument?.let(ToolIntentCodec::decode)
+        private val handoffMac =
+            (typedIntent?.destination as? ToolDestination.WakeOnLan)
+                ?.mac
+                ?.takeIf { routeMac != null && it == routeMac && typedIntent.source == ToolSource.LAN }
+        private val handoffConsumed = savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true
+        private val _hasInvalidHandoff =
+            MutableStateFlow(
+                (rawIntentArgument != null || savedStateHandle.get<String>("mac") != null) &&
+                    handoffMac == null && savedStateHandle.get<Boolean>(HANDOFF_RECOVERED_KEY) != true,
+            )
+        val hasInvalidHandoff: StateFlow<Boolean> = _hasInvalidHandoff.asStateFlow()
+        private val _sourceContext =
+            MutableStateFlow(
+                if (handoffConsumed) {
+                    savedStateHandle
+                        .get<String>(HANDOFF_SOURCE_KEY)
+                        ?.let { wireName ->
+                            ToolSource.entries.singleOrNull { it.wireName == wireName }
+                        }?.takeIf { handoffMac != null && typedIntent?.source == it }
+                } else {
+                    handoffMac?.let { typedIntent?.source }
+                },
+            )
+        val sourceContext: ToolSource? get() = _sourceContext.value
+        val sourceContextState: StateFlow<ToolSource?> = _sourceContext.asStateFlow()
 
-    private val routeMac = savedStateHandle.get<String>("mac")?.let(ToolMacAddress::parse)
-    private val rawIntentArgument = savedStateHandle.get<String>("intent")
-    private val typedIntent = rawIntentArgument?.let(ToolIntentCodec::decode)
-    private val handoffMac = (typedIntent?.destination as? ToolDestination.WakeOnLan)
-        ?.mac
-        ?.takeIf { routeMac != null && it == routeMac && typedIntent.source == ToolSource.LAN }
-    private val handoffConsumed = savedStateHandle.get<Boolean>(HANDOFF_CONSUMED_KEY) == true
-    private val _hasInvalidHandoff = MutableStateFlow(
-        (rawIntentArgument != null || savedStateHandle.get<String>("mac") != null) &&
-            handoffMac == null && savedStateHandle.get<Boolean>(HANDOFF_RECOVERED_KEY) != true,
-    )
-    val hasInvalidHandoff: StateFlow<Boolean> = _hasInvalidHandoff.asStateFlow()
-    private val _sourceContext = MutableStateFlow(
-        if (handoffConsumed) {
-            savedStateHandle.get<String>(HANDOFF_SOURCE_KEY)?.let { wireName ->
-                ToolSource.entries.singleOrNull { it.wireName == wireName }
-            }?.takeIf { handoffMac != null && typedIntent?.source == it }
-        } else {
-            handoffMac?.let { typedIntent?.source }
-        },
-    )
-    val sourceContext: ToolSource? get() = _sourceContext.value
-    val sourceContextState: StateFlow<ToolSource?> = _sourceContext.asStateFlow()
+        val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
 
-    val networkStatus: StateFlow<NetworkStatus> = networkStatusProvider.status
+        private val _macAddress =
+            MutableStateFlow(
+                if (handoffConsumed) {
+                    savedStateHandle.get<String>(EDITED_MAC_KEY).orEmpty()
+                } else {
+                    savedStateHandle.get<String>(EDITED_MAC_KEY)
+                        ?: if (_hasInvalidHandoff.value) "" else handoffMac?.value ?: restoredSession?.mac.orEmpty()
+                },
+            )
+        val macAddress: StateFlow<String> = _macAddress.asStateFlow()
 
-    private val _macAddress = MutableStateFlow(
-        if (handoffConsumed) {
-            savedStateHandle.get<String>(EDITED_MAC_KEY).orEmpty()
-        } else {
-            savedStateHandle.get<String>(EDITED_MAC_KEY)
-                ?: if (_hasInvalidHandoff.value) "" else handoffMac?.value ?: restoredSession?.mac.orEmpty()
-        },
-    )
-    val macAddress: StateFlow<String> = _macAddress.asStateFlow()
+        private val _broadcastAddress =
+            MutableStateFlow(
+                savedStateHandle.get<String>(BROADCAST_KEY) ?: restoredSession?.broadcastAddress ?: DEFAULT_BROADCAST,
+            )
+        val broadcastAddress: StateFlow<String> = _broadcastAddress.asStateFlow()
 
-    private val _broadcastAddress =
-        MutableStateFlow(
-            savedStateHandle.get<String>(BROADCAST_KEY) ?: restoredSession?.broadcastAddress ?: DEFAULT_BROADCAST,
-        )
-    val broadcastAddress: StateFlow<String> = _broadcastAddress.asStateFlow()
+        private val _port =
+            MutableStateFlow(
+                savedStateHandle.get<String>(PORT_KEY) ?: restoredSession?.port ?: DEFAULT_PORT.toString(),
+            )
+        val port: StateFlow<String> = _port.asStateFlow()
 
-    private val _port =
-        MutableStateFlow(
-            savedStateHandle.get<String>(PORT_KEY) ?: restoredSession?.port ?: DEFAULT_PORT.toString(),
-        )
-    val port: StateFlow<String> = _port.asStateFlow()
+        // Declared after the MAC: a finished send is shown again only for the MAC it was sent to.
+        private val _uiState =
+            MutableStateFlow<WolUiState>(
+                restoredSession?.takeIf { it.mac == _macAddress.value }?.finished ?: WolUiState.Idle,
+            )
+        val uiState: StateFlow<WolUiState> = _uiState.asStateFlow()
 
-    // Declared after the MAC: a finished send is shown again only for the MAC it was sent to.
-    private val _uiState =
-        MutableStateFlow<WolUiState>(
-            restoredSession?.takeIf { it.mac == _macAddress.value }?.finished ?: WolUiState.Idle,
-        )
-    val uiState: StateFlow<WolUiState> = _uiState.asStateFlow()
+        /** Inline problem for the MAC field; BLANK means "nothing entered yet" and is not an error to show. */
+        val macProblem: StateFlow<WolMacProblem?> =
+            _macAddress
+                .map { WolMagicPacket.macProblem(it) }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, WolMagicPacket.macProblem(_macAddress.value))
 
-    /** Inline problem for the MAC field; BLANK means "nothing entered yet" and is not an error to show. */
-    val macProblem: StateFlow<WolMacProblem?> =
-        _macAddress
-            .map { WolMagicPacket.macProblem(it) }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, WolMagicPacket.macProblem(_macAddress.value))
+        val broadcastProblem: StateFlow<WolBroadcastProblem?> =
+            _broadcastAddress
+                .map { WolMagicPacket.broadcastProblem(it) }
+                .stateIn(
+                    viewModelScope,
+                    SharingStarted.Eagerly,
+                    WolMagicPacket.broadcastProblem(_broadcastAddress.value),
+                )
 
-    val broadcastProblem: StateFlow<WolBroadcastProblem?> =
-        _broadcastAddress
-            .map { WolMagicPacket.broadcastProblem(it) }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, WolMagicPacket.broadcastProblem(_broadcastAddress.value))
+        val portInvalid: StateFlow<Boolean> =
+            _port
+                .map { isPortOutOfRange(it) }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, isPortOutOfRange(_port.value))
 
-    val portInvalid: StateFlow<Boolean> =
-        _port
-            .map { isPortOutOfRange(it) }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, isPortOutOfRange(_port.value))
+        // ── Saved devices ────────────────────────────────────────────────────────
+        // The list and its add, edit, use and delete actions live in WolSavedDeviceEditor. The screen
+        // calls those actions through savedDeviceEditor; the flows are re-exposed here for collection.
 
-    // ── Saved devices ────────────────────────────────────────────────────────
-    // The list and its add, edit, use and delete actions live in WolSavedDeviceEditor. The screen
-    // calls those actions through savedDeviceEditor; the flows are re-exposed here for collection.
+        val savedDeviceEditor: WolSavedDeviceEditor =
+            WolSavedDeviceEditor(
+                store = savedDeviceStore,
+                scope = viewModelScope,
+                currentMac = { _macAddress.value },
+                currentBroadcast = { _broadcastAddress.value },
+                currentPort = { _port.value.toIntOrNull()?.takeIf { it in PORT_RANGE } },
+                fillDevice = { device -> fillTarget(device) },
+                initialDeviceName = restoredSession?.deviceName.orEmpty(),
+            )
+        val savedDevices: StateFlow<List<WolSavedDevice>> = savedDeviceEditor.savedDevices
+        val deviceName: StateFlow<String> = savedDeviceEditor.deviceName
+        val editingMac: StateFlow<String?> = savedDeviceEditor.editingMac
+        val saveConflict: StateFlow<Boolean> = savedDeviceEditor.saveConflict
+        val saveNotice: StateFlow<WolSaveNotice?> = savedDeviceEditor.saveNotice
 
-    val savedDeviceEditor: WolSavedDeviceEditor =
-        WolSavedDeviceEditor(
-            store = savedDeviceStore,
-            scope = viewModelScope,
-            currentMac = { _macAddress.value },
-            fillMac = { mac -> onMacAddressChange(mac) },
-            initialDeviceName = restoredSession?.deviceName.orEmpty(),
-        )
-    val savedDevices: StateFlow<List<WolSavedDevice>> = savedDeviceEditor.savedDevices
-    val deviceName: StateFlow<String> = savedDeviceEditor.deviceName
-    val editingMac: StateFlow<String?> = savedDeviceEditor.editingMac
-    val saveConflict: StateFlow<Boolean> = savedDeviceEditor.saveConflict
-    val saveNotice: StateFlow<WolSaveNotice?> = savedDeviceEditor.saveNotice
+        private var operationSession: OperationSession? = null
+        private var sendGeneration = 0L
+        private var successfulSends = 0
 
-    private var operationSession: OperationSession? = null
-    private var sendGeneration = 0L
-
-    init {
-        if (!handoffConsumed) {
-            // Snapshot the validated initial prefill once; route arguments remain available
-            // after recreation and must not restore a MAC the user has cleared.
-            savedStateHandle[EDITED_MAC_KEY] = _macAddress.value
-            _sourceContext.value?.let { source ->
-                savedStateHandle[HANDOFF_SOURCE_KEY] = source.wireName
-            } ?: savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
-            savedStateHandle[HANDOFF_CONSUMED_KEY] = true
-        }
-    }
-
-    /** True when the user has typed something that is not a valid MAC yet. */
-    val isMacInvalid: Boolean
-        get() = macProblem.value.let { it != null && it != WolMacProblem.BLANK }
-
-    val canSend: Boolean
-        get() =
-            macProblem.value == null &&
-                broadcastProblem.value == null &&
-                !portInvalid.value &&
-                _uiState.value !is WolUiState.Sending
-
-    fun onMacAddressChange(value: String) {
-        _macAddress.value = value
-        savedStateHandle[EDITED_MAC_KEY] = value
-        savedDeviceEditor.clearSaveConflict()
-        if (_hasInvalidHandoff.value && ToolMacAddress.parse(value) != null) {
-            savedStateHandle[HANDOFF_RECOVERED_KEY] = true
-            _hasInvalidHandoff.value = false
-        }
-    }
-
-    /** Clears only the incoming MAC prefill; broadcast and port choices remain untouched. */
-    fun clearPrefill() {
-        if (_uiState.value is WolUiState.Sending) return
-        _macAddress.value = ""
-        savedStateHandle[EDITED_MAC_KEY] = ""
-        _sourceContext.value = null
-        savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
-        savedStateHandle[HANDOFF_CONSUMED_KEY] = true
-    }
-
-    fun onBroadcastAddressChange(value: String) {
-        _broadcastAddress.value = value
-        savedStateHandle[BROADCAST_KEY] = value
-    }
-
-    fun onPortChange(value: String) {
-        if (value.isEmpty() || (value.length <= 5 && value.all(Char::isDigit))) {
-            _port.value = value
-            savedStateHandle[PORT_KEY] = value
-        }
-    }
-
-    fun send() {
-        if (!canSend) return
-        val params = WakeOnLanParams(
-            macAddress = _macAddress.value,
-            broadcastAddress = _broadcastAddress.value,
-            port = _port.value.toIntOrNull() ?: DEFAULT_PORT,
-        )
-        operationSession?.cancel(CancellationReason.USER_STOP)
-        val session = WakeOnLanOperation.newSession()
-        val generation = ++sendGeneration
-        operationSession = session
-        _uiState.value = WolUiState.Sending
-        viewModelScope.launch {
-            try {
-                val result = wakeOnLan(params, session)
-                if (sendGeneration != generation || operationSession !== session) return@launch
-                _uiState.value = when (result) {
-                    is NetworkResult.Success -> WolUiState.Success(result.data)
-                    is NetworkResult.Error -> errorState(result)
-                }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } finally {
-                if (operationSession === session) operationSession = null
+        init {
+            if (!handoffConsumed) {
+                // Snapshot the validated initial prefill once; route arguments remain available
+                // after recreation and must not restore a MAC the user has cleared.
+                savedStateHandle[EDITED_MAC_KEY] = _macAddress.value
+                _sourceContext.value?.let { source ->
+                    savedStateHandle[HANDOFF_SOURCE_KEY] = source.wireName
+                } ?: savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
+                savedStateHandle[HANDOFF_CONSUMED_KEY] = true
             }
         }
+
+        /** True when the user has typed something that is not a valid MAC yet. */
+        val isMacInvalid: Boolean
+            get() = macProblem.value.let { it != null && it != WolMacProblem.BLANK }
+
+        /** Checks the form's current values directly, so a send never relies on a flow that has not caught up. */
+        val canSend: Boolean
+            get() =
+                isTargetValid(_macAddress.value, _broadcastAddress.value, _port.value) &&
+                    _uiState.value !is WolUiState.Sending
+
+        fun onMacAddressChange(value: String) {
+            if (WolMagicPacket.canonicalMacOrNull(value) != WolMagicPacket.canonicalMacOrNull(_macAddress.value)) {
+                discardFinishedResult()
+            }
+            _macAddress.value = value
+            savedStateHandle[EDITED_MAC_KEY] = value
+            savedDeviceEditor.clearSaveConflict()
+            if (_hasInvalidHandoff.value && ToolMacAddress.parse(value) != null) {
+                savedStateHandle[HANDOFF_RECOVERED_KEY] = true
+                _hasInvalidHandoff.value = false
+            }
+        }
+
+        /** Clears only the incoming MAC prefill; broadcast and port choices remain untouched. */
+        fun clearPrefill() {
+            if (_uiState.value is WolUiState.Sending) return
+            if (_macAddress.value.isNotEmpty()) discardFinishedResult()
+            _macAddress.value = ""
+            savedStateHandle[EDITED_MAC_KEY] = ""
+            _sourceContext.value = null
+            savedStateHandle.remove<String>(HANDOFF_SOURCE_KEY)
+            savedStateHandle[HANDOFF_CONSUMED_KEY] = true
+        }
+
+        fun onBroadcastAddressChange(value: String) {
+            if (value != _broadcastAddress.value) discardFinishedResult()
+            _broadcastAddress.value = value
+            savedStateHandle[BROADCAST_KEY] = value
+        }
+
+        fun onPortChange(value: String) {
+            if (value.isEmpty() || (value.length <= 5 && value.all(Char::isDigit))) {
+                if (value != _port.value) discardFinishedResult()
+                _port.value = value
+                savedStateHandle[PORT_KEY] = value
+            }
+        }
+
+        fun send() {
+            if (!canSend) return
+            sendTo(_macAddress.value, _broadcastAddress.value, _port.value, deviceName = null)
+        }
+
+        /** One tap on a saved device: fills the form with its target and sends to it. */
+        fun wakeDevice(device: WolSavedDevice) {
+            if (_uiState.value is WolUiState.Sending) return
+            fillTarget(device)
+            if (!canSend) return
+            sendTo(_macAddress.value, _broadcastAddress.value, _port.value, deviceName = device.name)
+        }
+
+        /** A finished send describes the target it went to; once the form changes, that result no longer applies. */
+        private fun discardFinishedResult() {
+            if (_uiState.value is WolUiState.Success || _uiState.value is WolUiState.Error) {
+                _uiState.value = WolUiState.Idle
+            }
+        }
+
+        private fun fillTarget(device: WolSavedDevice) {
+            onMacAddressChange(device.mac)
+            onBroadcastAddressChange(device.broadcastAddress)
+            onPortChange(device.port.toString())
+        }
+
+        private fun sendTo(
+            mac: String,
+            broadcast: String,
+            port: String,
+            deviceName: String?,
+        ) {
+            val params =
+                WakeOnLanParams(
+                    macAddress = mac,
+                    broadcastAddress = broadcast,
+                    port = port.toIntOrNull() ?: DEFAULT_PORT,
+                )
+            operationSession?.cancel(CancellationReason.USER_STOP)
+            val session = WakeOnLanOperation.newSession()
+            val generation = ++sendGeneration
+            operationSession = session
+            _uiState.value = WolUiState.Sending
+            viewModelScope.launch {
+                try {
+                    val result = wakeOnLan(params, session)
+                    if (sendGeneration != generation || operationSession !== session) return@launch
+                    _uiState.value =
+                        when (result) {
+                            is NetworkResult.Success -> {
+                                WolUiState.Success(
+                                    report = result.data,
+                                    deviceName = deviceName,
+                                    sendNumber = ++successfulSends,
+                                )
+                            }
+
+                            is NetworkResult.Error -> {
+                                result.toWolErrorState()
+                            }
+                        }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } finally {
+                    if (operationSession === session) operationSession = null
+                }
+            }
+        }
+
+        fun stopSending() {
+            sendGeneration++
+            operationSession?.cancel(CancellationReason.USER_STOP)
+            operationSession = null
+            _uiState.value = WolUiState.Idle
+        }
+
+        override fun onCleared() {
+            sendGeneration++
+            operationSession?.cancel(CancellationReason.LIFECYCLE_PAUSE)
+            operationSession = null
+            // A send still in progress is not kept as running; only a finished Success or Error is.
+            val state = _uiState.value
+            sessionMemory.put(
+                WOL_SESSION_KEY,
+                WolSessionSnapshot(
+                    mac = _macAddress.value,
+                    broadcastAddress = _broadcastAddress.value,
+                    port = _port.value,
+                    deviceName = savedDeviceEditor.deviceName.value,
+                    finished = state.takeIf { it is WolUiState.Success || it is WolUiState.Error },
+                ),
+            )
+        }
+
+        companion object {
+            const val DEFAULT_BROADCAST = "255.255.255.255"
+            const val DEFAULT_PORT = 9
+
+            private val PORT_RANGE = WakeOnLanParams.MIN_PORT..WakeOnLanParams.MAX_PORT
+
+            private fun isPortOutOfRange(value: String): Boolean = value.toIntOrNull() !in PORT_RANGE
+
+            private fun isTargetValid(
+                mac: String,
+                broadcast: String,
+                port: String,
+            ): Boolean =
+                WolMagicPacket.macProblem(mac) == null &&
+                    WolMagicPacket.broadcastProblem(broadcast) == null &&
+                    !isPortOutOfRange(port)
+
+            private const val EDITED_MAC_KEY = "editedWolMac"
+            private const val HANDOFF_CONSUMED_KEY = "wolHandoffConsumed"
+            private const val HANDOFF_SOURCE_KEY = "wolHandoffSource"
+            private const val HANDOFF_RECOVERED_KEY = "wolHandoffRecovered"
+
+            // Advanced-options values; they survive rotation and process death, not leaving the tool.
+            private const val BROADCAST_KEY = "wolBroadcastAddress"
+            private const val PORT_KEY = "wolPort"
+
+            /** [ToolSessionMemory] slot for the form, device name and last finished send when the tool is left. */
+            private const val WOL_SESSION_KEY = "wolSession"
+        }
     }
-
-    private fun errorState(result: NetworkResult.Error): WolUiState.Error =
-        WolUiState.Error(
-            message = result.message,
-            info = result.info,
-            networkErrorKind = result.cause.toNetworkErrorKind(),
-        )
-
-    fun stopSending() {
-        sendGeneration++
-        operationSession?.cancel(CancellationReason.USER_STOP)
-        operationSession = null
-        _uiState.value = WolUiState.Idle
-    }
-
-    fun reset() {
-        sendGeneration++
-        operationSession?.cancel(CancellationReason.USER_STOP)
-        operationSession = null
-        _uiState.value = WolUiState.Idle
-    }
-
-    override fun onCleared() {
-        sendGeneration++
-        operationSession?.cancel(CancellationReason.LIFECYCLE_PAUSE)
-        operationSession = null
-        // A send still in progress is not kept as running; only a finished Success or Error is.
-        val state = _uiState.value
-        sessionMemory.put(
-            WOL_SESSION_KEY,
-            WolSessionSnapshot(
-                mac = _macAddress.value,
-                broadcastAddress = _broadcastAddress.value,
-                port = _port.value,
-                deviceName = savedDeviceEditor.deviceName.value,
-                finished = state.takeIf { it is WolUiState.Success || it is WolUiState.Error },
-            ),
-        )
-    }
-
-    companion object {
-        const val DEFAULT_BROADCAST = "255.255.255.255"
-        const val DEFAULT_PORT = 9
-
-        private val PORT_RANGE = WakeOnLanParams.MIN_PORT..WakeOnLanParams.MAX_PORT
-
-        private fun isPortOutOfRange(value: String): Boolean = value.toIntOrNull() !in PORT_RANGE
-
-        private const val EDITED_MAC_KEY = "editedWolMac"
-        private const val HANDOFF_CONSUMED_KEY = "wolHandoffConsumed"
-        private const val HANDOFF_SOURCE_KEY = "wolHandoffSource"
-        private const val HANDOFF_RECOVERED_KEY = "wolHandoffRecovered"
-
-        // Advanced-options values; they survive rotation and process death, not leaving the tool.
-        private const val BROADCAST_KEY = "wolBroadcastAddress"
-        private const val PORT_KEY = "wolPort"
-
-        /** [ToolSessionMemory] slot for the form, device name and last finished send when the tool is left. */
-        private const val WOL_SESSION_KEY = "wolSession"
-    }
-}

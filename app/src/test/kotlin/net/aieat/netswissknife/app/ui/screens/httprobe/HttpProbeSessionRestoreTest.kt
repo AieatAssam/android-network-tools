@@ -65,6 +65,7 @@ class HttpProbeSessionRestoreTest {
             finalUrl = url,
             redirectChain = emptyList(),
             securityChecks = emptyList(),
+            sentRequestHeaders = listOf("Authorization" to secretHeaderValue),
         )
 
     @BeforeEach
@@ -127,6 +128,50 @@ class HttpProbeSessionRestoreTest {
             assertFalse(returned.uiState.value.followRedirects)
             val restored = returned.uiState.value
             assertEquals(200, restored.result?.statusCode)
+        }
+
+    @Test
+    fun `a restored result is not offered as a cURL command because its request details were dropped`() =
+        runTest {
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(resultWithSecrets)
+            val first = newViewModel()
+            first.onUrlChange(url)
+            first.onMethodChange(HttpMethod.POST)
+            first.send()
+            leave(first)
+
+            val returned = newViewModel()
+
+            assertTrue(returned.uiState.value.resultFromSession)
+            assertNull(returned.copyAsCurl())
+        }
+
+    @Test
+    fun `a result from a new send after returning is copyable as cURL and no longer marked restored`() =
+        runTest {
+            coEvery { useCase(any(), any()) } returns NetworkResult.Success(resultWithSecrets)
+            val first = newViewModel()
+            first.onUrlChange(url)
+            first.onMethodChange(HttpMethod.POST)
+            first.send()
+            leave(first)
+
+            val returned = newViewModel()
+            returned.send()
+
+            assertFalse(returned.uiState.value.resultFromSession)
+            assertTrue(returned.copyAsCurl() != null)
+        }
+
+    @Test
+    fun `adding a header expands the custom headers section so the new row is visible`() =
+        runTest {
+            val viewModel = newViewModel()
+
+            viewModel.addHeader()
+
+            assertTrue(viewModel.uiState.value.headersExpanded)
+            assertEquals(1, viewModel.uiState.value.customHeaders.size)
         }
 
     @Test

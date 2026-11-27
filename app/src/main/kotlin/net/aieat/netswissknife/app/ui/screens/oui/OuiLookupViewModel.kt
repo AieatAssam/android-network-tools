@@ -46,8 +46,8 @@ sealed interface OuiLookupPhase {
 data class OuiLookupUiState(
     val input: String = "",
     val phase: OuiLookupPhase = OuiLookupPhase.Idle,
-    /** Pasted entries that are not a MAC address or OUI prefix, shown as inline validation. */
-    val invalidEntryCount: Int = 0,
+    /** Pasted entries that are not a MAC address or OUI prefix, named in the inline validation. */
+    val invalidEntries: List<String> = emptyList(),
 )
 
 @HiltViewModel
@@ -67,8 +67,21 @@ class OuiLookupViewModel
 
         private var lookupJob: Job? = null
 
+        /**
+         * Typing changes what the field holds. A change to the lookup text drops any shown or pending
+         * result, so the screen never presents the answer to an earlier input as the answer to this one.
+         * Case and surrounding spaces alone do not count as a change.
+         */
         fun onInputChange(value: String) {
-            _uiState.update { it.copy(input = value, invalidEntryCount = countInvalid(value)) }
+            val changed = normalise(value) != normalise(_uiState.value.input)
+            if (changed) lookupJob?.cancel()
+            _uiState.update { state ->
+                state.copy(
+                    input = value,
+                    invalidEntries = invalidEntriesOf(value),
+                    phase = if (changed) OuiLookupPhase.Idle else state.phase,
+                )
+            }
         }
 
         /** Looks up whatever is in the field. A blank field does nothing. */
@@ -102,9 +115,10 @@ class OuiLookupViewModel
             viewModelScope.launch { recents.clearAll(AppPreferenceKeys.RECENT_OUI_LOOKUPS) }
         }
 
+        /** Clear results drops the result and keeps the input; the field has its own Clear icon. */
         fun onClear() {
             lookupJob?.cancel()
-            _uiState.value = OuiLookupUiState()
+            _uiState.update { it.copy(phase = OuiLookupPhase.Idle) }
         }
 
         private fun runLookup(text: String) {
@@ -125,8 +139,10 @@ class OuiLookupViewModel
                 }
         }
 
-        private fun countInvalid(text: String): Int {
-            val pieces = MacInputParser.splitEntries(text)
-            return pieces.count { MacInputParser.parse(it) is MacParseResult.Invalid }
+        private fun normalise(text: String): String = text.trim().uppercase()
+
+        private fun invalidEntriesOf(text: String): List<String> {
+            val entries = MacInputParser.splitEntries(text)
+            return entries.filter { MacInputParser.parse(it) is MacParseResult.Invalid }
         }
     }

@@ -15,6 +15,15 @@ internal fun formatSubnetCount(
 /** Plural quantity for a count. Clamped so a /0 count never overflows Int. */
 internal fun subnetPluralQuantity(count: Long): Int = count.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
 
+/** A /31 is point-to-point (RFC 3021), so it has no broadcast address; the row would repeat the last host. */
+internal fun showsBroadcastRow(prefixLength: Int): Boolean = prefixLength < POINT_TO_POINT_PREFIX
+
+/** A /32 holds one address, so first and last host would repeat the network address. */
+internal fun showsHostRange(prefixLength: Int): Boolean = prefixLength < SINGLE_ADDRESS_PREFIX
+
+private const val POINT_TO_POINT_PREFIX = 31
+private const val SINGLE_ADDRESS_PREFIX = 32
+
 @StringRes
 internal fun Ipv4Scope.labelRes(): Int =
     when (this) {
